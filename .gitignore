@@ -1,0 +1,31 @@
+# Dependencies
+/node_modules
+
+# Build outputs
+/.next/
+/out/
+/build
+/.claude/
+
+# Environment files
+.env*.local
+.env
+
+# Debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Vercel
+.vercel
+
+# TypeScript
+*.tsbuildinfo
+next-env.d.ts
+
+# IDE
+.idea
+.vscode
+
+# Tauri
+/src-tauri/target/

@@ -1,0 +1,233 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String           @id @default(cuid())
+  email         String           @unique
+  name          String?
+  passwordHash  String
+  role          UserRole         @default(USER)
+  archivedAt    DateTime?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+  orgId         String?
+  documents     Document[]
+  dossiers      Dossier[]
+  batches       EmailBatch[]
+  sendEvents    EmailSendEvent[]
+  templates     EmailTemplate[]
+  smtpConfig    SmtpConfig?
+  moduleConfigs ModuleConfig[]
+
+  @@index([email])
+  @@index([orgId])
+}
+
+model Dossier {
+  id              String           @id @default(cuid())
+  fullName        String
+  moduleType      ModuleType       @default(APA)
+  priority        DossierPriority  @default(NORMAL)
+  status          DossierStatus    @default(ACTIVE)
+  notes           String?
+  primaryEmail    String?
+  ccEmails        String[]         @default([])
+  bccEmails       String[]         @default([])
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  linkedDossierId String?          @unique
+  userId          String
+  documents       Document[]
+  linkedDossier   Dossier?         @relation("DossierLink", fields: [linkedDossierId], references: [id])
+  linkedBy        Dossier?         @relation("DossierLink")
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sendEvents      EmailSendEvent[]
+
+  @@index([userId])
+  @@index([moduleType])
+  @@index([fullName])
+  @@index([priority])
+  @@index([status])
+  @@index([updatedAt])
+}
+
+model Document {
+  id               String                     @id @default(cuid())
+  filename         String
+  blobUrl          String
+  size             Int
+  mimeType         String                     @default("application/pdf")
+  createdAt        DateTime                   @default(now())
+  userId           String
+  dossierId        String
+  dossier          Dossier                    @relation(fields: [dossierId], references: [id], onDelete: Cascade)
+  user             User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  attachedToEvents EmailSendEventAttachment[]
+
+  @@index([userId])
+  @@index([dossierId])
+  @@index([createdAt])
+}
+
+model EmailTemplate {
+  id        String           @id @default(cuid())
+  name      String
+  subject   String
+  body      String
+  category  TemplateCategory @default(APA)
+  isDefault Boolean          @default(false)
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+  userId    String
+  dossierId String?
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([category])
+  @@index([dossierId])
+}
+
+model EmailBatch {
+  id          String           @id @default(cuid())
+  description String?
+  moduleType  ModuleType?
+  createdAt   DateTime         @default(now())
+  userId      String
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sendEvents  EmailSendEvent[]
+
+  @@index([userId])
+  @@index([createdAt])
+  @@index([moduleType])
+}
+
+model EmailSendEvent {
+  id            String                     @id @default(cuid())
+  status        EmailSendStatus            @default(PENDING)
+  errorMessage  String?
+  moduleType    ModuleType?
+  emailType     EmailType                  @default(STANDARD)
+  emailReason   EmailReason?
+  recipients    String[]
+  ccRecipients  String[]                   @default([])
+  bccRecipients String[]                   @default([])
+  subject       String
+  body          String
+  createdAt     DateTime                   @default(now())
+  sentAt        DateTime?
+  userId        String
+  dossierId     String?
+  batchId       String?
+  batch         EmailBatch?                @relation(fields: [batchId], references: [id])
+  dossier       Dossier?                   @relation(fields: [dossierId], references: [id])
+  user          User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  attachments   EmailSendEventAttachment[]
+
+  @@index([userId])
+  @@index([dossierId])
+  @@index([batchId])
+  @@index([status])
+  @@index([moduleType])
+  @@index([emailType])
+  @@index([createdAt])
+}
+
+model EmailSendEventAttachment {
+  id          String         @id @default(cuid())
+  sendEventId String
+  documentId  String
+  document    Document       @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  sendEvent   EmailSendEvent @relation(fields: [sendEventId], references: [id], onDelete: Cascade)
+
+  @@unique([sendEventId, documentId])
+  @@index([sendEventId])
+  @@index([documentId])
+}
+
+model SmtpConfig {
+  id                String       @id @default(cuid())
+  provider          SmtpProvider @default(OTHER)
+  smtpHost          String
+  smtpPort          Int          @default(587)
+  secure            Boolean      @default(true)
+  username          String
+  encryptedPassword String
+  fromName          String
+  fromEmail         String
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+  userId            String       @unique
+  user              User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model ModuleConfig {
+  id               String     @id @default(cuid())
+  moduleType       ModuleType
+  destinationEmail String
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+  userId           String
+  user             User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, moduleType])
+  @@index([userId])
+}
+
+enum ModuleType {
+  APA
+  ASH
+}
+
+enum DossierPriority {
+  NORMAL
+  PRIORITAIRE
+  URGENT
+}
+
+enum DossierStatus {
+  ACTIVE
+  CLOSED
+}
+
+enum TemplateCategory {
+  APA
+  ASH
+  DERNIER_DECES
+  DERNIER_DESSAISISSEMENT
+  CUSTOM
+}
+
+enum EmailSendStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+enum EmailType {
+  STANDARD
+  DERNIER
+}
+
+enum EmailReason {
+  DECES
+  DESSAISISSEMENT
+}
+
+enum SmtpProvider {
+  GMAIL
+  OUTLOOK
+  OTHER
+}
+
+enum UserRole {
+  USER
+  ADMIN
+}
