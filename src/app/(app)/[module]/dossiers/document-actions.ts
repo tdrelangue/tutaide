@@ -1,10 +1,9 @@
 "use server";
 
+import { put, del } from "@vercel/blob";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { requireAuth } from "@/lib/auth";
-import fs from "node:fs/promises";
-import path from "node:path";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -19,16 +18,6 @@ const ALLOWED_MIME_TYPES = new Set([
   "image/jpg",
 ]);
 
-const ALLOWED_EXTENSIONS = new Set([".pdf", ".png", ".jpg", ".jpeg"]);
-
-/**
- * Absolute path to the uploads directory at the project root (next to `src/`).
- * Uses `process.cwd()` which in Next.js resolves to the project root.
- */
-function getUploadsRoot(): string {
-  return path.join(process.cwd(), "uploads");
-}
-
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -39,32 +28,7 @@ function revalidateModulePaths(): void {
 }
 
 function isAllowedFile(file: File): boolean {
-  const ext = path.extname(file.name).toLowerCase();
-  return (
-    ALLOWED_MIME_TYPES.has(file.type) &&
-    ALLOWED_EXTENSIONS.has(ext) &&
-    file.size <= MAX_FILE_SIZE
-  );
-}
-
-/**
- * Build a unique filename by prepending a timestamp to the original name.
- * This avoids collisions when the same file is uploaded multiple times.
- */
-function buildUniqueFilename(originalName: string): string {
-  const ext = path.extname(originalName);
-  const base = path.basename(originalName, ext);
-  const timestamp = Date.now();
-  // Sanitise the base name: keep only alphanumeric, dash, underscore, dot
-  const safeName = base.replace(/[^a-zA-Z0-9_\-\.]/g, "_");
-  return `${timestamp}-${safeName}${ext}`;
-}
-
-/**
- * Ensure a directory exists, creating it (and parents) if necessary.
- */
-async function ensureDir(dirPath: string): Promise<void> {
-  await fs.mkdir(dirPath, { recursive: true });
+  return ALLOWED_MIME_TYPES.has(file.type) && file.size <= MAX_FILE_SIZE;
 }
 
 // ---------------------------------------------------------------------------
@@ -94,65 +58,31 @@ export async function uploadDocuments(formData: FormData): Promise<{
       return { success: false, error: "Dossier non trouve" };
     }
 
-    // Prepare the target directory: uploads/{userId}/{dossierId}/
-    const uploadDir = path.join(getUploadsRoot(), userId, dossierId);
-    await ensureDir(uploadDir);
-
     const uploadedDocs: Array<{ id: string }> = [];
 
     for (const file of files) {
-      // Validate file type and size
       if (!isAllowedFile(file)) {
-        continue; // Skip files that do not match criteria
+        continue;
       }
 
-      const uniqueFilename = buildUniqueFilename(file.name);
-      const filePath = path.join(uploadDir, uniqueFilename);
+      // Upload to Vercel Blob
+      const blob = await put(
+        `documents/${userId}/${dossierId}/${file.name}`,
+        file,
+        { access: "public", addRandomSuffix: true }
+      );
 
-      // Read file contents and write to disk
-      const arrayBuffer = await file.arrayBuffer();
-      const buffer = Buffer.from(arrayBuffer);
-      await fs.writeFile(filePath, buffer);
-
-      // Create the database record.
-      // The blobUrl is stored as a virtual API path that a download route
-      // will resolve. The actual file path on disk is derived from the
-      // document id at download time.
+      // Create document record with Blob URL
       const doc = await db.document.create({
         data: {
           filename: file.name,
-          blobUrl: "", // placeholder -- updated below with the document id
+          blobUrl: blob.url,
           size: file.size,
           mimeType: file.type,
           userId,
           dossierId,
         },
       });
-
-      // Now that we have the document id, set the canonical download URL
-      // and persist the disk-relative path so we can locate the file later.
-      const downloadUrl = `/api/documents/${doc.id}/download`;
-
-      await db.document.update({
-        where: { id: doc.id },
-        data: {
-          blobUrl: downloadUrl,
-        },
-      });
-
-      // Store a mapping file so the download endpoint can find the
-      // physical file. We use a simple sidecar JSON file.
-      const metaPath = path.join(uploadDir, `${doc.id}.meta.json`);
-      await fs.writeFile(
-        metaPath,
-        JSON.stringify({
-          diskFilename: uniqueFilename,
-          originalFilename: file.name,
-          mimeType: file.type,
-          size: file.size,
-        }),
-        "utf-8"
-      );
 
       uploadedDocs.push({ id: doc.id });
     }
@@ -179,7 +109,6 @@ export async function deleteDocument(documentId: string): Promise<{
   try {
     const userId = await requireAuth();
 
-    // Find document and verify ownership
     const document = await db.document.findFirst({
       where: { id: documentId, userId },
     });
@@ -188,33 +117,11 @@ export async function deleteDocument(documentId: string): Promise<{
       return { success: false, error: "Document non trouve" };
     }
 
-    // Attempt to delete the physical file and its metadata from disk
-    const uploadDir = path.join(
-      getUploadsRoot(),
-      userId,
-      document.dossierId
-    );
-
-    const metaPath = path.join(uploadDir, `${documentId}.meta.json`);
-
+    // Delete from Vercel Blob
     try {
-      const metaRaw = await fs.readFile(metaPath, "utf-8");
-      const meta = JSON.parse(metaRaw) as { diskFilename: string };
-      const filePath = path.join(uploadDir, meta.diskFilename);
-
-      await fs.unlink(filePath).catch(() => {
-        console.error("Failed to delete file from disk:", filePath);
-      });
-
-      await fs.unlink(metaPath).catch(() => {
-        console.error("Failed to delete meta file:", metaPath);
-      });
+      await del(document.blobUrl);
     } catch {
-      // If meta file is missing or unreadable we still proceed with DB deletion
-      console.error(
-        "Could not read meta for document, skipping disk cleanup:",
-        documentId
-      );
+      console.error("Failed to delete blob:", document.blobUrl);
     }
 
     // Delete from database
@@ -256,13 +163,6 @@ export async function getDocuments(dossierId: string): Promise<
   return documents;
 }
 
-/**
- * Returns the absolute filesystem path of the document file, or `null` if
- * the document does not exist or the caller is not the owner.
- *
- * This is intended to be consumed by an API route that streams the file
- * back to the client.
- */
 export async function getDocumentUrl(
   documentId: string
 ): Promise<string | null> {
@@ -276,20 +176,5 @@ export async function getDocumentUrl(
     return null;
   }
 
-  // Resolve the physical path from the sidecar metadata
-  const uploadDir = path.join(
-    getUploadsRoot(),
-    userId,
-    document.dossierId
-  );
-  const metaPath = path.join(uploadDir, `${documentId}.meta.json`);
-
-  try {
-    const metaRaw = await fs.readFile(metaPath, "utf-8");
-    const meta = JSON.parse(metaRaw) as { diskFilename: string };
-    return path.join(uploadDir, meta.diskFilename);
-  } catch {
-    // Fallback: return the blobUrl which is the API route path
-    return document.blobUrl;
-  }
+  return document.blobUrl;
 }

@@ -5,6 +5,19 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { requireAuth } from "@/lib/auth";
 
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
+
+const ALLOWED_MIME_TYPES = new Set([
+  "application/pdf",
+  "image/png",
+  "image/jpeg",
+  "image/jpg",
+]);
+
+function isAllowedFile(file: File): boolean {
+  return ALLOWED_MIME_TYPES.has(file.type) && file.size <= MAX_FILE_SIZE;
+}
+
 export async function uploadDocuments(formData: FormData): Promise<{
   success: boolean;
   count?: number;
@@ -19,7 +32,6 @@ export async function uploadDocuments(formData: FormData): Promise<{
       return { success: false, error: "Données manquantes" };
     }
 
-    // Verify dossier ownership
     const dossier = await db.dossier.findFirst({
       where: { id: dossierId, userId },
     });
@@ -28,21 +40,18 @@ export async function uploadDocuments(formData: FormData): Promise<{
       return { success: false, error: "Dossier non trouvé" };
     }
 
-    // Upload each file to Vercel Blob
     const uploadedDocs = [];
     for (const file of files) {
-      // Validate file type
-      if (file.type !== "application/pdf") {
-        continue; // Skip non-PDF files
+      if (!isAllowedFile(file)) {
+        continue;
       }
 
-      // Upload to Vercel Blob
-      const blob = await put(`documents/${userId}/${dossierId}/${file.name}`, file, {
-        access: "public", // We'll control access via our API route
-        addRandomSuffix: true,
-      });
+      const blob = await put(
+        `documents/${userId}/${dossierId}/${file.name}`,
+        file,
+        { access: "public", addRandomSuffix: true }
+      );
 
-      // Create document record
       const doc = await db.document.create({
         data: {
           filename: file.name,
@@ -58,10 +67,12 @@ export async function uploadDocuments(formData: FormData): Promise<{
     }
 
     if (uploadedDocs.length === 0) {
-      return { success: false, error: "Aucun fichier PDF valide" };
+      return { success: false, error: "Aucun fichier valide (PDF ou image, max 10 Mo)" };
     }
 
     revalidatePath("/dossiers");
+    revalidatePath("/apa/dossiers");
+    revalidatePath("/ash/dossiers");
     return { success: true, count: uploadedDocs.length };
   } catch (error) {
     console.error("Error uploading documents:", error);
@@ -76,7 +87,6 @@ export async function deleteDocument(documentId: string): Promise<{
   try {
     const userId = await requireAuth();
 
-    // Find document and verify ownership
     const document = await db.document.findFirst({
       where: { id: documentId, userId },
     });
@@ -85,20 +95,19 @@ export async function deleteDocument(documentId: string): Promise<{
       return { success: false, error: "Document non trouvé" };
     }
 
-    // Delete from Vercel Blob
     try {
       await del(document.blobUrl);
     } catch {
-      // Continue even if blob deletion fails
       console.error("Failed to delete blob:", document.blobUrl);
     }
 
-    // Delete from database
     await db.document.delete({
       where: { id: documentId },
     });
 
     revalidatePath("/dossiers");
+    revalidatePath("/apa/dossiers");
+    revalidatePath("/ash/dossiers");
     return { success: true };
   } catch (error) {
     console.error("Error deleting document:", error);
