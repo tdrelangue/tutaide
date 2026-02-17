@@ -5,7 +5,6 @@
 /.next/
 /out/
 /build
-/.claude/
 
 # Environment files
 .env*.local
