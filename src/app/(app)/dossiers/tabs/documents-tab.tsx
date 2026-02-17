@@ -9,6 +9,8 @@ import {
   Trash2,
   Download,
   Loader2,
+  FolderOpen,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -54,10 +56,7 @@ export function DocumentsTab({ dossier }: DocumentsTabProps) {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
-
-  const handleUploadClick = () => {
-    fileInputRef.current?.click();
-  };
+  const [showUploadZone, setShowUploadZone] = useState(false);
 
   const doUpload = useCallback(async (files: File[]) => {
     if (files.length === 0) return;
@@ -88,6 +87,7 @@ export function DocumentsTab({ dossier }: DocumentsTabProps) {
         );
         const docs = await getDocuments(dossier.id);
         setDocuments(docs);
+        setShowUploadZone(false);
         router.refresh();
       } else {
         toast.error(result.error || "Erreur lors de l'upload");
@@ -157,27 +157,24 @@ export function DocumentsTab({ dossier }: DocumentsTabProps) {
   };
 
   return (
-    <div
-      className="space-y-4"
-      onDragOver={handleDragOver}
-      onDragLeave={handleDragLeave}
-      onDrop={handleDrop}
-    >
+    <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h4 className="font-medium">
           Documents ({documents.length})
         </h4>
         <Button
           size="sm"
-          onClick={handleUploadClick}
+          onClick={() => setShowUploadZone(!showUploadZone)}
           disabled={isUploading}
         >
           {isUploading ? (
             <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+          ) : showUploadZone ? (
+            <X className="mr-2 h-4 w-4" aria-hidden="true" />
           ) : (
             <Upload className="mr-2 h-4 w-4" aria-hidden="true" />
           )}
-          Ajouter
+          {showUploadZone ? "Fermer" : "Ajouter"}
         </Button>
         <input
           ref={fileInputRef}
@@ -190,34 +187,48 @@ export function DocumentsTab({ dossier }: DocumentsTabProps) {
         />
       </div>
 
-      {isDragOver && (
-        <div className="border-2 border-dashed border-primary rounded-lg p-8 text-center bg-primary/5 transition-colors">
-          <Upload className="mx-auto h-8 w-8 text-primary mb-2" aria-hidden="true" />
-          <p className="text-sm font-medium text-primary">
-            Déposez vos fichiers ici
+      {showUploadZone && (
+        <div
+          className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
+            isDragOver
+              ? "border-primary bg-primary/5"
+              : "border-muted-foreground/25 hover:border-muted-foreground/50"
+          }`}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+        >
+          <Upload
+            className={`mx-auto h-10 w-10 mb-3 ${
+              isDragOver ? "text-primary" : "text-muted-foreground"
+            }`}
+            aria-hidden="true"
+          />
+          <p className={`text-sm font-medium ${isDragOver ? "text-primary" : "text-foreground"}`}>
+            {isDragOver ? "Déposez vos fichiers ici" : "Glissez-déposez vos fichiers ici"}
           </p>
-          <p className="text-xs text-muted-foreground mt-1">
+          <p className="text-xs text-muted-foreground mt-1 mb-4">
             PDF, PNG, JPG — max 10 Mo
           </p>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={isUploading}
+          >
+            <FolderOpen className="mr-2 h-4 w-4" aria-hidden="true" />
+            Parcourir les fichiers
+          </Button>
         </div>
       )}
 
-      {!isDragOver && documents.length === 0 && (
-        <div
-          className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-8 text-center cursor-pointer hover:border-muted-foreground/50 transition-colors"
-          onClick={handleUploadClick}
-        >
-          <Upload className="mx-auto h-8 w-8 text-muted-foreground mb-2" aria-hidden="true" />
-          <p className="text-sm text-muted-foreground">
-            Glissez-déposez vos documents ici
-          </p>
-          <p className="text-xs text-muted-foreground mt-1">
-            ou cliquez pour sélectionner — PDF, PNG, JPG — max 10 Mo
-          </p>
-        </div>
+      {documents.length === 0 && !showUploadZone && (
+        <p className="text-sm text-muted-foreground text-center py-8">
+          Aucun document dans ce dossier
+        </p>
       )}
 
-      {!isDragOver && documents.length > 0 && (
+      {documents.length > 0 && (
         <ScrollArea className="h-64">
           <div className="space-y-2">
             {documents.map((doc) => (
