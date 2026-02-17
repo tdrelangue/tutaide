@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
@@ -37,6 +37,13 @@ type Document = {
   createdAt: Date;
 };
 
+const ACCEPTED_TYPES = [
+  "application/pdf",
+  "image/png",
+  "image/jpeg",
+  "image/jpg",
+];
+
 export function DocumentsTab({ dossier }: DocumentsTabProps) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -46,19 +53,22 @@ export function DocumentsTab({ dossier }: DocumentsTabProps) {
   const [isUploading, setIsUploading] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isDragOver, setIsDragOver] = useState(false);
 
   const handleUploadClick = () => {
     fileInputRef.current?.click();
   };
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
+  const doUpload = useCallback(async (files: File[]) => {
+    if (files.length === 0) return;
 
-    // Client-side size check (10MB)
-    for (const file of Array.from(files)) {
+    for (const file of files) {
       if (file.size > 10 * 1024 * 1024) {
         toast.error(`${file.name} dépasse la limite de 10 Mo`);
+        return;
+      }
+      if (!ACCEPTED_TYPES.includes(file.type)) {
+        toast.error(`${file.name} : type non supporté (PDF ou image uniquement)`);
         return;
       }
     }
@@ -67,9 +77,7 @@ export function DocumentsTab({ dossier }: DocumentsTabProps) {
     try {
       const formData = new FormData();
       formData.append("dossierId", dossier.id);
-      Array.from(files).forEach((file) => {
-        formData.append("files", file);
-      });
+      files.forEach((file) => formData.append("files", file));
 
       const result = await uploadDocuments(formData);
       if (result.success) {
@@ -92,7 +100,36 @@ export function DocumentsTab({ dossier }: DocumentsTabProps) {
         fileInputRef.current.value = "";
       }
     }
+  }, [dossier.id, router]);
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    await doUpload(Array.from(files));
   };
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+  }, []);
+
+  const handleDrop = useCallback(async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+
+    const files = Array.from(e.dataTransfer.files);
+    if (files.length > 0) {
+      await doUpload(files);
+    }
+  }, [doUpload]);
 
   const handleDelete = async () => {
     if (!deleteId) return;
@@ -120,7 +157,12 @@ export function DocumentsTab({ dossier }: DocumentsTabProps) {
   };
 
   return (
-    <div className="space-y-4">
+    <div
+      className="space-y-4"
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
       <div className="flex items-center justify-between">
         <h4 className="font-medium">
           Documents ({documents.length})
@@ -148,11 +190,34 @@ export function DocumentsTab({ dossier }: DocumentsTabProps) {
         />
       </div>
 
-      {documents.length === 0 ? (
-        <p className="text-sm text-muted-foreground text-center py-8">
-          Aucun document dans ce dossier
-        </p>
-      ) : (
+      {isDragOver && (
+        <div className="border-2 border-dashed border-primary rounded-lg p-8 text-center bg-primary/5 transition-colors">
+          <Upload className="mx-auto h-8 w-8 text-primary mb-2" aria-hidden="true" />
+          <p className="text-sm font-medium text-primary">
+            Déposez vos fichiers ici
+          </p>
+          <p className="text-xs text-muted-foreground mt-1">
+            PDF, PNG, JPG — max 10 Mo
+          </p>
+        </div>
+      )}
+
+      {!isDragOver && documents.length === 0 && (
+        <div
+          className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-8 text-center cursor-pointer hover:border-muted-foreground/50 transition-colors"
+          onClick={handleUploadClick}
+        >
+          <Upload className="mx-auto h-8 w-8 text-muted-foreground mb-2" aria-hidden="true" />
+          <p className="text-sm text-muted-foreground">
+            Glissez-déposez vos documents ici
+          </p>
+          <p className="text-xs text-muted-foreground mt-1">
+            ou cliquez pour sélectionner — PDF, PNG, JPG — max 10 Mo
+          </p>
+        </div>
+      )}
+
+      {!isDragOver && documents.length > 0 && (
         <ScrollArea className="h-64">
           <div className="space-y-2">
             {documents.map((doc) => (
