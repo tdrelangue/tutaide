@@ -202,9 +202,10 @@ export async function createDossier(
     return { success: true, id: dossier.id };
   } catch (error) {
     console.error("Error creating dossier:", error);
+    const message = error instanceof Error ? error.message : "Unknown error";
     return {
       success: false,
-      error: "Erreur lors de la creation du dossier",
+      error: `Erreur: ${message}`,
     };
   }
 }
