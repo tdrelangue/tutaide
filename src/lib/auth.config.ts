@@ -6,6 +6,8 @@ import Credentials from "next-auth/providers/credentials";
  * Does NOT include database adapter or authorize function.
  */
 export const authConfig: NextAuthConfig = {
+  secret: process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET,
+  trustHost: true,
   pages: {
     signIn: "/login",
   },
