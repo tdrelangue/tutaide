@@ -22,21 +22,12 @@ import {
 import { sendDernierEmail } from "./dernier-actions";
 import { type DossierWithDocuments } from "./actions";
 
-// ---------------------------------------------------------------------------
-// Validation schema for the dernier email form
-// ---------------------------------------------------------------------------
-
 const dernierEmailFormSchema = z.object({
-  recipients: z.string().min(1, "Au moins un destinataire requis"),
   subject: z.string().min(1, "L'objet est requis"),
   body: z.string().min(1, "Le contenu est requis"),
 });
 
 type DernierEmailFormData = z.infer<typeof dernierEmailFormSchema>;
-
-// ---------------------------------------------------------------------------
-// Pre-filled content helpers
-// ---------------------------------------------------------------------------
 
 function getSubjectForReason(
   reason: "DECES" | "DESSAISISSEMENT",
@@ -82,10 +73,6 @@ function getReasonLabel(reason: "DECES" | "DESSAISISSEMENT"): string {
   return reason === "DECES" ? "Deces" : "Dessaisissement";
 }
 
-// ---------------------------------------------------------------------------
-// Component
-// ---------------------------------------------------------------------------
-
 interface DernierEmailDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -112,17 +99,14 @@ export function DernierEmailDialog({
   } = useForm<DernierEmailFormData>({
     resolver: zodResolver(dernierEmailFormSchema),
     defaultValues: {
-      recipients: dossier.primaryEmail || "",
       subject: getSubjectForReason(reason, dossier.fullName),
       body: getBodyForReason(reason, dossier.fullName),
     },
   });
 
-  // Reset the form whenever the dialog opens or the reason / dossier changes
   useEffect(() => {
     if (open) {
       reset({
-        recipients: dossier.primaryEmail || "",
         subject: getSubjectForReason(reason, dossier.fullName),
         body: getBodyForReason(reason, dossier.fullName),
       });
@@ -132,29 +116,15 @@ export function DernierEmailDialog({
   async function onSubmit(data: DernierEmailFormData) {
     setIsLoading(true);
     try {
-      // Parse comma-separated recipients into an array
-      const recipientsList = data.recipients
-        .split(",")
-        .map((email) => email.trim())
-        .filter((email) => email.length > 0);
-
-      if (recipientsList.length === 0) {
-        toast.error("Veuillez saisir au moins un destinataire");
-        setIsLoading(false);
-        return;
-      }
-
       const result = await sendDernierEmail({
         dossierId: dossier.id,
         moduleType,
         reason,
-        recipients: recipientsList,
         subject: data.subject,
         body: data.body,
       });
 
       if (result.success) {
-        // sendDernierEmail already closes the dossier
         toast.success(
           `Dernier email envoye et dossier cloture (${getReasonLabel(reason)})`
         );
@@ -180,38 +150,14 @@ export function DernierEmailDialog({
           <DialogDescription>
             Envoyez le dernier email pour le dossier de {dossier.fullName}.
             Le dossier sera automatiquement cloture apres l&apos;envoi.
+            L&apos;email sera envoye a l&apos;adresse de destination configuree dans les parametres.
+            {dossier.primaryEmail && (
+              <> Le protege ({dossier.primaryEmail}) sera en copie.</>
+            )}
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-          {/* Recipients */}
-          <div className="space-y-2">
-            <Label htmlFor="dernier-recipients">
-              Destinataires <span className="text-destructive">*</span>
-            </Label>
-            <Input
-              id="dernier-recipients"
-              placeholder="email1@example.com, email2@example.com"
-              disabled={isLoading}
-              aria-describedby={
-                errors.recipients ? "dernier-recipients-error" : undefined
-              }
-              aria-invalid={errors.recipients ? "true" : "false"}
-              {...register("recipients")}
-            />
-            {errors.recipients && (
-              <p
-                id="dernier-recipients-error"
-                className="text-sm text-destructive"
-              >
-                {errors.recipients.message}
-              </p>
-            )}
-            <p className="text-xs text-muted-foreground">
-              Separez les adresses par des virgules
-            </p>
-          </div>
-
           {/* Subject */}
           <div className="space-y-2">
             <Label htmlFor="dernier-subject">

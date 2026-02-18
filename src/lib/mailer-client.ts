@@ -1,3 +1,5 @@
+import nodemailer from "nodemailer";
+
 interface SmtpSettings {
   host: string;
   port: number;
@@ -8,7 +10,7 @@ interface SmtpSettings {
   fromEmail: string;
 }
 
-interface SendEmailPayload {
+export interface SendEmailPayload {
   smtp: SmtpSettings;
   recipients: string[];
   ccRecipients?: string[];
@@ -18,59 +20,52 @@ interface SendEmailPayload {
   attachmentUrls?: string[];
 }
 
-interface SendEmailResponse {
+export interface SendEmailResponse {
   success: boolean;
   messageId?: string;
   error?: string;
 }
 
 export async function sendEmail(payload: SendEmailPayload): Promise<SendEmailResponse> {
-  const serviceUrl = process.env.MAILER_SERVICE_URL;
-  const serviceToken = process.env.MAILER_SERVICE_TOKEN;
-
-  if (!serviceUrl || !serviceToken) {
-    throw new Error("Mailer service configuration missing");
-  }
-
   try {
-    const response = await fetch(`${serviceUrl}/send-email`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-SERVICE-TOKEN": serviceToken,
+    const transporter = nodemailer.createTransport({
+      host: payload.smtp.host,
+      port: payload.smtp.port,
+      secure: payload.smtp.port === 465,
+      auth: {
+        user: payload.smtp.username,
+        pass: payload.smtp.password,
       },
-      body: JSON.stringify(payload),
+      tls: { rejectUnauthorized: false },
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      return {
-        success: false,
-        error: `Service error: ${response.status} - ${errorText}`,
-      };
+    // Build attachments by fetching blob URLs
+    const attachments: { filename: string; content: Buffer }[] = [];
+    for (const url of payload.attachmentUrls ?? []) {
+      const res = await fetch(url);
+      if (!res.ok) continue;
+      const buffer = Buffer.from(await res.arrayBuffer());
+      // Extract filename from URL path, removing random suffix from Vercel Blob
+      const urlPath = new URL(url).pathname;
+      const filename = decodeURIComponent(urlPath.split("/").pop() || "document");
+      attachments.push({ filename, content: buffer });
     }
 
-    const result = await response.json();
-    return result;
+    const info = await transporter.sendMail({
+      from: `"${payload.smtp.fromName}" <${payload.smtp.fromEmail}>`,
+      to: payload.recipients.join(", "),
+      cc: payload.ccRecipients?.length ? payload.ccRecipients.join(", ") : undefined,
+      bcc: payload.bccRecipients?.length ? payload.bccRecipients.join(", ") : undefined,
+      subject: payload.subject,
+      text: payload.body,
+      attachments,
+    });
+
+    return { success: true, messageId: info.messageId };
   } catch (error) {
     return {
       success: false,
       error: error instanceof Error ? error.message : "Unknown error",
     };
-  }
-}
-
-export async function checkMailerHealth(): Promise<boolean> {
-  const serviceUrl = process.env.MAILER_SERVICE_URL;
-  if (!serviceUrl) return false;
-
-  try {
-    const response = await fetch(`${serviceUrl}/health`, {
-      method: "GET",
-      signal: AbortSignal.timeout(5000),
-    });
-    return response.ok;
-  } catch {
-    return false;
   }
 }

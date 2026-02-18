@@ -16,6 +16,7 @@ import { DossierCard } from "./dossier-card";
 import { DossierSheet } from "./dossier-sheet";
 import { CreateDossierDialog } from "./create-dossier-dialog";
 import { BulkSendDialog } from "./bulk-send-dialog";
+import { SendAllDialog } from "./send-all-dialog";
 import type { DossierWithDocuments } from "./actions";
 
 interface DossiersPageClientProps {
@@ -45,6 +46,7 @@ export function DossiersPageClient({
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isBulkSendOpen, setIsBulkSendOpen] = useState(false);
+  const [isSendAllOpen, setIsSendAllOpen] = useState(false);
 
   const basePath = `/${moduleType.toLowerCase()}/dossiers`;
 
@@ -124,6 +126,14 @@ export function DossiersPageClient({
       primaryEmail: d.primaryEmail,
     }));
 
+  const eligibleDossiers = initialDossiers
+    .filter((d) => d.status === "ACTIVE" && d.documents.length > 0)
+    .map((d) => ({
+      id: d.id,
+      fullName: d.fullName,
+      documentCount: d.documents.length,
+    }));
+
   // Determine empty state message
   const getEmptyStateMessage = () => {
     if (search) {
@@ -147,6 +157,14 @@ export function DossiersPageClient({
             Dossiers
           </h2>
           <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setIsSendAllOpen(true)}
+              disabled={eligibleDossiers.length === 0}
+            >
+              <Send className="mr-2 h-4 w-4" aria-hidden="true" />
+              Envoyer tout ({eligibleDossiers.length})
+            </Button>
             <Button
               variant={selectionMode ? "secondary" : "outline"}
               onClick={toggleSelectionMode}
@@ -306,6 +324,14 @@ export function DossiersPageClient({
         onOpenChange={setIsBulkSendOpen}
         moduleType={moduleType}
         selectedDossiers={selectedDossiers}
+      />
+
+      {/* Send All Dialog */}
+      <SendAllDialog
+        open={isSendAllOpen}
+        onOpenChange={setIsSendAllOpen}
+        moduleType={moduleType}
+        eligibleDossiers={eligibleDossiers}
       />
     </div>
   );

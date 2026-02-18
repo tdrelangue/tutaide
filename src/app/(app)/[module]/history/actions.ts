@@ -4,14 +4,15 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { requireAuth } from "@/lib/auth";
 import { sendEmail } from "@/lib/mailer-client";
-import { getSmtpConfigWithPassword } from "../../settings/actions";
+import { getSmtpConfigWithPassword, getModuleConfig } from "../../settings/actions";
 import {
   sendEmailSchema,
   bulkSendSchema,
+  sendAllSchema,
   type SendEmailFormData,
   type BulkSendFormData,
 } from "@/lib/validations";
-import type { EmailSendStatus, EmailType, EmailReason } from "@prisma/client";
+import type { EmailSendStatus, EmailType, EmailReason, ModuleType } from "@prisma/client";
 
 export type EmailEvent = {
   id: string;
@@ -229,6 +230,16 @@ export async function bulkSendAction(
     }));
   }
 
+  // Get the module destination email (government organism)
+  const moduleConfig = await getModuleConfig(validated.moduleType as ModuleType);
+  if (!moduleConfig?.destinationEmail) {
+    return validated.dossierIds.map((dossierId) => ({
+      dossierId,
+      success: false,
+      error: "Email de destination non configure dans les parametres",
+    }));
+  }
+
   // Create a single batch for the entire bulk send
   const batch = await db.emailBatch.create({
     data: {
@@ -242,7 +253,6 @@ export async function bulkSendAction(
 
   for (const dossierId of validated.dossierIds) {
     try {
-      // Fetch the dossier and its primary email
       const dossier = await db.dossier.findFirst({
         where: { id: dossierId, userId },
         select: {
@@ -251,6 +261,7 @@ export async function bulkSendAction(
           primaryEmail: true,
           ccEmails: true,
           bccEmails: true,
+          documents: { select: { blobUrl: true } },
         },
       });
 
@@ -263,16 +274,13 @@ export async function bulkSendAction(
         continue;
       }
 
-      if (!dossier.primaryEmail) {
-        results.push({
-          dossierId,
-          success: false,
-          error: `Pas d'email principal pour ${dossier.fullName}`,
-        });
-        continue;
-      }
+      // TO = government, CC = protege (if set) + dossier CC list
+      const recipients = [moduleConfig.destinationEmail];
+      const ccRecipients = [
+        ...(dossier.primaryEmail ? [dossier.primaryEmail] : []),
+        ...dossier.ccEmails,
+      ];
 
-      // Create send event (pending)
       const event = await db.emailSendEvent.create({
         data: {
           userId,
@@ -281,15 +289,14 @@ export async function bulkSendAction(
           status: "PENDING",
           moduleType: validated.moduleType,
           emailType: "STANDARD",
-          recipients: [dossier.primaryEmail],
-          ccRecipients: dossier.ccEmails,
+          recipients,
+          ccRecipients,
           bccRecipients: dossier.bccEmails,
           subject: validated.subject,
           body: validated.body,
         },
       });
 
-      // Attempt to send
       const sendResult = await sendEmail({
         smtp: {
           host: smtpConfig.host,
@@ -300,14 +307,14 @@ export async function bulkSendAction(
           fromName: smtpConfig.fromName,
           fromEmail: smtpConfig.fromEmail,
         },
-        recipients: [dossier.primaryEmail],
-        ccRecipients: dossier.ccEmails,
+        recipients,
+        ccRecipients,
         bccRecipients: dossier.bccEmails,
         subject: validated.subject,
         body: validated.body,
+        attachmentUrls: dossier.documents.map((d) => d.blobUrl),
       });
 
-      // Update event with the result
       await db.emailSendEvent.update({
         where: { id: event.id },
         data: {
@@ -380,4 +387,135 @@ export async function resendEmail(
     body: originalEvent.body,
     attachmentIds: originalEvent.attachments.map((a) => a.documentId),
   });
+}
+
+// ---------------------------------------------------------------------------
+// Send emails for ALL non-empty active dossiers in a module
+// ---------------------------------------------------------------------------
+export async function sendAllAction(
+  data: { moduleType: "APA" | "ASH"; subject: string; body: string }
+): Promise<BulkSendResult[]> {
+  const userId = await requireAuth();
+  const validated = sendAllSchema.parse(data);
+
+  const smtpConfig = await getSmtpConfigWithPassword();
+  if (!smtpConfig) {
+    return [{ dossierId: "", success: false, error: "Configuration SMTP non definie" }];
+  }
+
+  const moduleConfig = await getModuleConfig(validated.moduleType as ModuleType);
+  if (!moduleConfig?.destinationEmail) {
+    return [{ dossierId: "", success: false, error: "Email de destination non configure dans les parametres" }];
+  }
+
+  // Fetch all active dossiers with at least one document
+  const dossiers = await db.dossier.findMany({
+    where: {
+      userId,
+      moduleType: validated.moduleType,
+      status: "ACTIVE",
+      documents: { some: {} },
+    },
+    select: {
+      id: true,
+      fullName: true,
+      primaryEmail: true,
+      ccEmails: true,
+      bccEmails: true,
+      documents: { select: { id: true, blobUrl: true } },
+    },
+  });
+
+  if (dossiers.length === 0) {
+    return [{ dossierId: "", success: false, error: "Aucun dossier actif avec des documents" }];
+  }
+
+  const batch = await db.emailBatch.create({
+    data: {
+      userId,
+      moduleType: validated.moduleType,
+      description: `Envoi total ${validated.moduleType} - ${dossiers.length} dossiers`,
+    },
+  });
+
+  const results: BulkSendResult[] = [];
+
+  for (const dossier of dossiers) {
+    try {
+      const recipients = [moduleConfig.destinationEmail];
+      const ccRecipients = [
+        ...(dossier.primaryEmail ? [dossier.primaryEmail] : []),
+        ...dossier.ccEmails,
+      ];
+
+      const event = await db.emailSendEvent.create({
+        data: {
+          userId,
+          dossierId: dossier.id,
+          batchId: batch.id,
+          status: "PENDING",
+          moduleType: validated.moduleType,
+          emailType: "STANDARD",
+          recipients,
+          ccRecipients,
+          bccRecipients: dossier.bccEmails,
+          subject: validated.subject,
+          body: validated.body,
+          attachments: {
+            create: dossier.documents.map((doc) => ({
+              documentId: doc.id,
+            })),
+          },
+        },
+      });
+
+      const sendResult = await sendEmail({
+        smtp: {
+          host: smtpConfig.host,
+          port: smtpConfig.port,
+          secure: smtpConfig.secure,
+          username: smtpConfig.username,
+          password: smtpConfig.password,
+          fromName: smtpConfig.fromName,
+          fromEmail: smtpConfig.fromEmail,
+        },
+        recipients,
+        ccRecipients,
+        bccRecipients: dossier.bccEmails,
+        subject: validated.subject,
+        body: validated.body,
+        attachmentUrls: dossier.documents.map((d) => d.blobUrl),
+      });
+
+      await db.emailSendEvent.update({
+        where: { id: event.id },
+        data: {
+          status: sendResult.success ? "SENT" : "FAILED",
+          errorMessage: sendResult.error || null,
+          sentAt: sendResult.success ? new Date() : null,
+        },
+      });
+
+      results.push({
+        dossierId: dossier.id,
+        success: sendResult.success,
+        error: sendResult.error,
+      });
+    } catch (error) {
+      console.error(`Error sending for dossier ${dossier.id}:`, error);
+      results.push({
+        dossierId: dossier.id,
+        success: false,
+        error: "Erreur inattendue lors de l'envoi",
+      });
+    }
+  }
+
+  revalidatePath("/history");
+  revalidatePath("/apa/history");
+  revalidatePath("/ash/history");
+  revalidatePath("/apa/dossiers");
+  revalidatePath("/ash/dossiers");
+
+  return results;
 }

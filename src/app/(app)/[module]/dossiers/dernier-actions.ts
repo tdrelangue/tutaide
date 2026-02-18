@@ -4,15 +4,13 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { requireAuth } from "@/lib/auth";
 import { sendEmail } from "@/lib/mailer-client";
-import { getSmtpConfigWithPassword } from "../../settings/actions";
+import { getSmtpConfigWithPassword, getModuleConfig } from "../../settings/actions";
+import type { ModuleType } from "@prisma/client";
 
 interface SendDernierEmailParams {
   dossierId: string;
   moduleType: "APA" | "ASH";
   reason: "DECES" | "DESSAISISSEMENT";
-  recipients: string[];
-  ccRecipients?: string[];
-  bccRecipients?: string[];
   subject: string;
   body: string;
 }
@@ -23,22 +21,39 @@ export async function sendDernierEmail(
   try {
     const userId = await requireAuth();
 
-    // Validate that the dossier exists and belongs to the user
     const dossier = await db.dossier.findFirst({
       where: { id: params.dossierId, userId },
+      select: {
+        id: true,
+        fullName: true,
+        primaryEmail: true,
+        ccEmails: true,
+        bccEmails: true,
+      },
     });
 
     if (!dossier) {
       return { success: false, error: "Dossier non trouve" };
     }
 
-    // Get SMTP configuration
     const smtpConfig = await getSmtpConfigWithPassword();
     if (!smtpConfig) {
       return { success: false, error: "Configuration SMTP non definie" };
     }
 
-    // Create a batch to group this dernier email event
+    // TO = government destination email
+    const moduleConfig = await getModuleConfig(params.moduleType as ModuleType);
+    if (!moduleConfig?.destinationEmail) {
+      return { success: false, error: "Email de destination non configure dans les parametres" };
+    }
+
+    const recipients = [moduleConfig.destinationEmail];
+    const ccRecipients = [
+      ...(dossier.primaryEmail ? [dossier.primaryEmail] : []),
+      ...dossier.ccEmails,
+    ];
+    const bccRecipients = dossier.bccEmails;
+
     const batch = await db.emailBatch.create({
       data: {
         userId,
@@ -47,10 +62,6 @@ export async function sendDernierEmail(
       },
     });
 
-    const ccRecipients = params.ccRecipients ?? [];
-    const bccRecipients = params.bccRecipients ?? [];
-
-    // Create the send event with DERNIER type and reason
     const event = await db.emailSendEvent.create({
       data: {
         userId,
@@ -60,7 +71,7 @@ export async function sendDernierEmail(
         moduleType: params.moduleType,
         emailType: "DERNIER",
         emailReason: params.reason,
-        recipients: params.recipients,
+        recipients,
         ccRecipients,
         bccRecipients,
         subject: params.subject,
@@ -68,7 +79,6 @@ export async function sendDernierEmail(
       },
     });
 
-    // Send the email via the mailer service
     const result = await sendEmail({
       smtp: {
         host: smtpConfig.host,
@@ -79,14 +89,13 @@ export async function sendDernierEmail(
         fromName: smtpConfig.fromName,
         fromEmail: smtpConfig.fromEmail,
       },
-      recipients: params.recipients,
+      recipients,
       ccRecipients,
       bccRecipients,
       subject: params.subject,
       body: params.body,
     });
 
-    // Update event status based on send result
     await db.emailSendEvent.update({
       where: { id: event.id },
       data: {
@@ -100,13 +109,11 @@ export async function sendDernierEmail(
       return { success: false, error: result.error || "Echec de l'envoi" };
     }
 
-    // On successful send, close the dossier
     await db.dossier.update({
       where: { id: params.dossierId },
       data: { status: "CLOSED" },
     });
 
-    // Revalidate all relevant paths
     const moduleSlug = params.moduleType.toLowerCase();
     revalidatePath(`/${moduleSlug}/dossiers`);
     revalidatePath(`/${moduleSlug}/history`);

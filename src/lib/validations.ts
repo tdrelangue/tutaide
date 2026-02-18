@@ -78,3 +78,12 @@ export const bulkSendSchema = z.object({
 });
 
 export type BulkSendFormData = z.infer<typeof bulkSendSchema>;
+
+// Send All (all non-empty dossiers)
+export const sendAllSchema = z.object({
+  moduleType: z.enum(["APA", "ASH"]),
+  subject: z.string().min(1, "L'objet est requis"),
+  body: z.string().min(1, "Le contenu est requis"),
+});
+
+export type SendAllFormData = z.infer<typeof sendAllSchema>;
