@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { hash, compare } from "bcryptjs";
 import { db } from "@/lib/db";
 import { requireAuth } from "@/lib/auth";
 import { encrypt, decrypt } from "@/lib/encryption";
@@ -235,6 +236,7 @@ export type ModuleConfigData = {
   id: string;
   moduleType: ModuleType;
   destinationEmail: string;
+  imapFolder: string | null;
 } | null;
 
 // Get module config
@@ -254,6 +256,7 @@ export async function getModuleConfig(
       id: true,
       moduleType: true,
       destinationEmail: true,
+      imapFolder: true,
     },
   });
 
@@ -273,6 +276,7 @@ export async function getAllModuleConfigs(): Promise<{
       id: true,
       moduleType: true,
       destinationEmail: true,
+      imapFolder: true,
     },
   });
 
@@ -285,7 +289,8 @@ export async function getAllModuleConfigs(): Promise<{
 // Save module config
 export async function saveModuleConfig(
   moduleType: ModuleType,
-  destinationEmail: string
+  destinationEmail: string,
+  imapFolder?: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const userId = await requireAuth();
@@ -301,9 +306,11 @@ export async function saveModuleConfig(
         userId,
         moduleType,
         destinationEmail,
+        imapFolder: imapFolder || null,
       },
       update: {
         destinationEmail,
+        imapFolder: imapFolder || null,
       },
     });
 
@@ -339,4 +346,73 @@ export async function getTemplatesByCategory(
   });
 
   return templates;
+}
+
+// ── General Settings (Password + Signature) ──
+
+export async function getSignature(): Promise<string> {
+  const userId = await requireAuth();
+  const user = await db.user.findUnique({
+    where: { id: userId },
+    select: { signature: true },
+  });
+  return user?.signature ?? "";
+}
+
+export async function updateSignature(
+  signature: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const userId = await requireAuth();
+    await db.user.update({
+      where: { id: userId },
+      data: { signature },
+    });
+    revalidatePath("/settings");
+    return { success: true };
+  } catch (error) {
+    console.error("Error updating signature:", error);
+    return { success: false, error: "Erreur lors de la mise a jour" };
+  }
+}
+
+export async function updatePassword(data: {
+  currentPassword: string;
+  newPassword: string;
+}): Promise<{ success: boolean; error?: string }> {
+  try {
+    const userId = await requireAuth();
+
+    const user = await db.user.findUnique({
+      where: { id: userId },
+      select: { passwordHash: true },
+    });
+
+    if (!user?.passwordHash) {
+      return { success: false, error: "Compte sans mot de passe" };
+    }
+
+    const isValid = await compare(data.currentPassword, user.passwordHash);
+    if (!isValid) {
+      return { success: false, error: "Mot de passe actuel incorrect" };
+    }
+
+    if (data.newPassword.length < 8) {
+      return {
+        success: false,
+        error: "Le nouveau mot de passe doit contenir au moins 8 caracteres",
+      };
+    }
+
+    const newHash = await hash(data.newPassword, 12);
+    await db.user.update({
+      where: { id: userId },
+      data: { passwordHash: newHash },
+    });
+
+    return { success: true };
+  } catch (error) {
+    console.error("Error updating password:", error);
+    return { success: false, error: "Erreur lors de la mise a jour" };
+  }
 }

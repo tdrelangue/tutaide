@@ -5,7 +5,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
-import { Loader2, Plus, Pencil, Trash2, Mail } from "lucide-react";
+import { Loader2, Plus, Pencil, Trash2, Mail, FolderInput } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -21,11 +21,12 @@ import {
 } from "./actions";
 import type { ModuleType } from "@prisma/client";
 
-const emailSchema = z.object({
+const moduleConfigSchema = z.object({
   destinationEmail: z.string().email("Email invalide"),
+  imapFolder: z.string().optional(),
 });
 
-type EmailFormData = z.infer<typeof emailSchema>;
+type ModuleConfigFormData = z.infer<typeof moduleConfigSchema>;
 
 interface ModuleConfigTabProps {
   moduleType: ModuleType;
@@ -66,17 +67,18 @@ export function ModuleConfigTab({
     register,
     handleSubmit,
     formState: { errors },
-  } = useForm<EmailFormData>({
-    resolver: zodResolver(emailSchema),
+  } = useForm<ModuleConfigFormData>({
+    resolver: zodResolver(moduleConfigSchema),
     defaultValues: {
       destinationEmail: initialConfig?.destinationEmail || "",
+      imapFolder: initialConfig?.imapFolder || "",
     },
   });
 
-  async function onSubmitEmail(data: EmailFormData) {
+  async function onSubmitConfig(data: ModuleConfigFormData) {
     setIsSaving(true);
     try {
-      const result = await saveModuleConfig(moduleType, data.destinationEmail);
+      const result = await saveModuleConfig(moduleType, data.destinationEmail, data.imapFolder);
       if (result.success) {
         toast.success("Email de destination enregistre");
       } else {
@@ -148,21 +150,21 @@ export function ModuleConfigTab({
         <span className="text-muted-foreground text-sm">{moduleLabel}</span>
       </div>
 
-      {/* Destination Email */}
+      {/* Destination Email & IMAP Folder */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
             <Mail className="h-4 w-4" />
-            Email de destination
+            Configuration du module
           </CardTitle>
           <CardDescription>
-            Adresse email ou seront envoyes les emails de ce module
+            Email de destination et dossier IMAP pour ce module
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSubmit(onSubmitEmail)} className="flex gap-3">
-            <div className="flex-1">
-              <Label htmlFor={`${moduleType}-email`} className="sr-only">
+          <form onSubmit={handleSubmit(onSubmitConfig)} className="space-y-4">
+            <div>
+              <Label htmlFor={`${moduleType}-email`}>
                 Email de destination
               </Label>
               <Input
@@ -170,6 +172,7 @@ export function ModuleConfigTab({
                 type="email"
                 placeholder="destination@exemple.fr"
                 disabled={isSaving}
+                className="mt-1"
                 {...register("destinationEmail")}
               />
               {errors.destinationEmail && (
@@ -177,6 +180,23 @@ export function ModuleConfigTab({
                   {errors.destinationEmail.message}
                 </p>
               )}
+            </div>
+            <div>
+              <Label htmlFor={`${moduleType}-imap`} className="flex items-center gap-2">
+                <FolderInput className="h-3.5 w-3.5" />
+                Dossier IMAP
+              </Label>
+              <Input
+                id={`${moduleType}-imap`}
+                type="text"
+                placeholder={`INBOX/${moduleType}`}
+                disabled={isSaving}
+                className="mt-1"
+                {...register("imapFolder")}
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Dossier IMAP ou copier les emails envoyes (par defaut : INBOX/{moduleType})
+              </p>
             </div>
             <Button type="submit" disabled={isSaving}>
               {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

@@ -1,5 +1,6 @@
 "use server";
 
+import fs from "fs/promises";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { requireAuth } from "@/lib/auth";
@@ -13,6 +14,36 @@ import {
   type BulkSendFormData,
 } from "@/lib/validations";
 import type { EmailSendStatus, EmailType, EmailReason, ModuleType } from "@prisma/client";
+
+async function getUserSignature(userId: string): Promise<string> {
+  const user = await db.user.findUnique({
+    where: { id: userId },
+    select: { signature: true },
+  });
+  return user?.signature ?? "";
+}
+
+/** Delete all documents from a dossier (DB records + files on disk). */
+async function clearDossierDocuments(dossierId: string, userId: string): Promise<void> {
+  const documents = await db.document.findMany({
+    where: { dossierId, userId },
+    select: { id: true, blobUrl: true },
+  });
+
+  // Delete files from disk
+  for (const doc of documents) {
+    try {
+      await fs.unlink(doc.blobUrl);
+    } catch {
+      // File may already be gone
+    }
+  }
+
+  // Delete DB records (cascades to EmailSendEventAttachment)
+  await db.document.deleteMany({
+    where: { dossierId, userId },
+  });
+}
 
 export type EmailEvent = {
   id: string;
@@ -122,6 +153,7 @@ export async function sendEmailAction(
   try {
     const userId = await requireAuth();
     const validated = sendEmailSchema.parse(data);
+    const signature = await getUserSignature(userId);
 
     const smtpConfig = await getSmtpConfigWithPassword();
     if (!smtpConfig) {
@@ -136,8 +168,25 @@ export async function sendEmailAction(
       },
     });
 
+    // Fetch dossier name for placeholder resolution
+    let dossierName: string | undefined;
+    if (validated.dossierId) {
+      const dossier = await db.dossier.findFirst({
+        where: { id: validated.dossierId, userId },
+        select: { fullName: true },
+      });
+      dossierName = dossier?.fullName ?? undefined;
+    }
+
+    // Fetch module config for IMAP folder
+    let imapFolder: string | undefined;
+    if (validated.moduleType) {
+      const moduleConfig = await getModuleConfig(validated.moduleType as ModuleType);
+      imapFolder = moduleConfig?.imapFolder ?? undefined;
+    }
+
     // Resolve attachment URLs if provided
-    let attachmentUrls: string[] = [];
+    let attachmentPaths: string[] = [];
     if (validated.attachmentIds.length > 0) {
       const documents = await db.document.findMany({
         where: {
@@ -145,7 +194,7 @@ export async function sendEmailAction(
           userId,
         },
       });
-      attachmentUrls = documents.map((d) => d.blobUrl);
+      attachmentPaths = documents.map((d) => d.blobUrl);
     }
 
     const event = await db.emailSendEvent.create({
@@ -185,7 +234,11 @@ export async function sendEmailAction(
       bccRecipients: validated.bccRecipients,
       subject: validated.subject,
       body: validated.body,
-      attachmentUrls,
+      attachmentPaths,
+      signature,
+      moduleType: validated.moduleType as "APA" | "ASH" | undefined,
+      dossierName,
+      imapFolder,
     });
 
     await db.emailSendEvent.update({
@@ -220,6 +273,7 @@ export async function bulkSendAction(
 ): Promise<BulkSendResult[]> {
   const userId = await requireAuth();
   const validated = bulkSendSchema.parse(data);
+  const signature = await getUserSignature(userId);
 
   const smtpConfig = await getSmtpConfigWithPassword();
   if (!smtpConfig) {
@@ -312,7 +366,11 @@ export async function bulkSendAction(
         bccRecipients: dossier.bccEmails,
         subject: validated.subject,
         body: validated.body,
-        attachmentUrls: dossier.documents.map((d) => d.blobUrl),
+        attachmentPaths: dossier.documents.map((d) => d.blobUrl),
+        signature,
+        moduleType: validated.moduleType as "APA" | "ASH",
+        dossierName: dossier.fullName,
+        imapFolder: moduleConfig.imapFolder ?? undefined,
       });
 
       await db.emailSendEvent.update({
@@ -323,6 +381,11 @@ export async function bulkSendAction(
           sentAt: sendResult.success ? new Date() : null,
         },
       });
+
+      // Clear documents from dossier after successful send
+      if (sendResult.success) {
+        await clearDossierDocuments(dossierId, userId);
+      }
 
       results.push({
         dossierId,
@@ -397,6 +460,7 @@ export async function sendAllAction(
 ): Promise<BulkSendResult[]> {
   const userId = await requireAuth();
   const validated = sendAllSchema.parse(data);
+  const signature = await getUserSignature(userId);
 
   const smtpConfig = await getSmtpConfigWithPassword();
   if (!smtpConfig) {
@@ -484,7 +548,11 @@ export async function sendAllAction(
         bccRecipients: dossier.bccEmails,
         subject: validated.subject,
         body: validated.body,
-        attachmentUrls: dossier.documents.map((d) => d.blobUrl),
+        attachmentPaths: dossier.documents.map((d) => d.blobUrl),
+        signature,
+        moduleType: validated.moduleType as "APA" | "ASH",
+        dossierName: dossier.fullName,
+        imapFolder: moduleConfig.imapFolder ?? undefined,
       });
 
       await db.emailSendEvent.update({
@@ -495,6 +563,11 @@ export async function sendAllAction(
           sentAt: sendResult.success ? new Date() : null,
         },
       });
+
+      // Clear documents from dossier after successful send
+      if (sendResult.success) {
+        await clearDossierDocuments(dossier.id, userId);
+      }
 
       results.push({
         dossierId: dossier.id,

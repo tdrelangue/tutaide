@@ -1,13 +1,11 @@
 "use server";
 
-import { put, del } from "@vercel/blob";
+import fs from "fs/promises";
+import path from "path";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { requireAuth } from "@/lib/auth";
-
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
+import { getDocumentsBaseDir } from "@/lib/documents-dir";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 
@@ -18,10 +16,6 @@ const ALLOWED_MIME_TYPES = new Set([
   "image/jpg",
 ]);
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
 function revalidateModulePaths(): void {
   revalidatePath("/apa/dossiers");
   revalidatePath("/ash/dossiers");
@@ -30,10 +24,6 @@ function revalidateModulePaths(): void {
 function isAllowedFile(file: File): boolean {
   return ALLOWED_MIME_TYPES.has(file.type) && file.size <= MAX_FILE_SIZE;
 }
-
-// ---------------------------------------------------------------------------
-// Public server actions
-// ---------------------------------------------------------------------------
 
 export async function uploadDocuments(formData: FormData): Promise<{
   success: boolean;
@@ -49,7 +39,6 @@ export async function uploadDocuments(formData: FormData): Promise<{
       return { success: false, error: "Donnees manquantes" };
     }
 
-    // Verify dossier ownership
     const dossier = await db.dossier.findFirst({
       where: { id: dossierId, userId },
     });
@@ -59,24 +48,25 @@ export async function uploadDocuments(formData: FormData): Promise<{
     }
 
     const uploadedDocs: Array<{ id: string }> = [];
+    const dir = path.join(getDocumentsBaseDir(), userId, dossierId);
+    await fs.mkdir(dir, { recursive: true });
 
     for (const file of files) {
       if (!isAllowedFile(file)) {
         continue;
       }
 
-      // Upload to Vercel Blob
-      const blob = await put(
-        `documents/${userId}/${dossierId}/${file.name}`,
-        file,
-        { access: "public", addRandomSuffix: true }
-      );
+      const timestamp = Date.now();
+      const safeFilename = `${timestamp}-${file.name}`;
+      const filePath = path.join(dir, safeFilename);
 
-      // Create document record with Blob URL
+      const buffer = Buffer.from(await file.arrayBuffer());
+      await fs.writeFile(filePath, buffer);
+
       const doc = await db.document.create({
         data: {
           filename: file.name,
-          blobUrl: blob.url,
+          blobUrl: filePath,
           size: file.size,
           mimeType: file.type,
           userId,
@@ -117,14 +107,12 @@ export async function deleteDocument(documentId: string): Promise<{
       return { success: false, error: "Document non trouve" };
     }
 
-    // Delete from Vercel Blob
     try {
-      await del(document.blobUrl);
+      await fs.unlink(document.blobUrl);
     } catch {
-      console.error("Failed to delete blob:", document.blobUrl);
+      console.error("Failed to delete local file:", document.blobUrl);
     }
 
-    // Delete from database
     await db.document.delete({
       where: { id: documentId },
     });
@@ -176,5 +164,5 @@ export async function getDocumentUrl(
     return null;
   }
 
-  return document.blobUrl;
+  return `/api/documents/${documentId}/download`;
 }

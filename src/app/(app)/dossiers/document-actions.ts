@@ -1,9 +1,11 @@
 "use server";
 
-import { put, del } from "@vercel/blob";
+import fs from "fs/promises";
+import path from "path";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { requireAuth } from "@/lib/auth";
+import { getDocumentsBaseDir } from "@/lib/documents-dir";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 
@@ -41,21 +43,25 @@ export async function uploadDocuments(formData: FormData): Promise<{
     }
 
     const uploadedDocs = [];
+    const dir = path.join(getDocumentsBaseDir(), userId, dossierId);
+    await fs.mkdir(dir, { recursive: true });
+
     for (const file of files) {
       if (!isAllowedFile(file)) {
         continue;
       }
 
-      const blob = await put(
-        `documents/${userId}/${dossierId}/${file.name}`,
-        file,
-        { access: "public", addRandomSuffix: true }
-      );
+      const timestamp = Date.now();
+      const safeFilename = `${timestamp}-${file.name}`;
+      const filePath = path.join(dir, safeFilename);
+
+      const buffer = Buffer.from(await file.arrayBuffer());
+      await fs.writeFile(filePath, buffer);
 
       const doc = await db.document.create({
         data: {
           filename: file.name,
-          blobUrl: blob.url,
+          blobUrl: filePath,
           size: file.size,
           mimeType: file.type,
           userId,
@@ -96,9 +102,9 @@ export async function deleteDocument(documentId: string): Promise<{
     }
 
     try {
-      await del(document.blobUrl);
+      await fs.unlink(document.blobUrl);
     } catch {
-      console.error("Failed to delete blob:", document.blobUrl);
+      console.error("Failed to delete local file:", document.blobUrl);
     }
 
     await db.document.delete({
@@ -150,5 +156,5 @@ export async function getDocumentUrl(documentId: string): Promise<string | null>
     return null;
   }
 
-  return document.blobUrl;
+  return `/api/documents/${documentId}/download`;
 }

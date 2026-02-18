@@ -1,3 +1,4 @@
+import fs from "fs/promises";
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -22,16 +23,16 @@ export async function GET(
       return NextResponse.json({ error: "Document non trouvé" }, { status: 404 });
     }
 
-    // Fetch from Vercel Blob
-    const response = await fetch(document.blobUrl);
-    if (!response.ok) {
+    // Read from local filesystem
+    let fileBuffer: Buffer;
+    try {
+      fileBuffer = await fs.readFile(document.blobUrl);
+    } catch {
       return NextResponse.json(
-        { error: "Erreur lors de la récupération du fichier" },
-        { status: 500 }
+        { error: "Fichier introuvable sur le disque" },
+        { status: 404 }
       );
     }
-
-    const blob = await response.blob();
 
     const headers = new Headers();
     headers.set("Content-Type", document.mimeType);
@@ -39,9 +40,9 @@ export async function GET(
       "Content-Disposition",
       `attachment; filename="${encodeURIComponent(document.filename)}"`
     );
-    headers.set("Content-Length", document.size.toString());
+    headers.set("Content-Length", fileBuffer.length.toString());
 
-    return new NextResponse(blob, { status: 200, headers });
+    return new NextResponse(new Uint8Array(fileBuffer), { status: 200, headers });
   } catch (error) {
     console.error("Download error:", error);
     return NextResponse.json(

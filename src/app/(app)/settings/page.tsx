@@ -3,16 +3,18 @@ import {
   getSmtpConfig,
   getAllModuleConfigs,
   getTemplatesByCategory,
+  getSignature,
 } from "./actions";
 import { SettingsPageClient } from "./settings-client";
 
 export default async function SettingsPage() {
-  const [smtpConfig, moduleConfigs, apaTemplates, ashTemplates] =
+  const [smtpConfig, moduleConfigs, apaTemplates, ashTemplates, signature] =
     await Promise.all([
       getSmtpConfig(),
       getAllModuleConfigs(),
       getTemplatesByCategory("APA"),
       getTemplatesByCategory("ASH"),
+      getSignature(),
     ]);
 
   return (
@@ -22,6 +24,7 @@ export default async function SettingsPage() {
         initialModuleConfigs={moduleConfigs}
         initialApaTemplates={apaTemplates}
         initialAshTemplates={ashTemplates}
+        initialSignature={signature}
       />
     </Suspense>
   );

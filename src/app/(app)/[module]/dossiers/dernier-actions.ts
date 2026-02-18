@@ -20,6 +20,11 @@ export async function sendDernierEmail(
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const userId = await requireAuth();
+    const user = await db.user.findUnique({
+      where: { id: userId },
+      select: { signature: true },
+    });
+    const signature = user?.signature ?? "";
 
     const dossier = await db.dossier.findFirst({
       where: { id: params.dossierId, userId },
@@ -94,6 +99,10 @@ export async function sendDernierEmail(
       bccRecipients,
       subject: params.subject,
       body: params.body,
+      signature,
+      moduleType: params.moduleType,
+      dossierName: dossier.fullName,
+      imapFolder: moduleConfig.imapFolder ?? undefined,
     });
 
     await db.emailSendEvent.update({

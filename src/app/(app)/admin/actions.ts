@@ -5,6 +5,7 @@ import { hash } from "bcryptjs";
 import { db } from "@/lib/db";
 import { requireAdmin, startImpersonation, stopImpersonation } from "@/lib/auth";
 import { z } from "zod";
+import { seedDefaultTemplates } from "@/lib/default-templates";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -104,6 +105,8 @@ export async function createUser(data: {
         role: validated.role ?? "USER",
       },
     });
+
+    await seedDefaultTemplates(user.id);
 
     revalidatePath("/admin/users");
     return { success: true, id: user.id };

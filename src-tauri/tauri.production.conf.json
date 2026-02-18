@@ -1,0 +1,10 @@
+{
+  "build": {
+    "frontendDist": "http://127.0.0.1:3456"
+  },
+  "bundle": {
+    "resources": {
+      "nextjs-server/": "../.next/standalone/"
+    }
+  }
+}

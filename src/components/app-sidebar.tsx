@@ -84,6 +84,7 @@ export function AppSidebar({ userRole }: AppSidebarProps) {
             height={44}
             className="object-contain"
             priority
+            unoptimized
           />
         </Link>
       </div>

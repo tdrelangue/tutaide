@@ -3,8 +3,9 @@
 import { useState } from "react";
 import { SmtpConfigForm } from "./smtp-config-form";
 import { ModuleConfigTab } from "./module-config-tab";
+import { GeneralSettingsTab } from "./general-settings-tab";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Mail, FileText } from "lucide-react";
+import { Mail, FileText, Settings } from "lucide-react";
 import type { SmtpConfigData, ModuleConfigData, TemplateData } from "./actions";
 
 interface SettingsPageClientProps {
@@ -15,6 +16,7 @@ interface SettingsPageClientProps {
   };
   initialApaTemplates: TemplateData[];
   initialAshTemplates: TemplateData[];
+  initialSignature: string;
 }
 
 export function SettingsPageClient({
@@ -22,6 +24,7 @@ export function SettingsPageClient({
   initialModuleConfigs,
   initialApaTemplates,
   initialAshTemplates,
+  initialSignature,
 }: SettingsPageClientProps) {
   const [smtpConfig] = useState(initialSmtpConfig);
   const [apaConfig] = useState(initialModuleConfigs.apa);
@@ -43,8 +46,12 @@ export function SettingsPageClient({
 
       {/* Content with Tabs */}
       <div className="flex-1 overflow-auto p-6">
-        <Tabs defaultValue="smtp" className="w-full">
-          <TabsList className="grid w-full max-w-md grid-cols-3">
+        <Tabs defaultValue="general" className="w-full">
+          <TabsList className="grid w-full max-w-lg grid-cols-4">
+            <TabsTrigger value="general" className="flex items-center gap-2">
+              <Settings className="h-4 w-4" />
+              General
+            </TabsTrigger>
             <TabsTrigger value="smtp" className="flex items-center gap-2">
               <Mail className="h-4 w-4" />
               SMTP
@@ -58,6 +65,10 @@ export function SettingsPageClient({
               ASH
             </TabsTrigger>
           </TabsList>
+
+          <TabsContent value="general" className="mt-6">
+            <GeneralSettingsTab initialSignature={initialSignature} />
+          </TabsContent>
 
           <TabsContent value="smtp" className="mt-6">
             <div className="max-w-2xl">

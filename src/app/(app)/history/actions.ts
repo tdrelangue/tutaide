@@ -8,6 +8,14 @@ import { getSmtpConfigWithPassword } from "../settings/actions";
 import { sendEmailSchema, type SendEmailFormData } from "@/lib/validations";
 import type { EmailSendStatus } from "@prisma/client";
 
+async function getUserSignature(userId: string): Promise<string> {
+  const user = await db.user.findUnique({
+    where: { id: userId },
+    select: { signature: true },
+  });
+  return user?.signature ?? "";
+}
+
 export type EmailEvent = {
   id: string;
   status: EmailSendStatus;
@@ -121,6 +129,7 @@ export async function sendEmailAction(
   try {
     const userId = await requireAuth();
     const validated = sendEmailSchema.parse(data);
+    const signature = await getUserSignature(userId);
 
     // Get SMTP config
     const smtpConfig = await getSmtpConfigWithPassword();
@@ -136,8 +145,18 @@ export async function sendEmailAction(
       },
     });
 
+    // Fetch dossier name for placeholder resolution
+    let dossierName: string | undefined;
+    if (validated.dossierId) {
+      const dossier = await db.dossier.findFirst({
+        where: { id: validated.dossierId, userId },
+        select: { fullName: true },
+      });
+      dossierName = dossier?.fullName ?? undefined;
+    }
+
     // Get attachment URLs if any
-    let attachmentUrls: string[] = [];
+    let attachmentPaths: string[] = [];
     if (validated.attachmentIds.length > 0) {
       const documents = await db.document.findMany({
         where: {
@@ -145,7 +164,7 @@ export async function sendEmailAction(
           userId,
         },
       });
-      attachmentUrls = documents.map((d) => d.blobUrl);
+      attachmentPaths = documents.map((d) => d.blobUrl);
     }
 
     // Create send event (pending)
@@ -184,7 +203,9 @@ export async function sendEmailAction(
       bccRecipients: validated.bccRecipients,
       subject: validated.subject,
       body: validated.body,
-      attachmentUrls,
+      attachmentPaths,
+      signature,
+      dossierName,
     });
 
     // Update event status

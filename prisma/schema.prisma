@@ -16,6 +16,7 @@ model User {
   archivedAt    DateTime?
   createdAt     DateTime         @default(now())
   updatedAt     DateTime         @updatedAt
+  signature     String?
   orgId         String?
   documents     Document[]
   dossiers      Dossier[]
@@ -172,6 +173,7 @@ model ModuleConfig {
   id               String     @id @default(cuid())
   moduleType       ModuleType
   destinationEmail String
+  imapFolder       String?
   createdAt        DateTime   @default(now())
   updatedAt        DateTime   @updatedAt
   userId           String
