@@ -1,6 +1,12 @@
 "use server";
 
+// NOTE (ASH import): PDF text extraction requires `pdf-parse`.
+// Run: npm install pdf-parse @types/pdf-parse
+// Until installed, parseAshPdf will return null and the import zone
+// will show an "extraction unavailable" error per file.
+
 import fs from "fs/promises";
+import { existsSync } from "fs";
 import path from "path";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
@@ -28,6 +34,7 @@ function isAllowedFile(file: File): boolean {
 export async function uploadDocuments(formData: FormData): Promise<{
   success: boolean;
   count?: number;
+  documents?: Array<{ id: string; filename: string; size: number; createdAt: Date }>;
   error?: string;
 }> {
   try {
@@ -47,7 +54,7 @@ export async function uploadDocuments(formData: FormData): Promise<{
       return { success: false, error: "Dossier non trouve" };
     }
 
-    const uploadedDocs: Array<{ id: string }> = [];
+    const uploadedDocs: Array<{ id: string; filename: string; size: number; createdAt: Date }> = [];
     const dir = path.join(getDocumentsBaseDir(), userId, dossierId);
     await fs.mkdir(dir, { recursive: true });
 
@@ -74,7 +81,7 @@ export async function uploadDocuments(formData: FormData): Promise<{
         },
       });
 
-      uploadedDocs.push({ id: doc.id });
+      uploadedDocs.push({ id: doc.id, filename: doc.filename, size: doc.size, createdAt: doc.createdAt });
     }
 
     if (uploadedDocs.length === 0) {
@@ -85,7 +92,7 @@ export async function uploadDocuments(formData: FormData): Promise<{
     }
 
     revalidateModulePaths();
-    return { success: true, count: uploadedDocs.length };
+    return { success: true, count: uploadedDocs.length, documents: uploadedDocs };
   } catch (error) {
     console.error("Error uploading documents:", error);
     return { success: false, error: "Erreur lors de l'upload" };
@@ -145,10 +152,14 @@ export async function getDocuments(dossierId: string): Promise<
       size: true,
       mimeType: true,
       createdAt: true,
+      blobUrl: true,
     },
   });
 
-  return documents;
+  // Only return documents whose file actually exists on this machine
+  return documents
+    .filter((doc) => existsSync(doc.blobUrl))
+    .map(({ blobUrl: _url, ...doc }) => doc);
 }
 
 export async function getDocumentUrl(
@@ -165,4 +176,133 @@ export async function getDocumentUrl(
   }
 
   return `/api/documents/${documentId}/download`;
+}
+
+// ---------------------------------------------------------------------------
+// ASH Auto-Import
+// ---------------------------------------------------------------------------
+
+/**
+ * Parse an ASH PDF and extract protégé name + period label.
+ * Requires `pdf-parse` to be installed (npm install pdf-parse @types/pdf-parse).
+ * Returns null when the dependency is missing or text extraction fails.
+ */
+export async function parseAshPdf(formData: FormData): Promise<{
+  success: boolean;
+  protegeName?: string;
+  periodLabel?: string;
+  error?: string;
+}> {
+  try {
+    const file = formData.get("file") as File | null;
+    if (!file || file.type !== "application/pdf") {
+      return { success: false, error: "Fichier PDF requis" };
+    }
+
+    const buffer = Buffer.from(await file.arrayBuffer());
+    let text: string;
+    try {
+      // pdfjs-dist legacy build works in Node without DOM polyfills
+      const pdfjsLib = await import("pdfjs-dist/legacy/build/pdf.mjs");
+      // Point to the worker file so pdfjs can load it as a fake worker in Node
+      const workerPath = (await import("path")).resolve(
+        process.cwd(),
+        "node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs"
+      );
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (pdfjsLib as any).GlobalWorkerOptions.workerSrc = `file:///${workerPath.replace(/\\/g, "/")}`;
+      const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(buffer) });
+      const pdf = await loadingTask.promise;
+      const pages: string[] = [];
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const content = await page.getTextContent();
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        pages.push(content.items.map((item: any) => item.str ?? "").join(" "));
+      }
+      text = pages.join("\n");
+    } catch (e) {
+      console.error("[parseAshPdf] PDF extraction failed:", e);
+      return {
+        success: false,
+        error: `Erreur lecture PDF : ${e instanceof Error ? e.message : String(e)}`,
+      };
+    }
+    console.log("[parseAshPdf] extracted text (first 500 chars):", text.slice(0, 500));
+
+    // Extract protégé name.
+    // PDF column layout places the name BEFORE the label, e.g.:
+    //   "M. PHILIPPE CASTILLON Protégé :  01/06/2022"
+    // Fallback: label-first format "Protégé : M. FIRSTNAME LASTNAME"
+    const protegeMatch =
+      text.match(/(?:M\.?|Mme\.?|Dr\.?)\s+([A-ZÀÂÄÉÈÊËÎÏÔÙÛÜÇ][A-ZÀÂÄÉÈÊËÎÏÔÙÛÜÇ\s'-]+?)\s+Prot[eé]g[eé]/i) ??
+      text.match(/Prot[eé]g[eé]\s*:\s*(?:M\.?|Mme\.?|Dr\.?)?\s*([A-ZÀÂÄÉÈÊËÎÏÔÙÛÜÇ\s'-]+)/i);
+    if (!protegeMatch) {
+      return { success: false, error: "Nom du protégé introuvable dans le PDF" };
+    }
+
+    // Normalize: "PHILIPPE CASTILLON" → keep last word as surname
+    const rawName = protegeMatch[1].trim().replace(/\s+/g, " ");
+    const parts = rawName.split(" ");
+    const surname = parts[parts.length - 1]; // e.g. "CASTILLON"
+    const protegeName = rawName; // full name for dossier matching
+
+    // Extract period — pattern: "du DD/MM/YYYY au DD/MM/YYYY"
+    const periodMatch = text.match(/du\s+(\d{2}\/\d{2}\/(\d{4}))\s+au\s+(\d{2}\/(\d{2})\/\d{4})/i);
+    let periodLabel = surname; // fallback
+    if (periodMatch) {
+      const startMonth = parseInt(periodMatch[1].split("/")[1], 10);
+      const year = periodMatch[2];
+      const quarter = Math.ceil(startMonth / 3);
+      periodLabel = `ASH \u2013 ${surname} \u2013 Q${quarter} ${year}`;
+    }
+
+    return { success: true, protegeName, periodLabel };
+  } catch (error) {
+    console.error("parseAshPdf error:", error);
+    return { success: false, error: "Erreur lors de l'analyse du PDF" };
+  }
+}
+
+/**
+ * Find a dossier by fullName (case-insensitive) for the ASH module,
+ * or create a minimal one if none exists.
+ */
+export async function findOrCreateAshDossier(
+  protegeName: string
+): Promise<{ success: boolean; dossierId?: string; created?: boolean; error?: string }> {
+  try {
+    const userId = await requireAuth();
+    const normalized = protegeName.trim();
+
+    const existing = await db.dossier.findFirst({
+      where: {
+        userId,
+        moduleType: "ASH",
+        fullName: { equals: normalized, mode: "insensitive" },
+      },
+      select: { id: true },
+    });
+
+    if (existing) {
+      return { success: true, dossierId: existing.id, created: false };
+    }
+
+    const created = await db.dossier.create({
+      data: {
+        fullName: normalized,
+        moduleType: "ASH",
+        priority: "NORMAL",
+        status: "ACTIVE",
+        userId,
+      },
+      select: { id: true },
+    });
+
+    revalidateModulePaths();
+    return { success: true, dossierId: created.id, created: true };
+  } catch (error) {
+    console.error("findOrCreateAshDossier error:", error);
+    return { success: false, error: "Erreur lors de la recherche/création du dossier" };
+  }
 }

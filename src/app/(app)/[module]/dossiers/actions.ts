@@ -1,5 +1,6 @@
 "use server";
 
+import { existsSync } from "fs";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { requireAuth } from "@/lib/auth";
@@ -82,21 +83,27 @@ export async function getDossiers(
     include: {
       documents: {
         orderBy: { createdAt: "desc" },
-        take: 3,
         select: {
           id: true,
           filename: true,
           createdAt: true,
+          blobUrl: true,
         },
-      },
-      _count: {
-        select: { documents: true },
       },
     },
     orderBy,
   });
 
-  return dossiers;
+  // Filter out documents whose file no longer exists on this machine
+  // (e.g. uploaded from another computer with the same account)
+  return dossiers.map((dossier) => {
+    const localDocs = dossier.documents.filter((doc) => existsSync(doc.blobUrl));
+    return {
+      ...dossier,
+      documents: localDocs.slice(0, 3).map(({ blobUrl: _url, ...doc }) => doc),
+      _count: { documents: localDocs.length },
+    };
+  });
 }
 
 export async function getDossier(
@@ -113,15 +120,20 @@ export async function getDossier(
           id: true,
           filename: true,
           createdAt: true,
+          blobUrl: true,
         },
-      },
-      _count: {
-        select: { documents: true },
       },
     },
   });
 
-  return dossier;
+  if (!dossier) return null;
+
+  const localDocs = dossier.documents.filter((doc) => existsSync(doc.blobUrl));
+  return {
+    ...dossier,
+    documents: localDocs.map(({ blobUrl: _url, ...doc }) => doc),
+    _count: { documents: localDocs.length },
+  };
 }
 
 export async function createDossier(

@@ -13,7 +13,6 @@ import {
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -25,7 +24,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { formatRelativeTime, formatFileSize } from "@/lib/utils";
-import { uploadDocuments, deleteDocument, getDocuments } from "../document-actions";
+import { uploadDocuments, deleteDocument } from "../document-actions";
 import type { DossierWithDocuments } from "../actions";
 
 interface DocumentsTabProps {
@@ -85,8 +84,11 @@ export function DocumentsTab({ dossier }: DocumentsTabProps) {
             (result.count ?? 0) > 1 ? "s" : ""
           }`
         );
-        const docs = await getDocuments(dossier.id);
-        setDocuments(docs);
+        // Append newly uploaded docs directly from the server response —
+        // avoids a second round-trip and any existsSync timing issues.
+        if (result.documents && result.documents.length > 0) {
+          setDocuments((prev) => [...prev, ...result.documents!]);
+        }
         setShowUploadZone(false);
         router.refresh();
       } else {
@@ -229,7 +231,7 @@ export function DocumentsTab({ dossier }: DocumentsTabProps) {
       )}
 
       {documents.length > 0 && (
-        <ScrollArea className="h-64">
+        <div className="max-h-64 overflow-y-auto pr-1">
           <div className="space-y-2">
             {documents.map((doc) => (
               <div
@@ -246,7 +248,7 @@ export function DocumentsTab({ dossier }: DocumentsTabProps) {
                     {doc.size > 0 && ` • ${formatFileSize(doc.size)}`}
                   </p>
                 </div>
-                <div className="flex gap-1">
+                <div className="flex gap-1 flex-shrink-0">
                   <Button
                     variant="ghost"
                     size="icon"
@@ -269,7 +271,7 @@ export function DocumentsTab({ dossier }: DocumentsTabProps) {
               </div>
             ))}
           </div>
-        </ScrollArea>
+        </div>
       )}
 
       <AlertDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>

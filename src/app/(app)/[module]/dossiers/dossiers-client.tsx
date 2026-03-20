@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Plus, Search, SortAsc, Send, CheckSquare, Filter } from "lucide-react";
+import { Plus, Search, SortAsc, Send, CheckSquare, Filter, ChevronDown, ChevronUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -17,6 +17,7 @@ import { DossierSheet } from "./dossier-sheet";
 import { CreateDossierDialog } from "./create-dossier-dialog";
 import { BulkSendDialog } from "./bulk-send-dialog";
 import { SendAllDialog } from "./send-all-dialog";
+import { AshImportZone } from "./ash-import-zone";
 import type { DossierWithDocuments } from "./actions";
 
 interface DossiersPageClientProps {
@@ -47,6 +48,7 @@ export function DossiersPageClient({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isBulkSendOpen, setIsBulkSendOpen] = useState(false);
   const [isSendAllOpen, setIsSendAllOpen] = useState(false);
+  const [isImportOpen, setIsImportOpen] = useState(false);
 
   const basePath = `/${moduleType.toLowerCase()}/dossiers`;
 
@@ -267,6 +269,25 @@ export function DossiersPageClient({
           </Select>
         </div>
       </div>
+
+      {/* ASH PDF auto-import zone */}
+      {moduleType === "ASH" && (
+        <div className="border-b px-6 py-2">
+          <button
+            type="button"
+            onClick={() => setIsImportOpen((v) => !v)}
+            className="flex items-center gap-2 text-xs font-medium text-muted-foreground uppercase tracking-wide py-2 hover:text-foreground transition-colors"
+          >
+            {isImportOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+            Import ASH automatique
+          </button>
+          {isImportOpen && (
+            <div className="pb-3">
+              <AshImportZone />
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Content */}
       <div className="flex-1 overflow-auto p-6">

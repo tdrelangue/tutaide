@@ -1,6 +1,7 @@
 "use server";
 
 import fs from "fs/promises";
+import { existsSync } from "fs";
 import path from "path";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
@@ -23,6 +24,7 @@ function isAllowedFile(file: File): boolean {
 export async function uploadDocuments(formData: FormData): Promise<{
   success: boolean;
   count?: number;
+  documents?: Array<{ id: string; filename: string; size: number; createdAt: Date }>;
   error?: string;
 }> {
   try {
@@ -42,7 +44,7 @@ export async function uploadDocuments(formData: FormData): Promise<{
       return { success: false, error: "Dossier non trouvé" };
     }
 
-    const uploadedDocs = [];
+    const uploadedDocs: Array<{ id: string; filename: string; size: number; createdAt: Date }> = [];
     const dir = path.join(getDocumentsBaseDir(), userId, dossierId);
     await fs.mkdir(dir, { recursive: true });
 
@@ -69,7 +71,7 @@ export async function uploadDocuments(formData: FormData): Promise<{
         },
       });
 
-      uploadedDocs.push(doc);
+      uploadedDocs.push({ id: doc.id, filename: doc.filename, size: doc.size, createdAt: doc.createdAt });
     }
 
     if (uploadedDocs.length === 0) {
@@ -79,7 +81,7 @@ export async function uploadDocuments(formData: FormData): Promise<{
     revalidatePath("/dossiers");
     revalidatePath("/apa/dossiers");
     revalidatePath("/ash/dossiers");
-    return { success: true, count: uploadedDocs.length };
+    return { success: true, count: uploadedDocs.length, documents: uploadedDocs };
   } catch (error) {
     console.error("Error uploading documents:", error);
     return { success: false, error: "Erreur lors de l'upload" };
@@ -139,10 +141,14 @@ export async function getDocuments(dossierId: string): Promise<
       filename: true,
       size: true,
       createdAt: true,
+      blobUrl: true,
     },
   });
 
-  return documents;
+  // Only return documents whose file actually exists on this machine
+  return documents
+    .filter((doc) => existsSync(doc.blobUrl))
+    .map(({ blobUrl: _url, ...doc }) => doc);
 }
 
 export async function getDocumentUrl(documentId: string): Promise<string | null> {

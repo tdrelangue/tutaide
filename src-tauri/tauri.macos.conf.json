@@ -3,8 +3,12 @@
     "frontendDist": "../src-tauri/dist"
   },
   "bundle": {
+    "targets": ["dmg", "app"],
+    "macOS": {
+      "minimumSystemVersion": "11.0"
+    },
     "resources": {
-      "binaries/node-win.exe": "node.exe",
+      "binaries/node-mac": "node",
       "../.next/standalone/": "nextjs-server/"
     }
   }
