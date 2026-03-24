@@ -25,33 +25,26 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { smtpConfigSchema, type SmtpConfigFormData } from "@/lib/validations";
-import { saveSmtpConfig, type SmtpConfigData } from "./actions";
+import { CheckCircle2, XCircle } from "lucide-react";
+import { saveSmtpConfig, testSmtpConnection, type SmtpConfigData } from "./actions";
 
 interface SmtpConfigFormProps {
   initialConfig: SmtpConfigData;
 }
 
 const presets = {
-  GMAIL: {
-    smtpHost: "smtp.gmail.com",
-    smtpPort: 587,
-    secure: true,
-  },
-  OUTLOOK: {
-    smtpHost: "smtp.office365.com",
-    smtpPort: 587,
-    secure: true,
-  },
-  OTHER: {
-    smtpHost: "",
-    smtpPort: 587,
-    secure: true,
-  },
+  GMAIL:   { smtpHost: "smtp.gmail.com",      smtpPort: 587, secure: true },
+  OUTLOOK: { smtpHost: "smtp.office365.com",  smtpPort: 587, secure: true },
+  OVH:     { smtpHost: "ssl0.ovh.net",        smtpPort: 465, secure: true },
+  IONOS:   { smtpHost: "smtp.ionos.fr",       smtpPort: 587, secure: true },
+  OTHER:   { smtpHost: "",                    smtpPort: 587, secure: true },
 };
 
 export function SmtpConfigForm({ initialConfig }: SmtpConfigFormProps) {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
+  const [isTesting, setIsTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
   const [showPassword, setShowPassword] = useState(false);
 
   const {
@@ -79,20 +72,40 @@ export function SmtpConfigForm({ initialConfig }: SmtpConfigFormProps) {
 
   // Apply presets when provider changes
   useEffect(() => {
-    if (provider && presets[provider]) {
-      const preset = presets[provider];
-      if (preset.smtpHost) {
-        setValue("smtpHost", preset.smtpHost);
-      }
-      setValue("smtpPort", preset.smtpPort);
-      setValue("secure", preset.secure);
-    }
+    // OVH and IONOS are UI-only presets — they save as "OTHER" to the DB
+    const key = (provider as string) in presets ? (provider as keyof typeof presets) : "OTHER";
+    const preset = presets[key];
+    if (preset.smtpHost) setValue("smtpHost", preset.smtpHost);
+    setValue("smtpPort", preset.smtpPort);
+    setValue("secure", preset.secure);
   }, [provider, setValue]);
+
+  async function onTest() {
+    setIsTesting(true);
+    setTestResult(null);
+    try {
+      const result = await testSmtpConnection(normalizeProvider(watch()));
+      setTestResult(result);
+    } catch {
+      setTestResult({ success: false, message: "Erreur inattendue lors du test." });
+    } finally {
+      setIsTesting(false);
+    }
+  }
+
+  // OVH and IONOS are UI-only presets — map to OTHER before saving to DB
+  function normalizeProvider(data: SmtpConfigFormData): SmtpConfigFormData {
+    const uiOnlyProviders = ["OVH", "IONOS"];
+    if (uiOnlyProviders.includes(data.provider as string)) {
+      return { ...data, provider: "OTHER" };
+    }
+    return data;
+  }
 
   async function onSubmit(data: SmtpConfigFormData) {
     setIsLoading(true);
     try {
-      const result = await saveSmtpConfig(data);
+      const result = await saveSmtpConfig(normalizeProvider(data));
       if (result.success) {
         toast.success("Configuration SMTP enregistrée");
         router.refresh();
@@ -136,6 +149,8 @@ export function SmtpConfigForm({ initialConfig }: SmtpConfigFormProps) {
               <SelectContent>
                 <SelectItem value="GMAIL">Gmail</SelectItem>
                 <SelectItem value="OUTLOOK">Outlook / Office 365</SelectItem>
+                <SelectItem value="OVH">OVH</SelectItem>
+                <SelectItem value="IONOS">Ionos</SelectItem>
                 <SelectItem value="OTHER">Autre</SelectItem>
               </SelectContent>
             </Select>
@@ -291,12 +306,40 @@ export function SmtpConfigForm({ initialConfig }: SmtpConfigFormProps) {
             </div>
           </div>
 
-          <Button type="submit" disabled={isLoading}>
-            {isLoading && (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
-            )}
-            Enregistrer
-          </Button>
+          <div className="flex flex-wrap items-center gap-3">
+            <Button type="submit" disabled={isLoading || isTesting}>
+              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
+              Enregistrer
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={isLoading || isTesting}
+              onClick={onTest}
+            >
+              {isTesting && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
+              Tester la connexion
+            </Button>
+          </div>
+
+          {/* Inline test result */}
+          {testResult && (
+            <div
+              className={`flex items-start gap-2 rounded-md border px-3 py-2 text-sm ${
+                testResult.success
+                  ? "border-green-200 bg-green-50 text-green-800"
+                  : "border-red-200 bg-red-50 text-red-800"
+              }`}
+              role="status"
+            >
+              {testResult.success ? (
+                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+              ) : (
+                <XCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+              )}
+              {testResult.message}
+            </div>
+          )}
         </form>
       </CardContent>
     </Card>
