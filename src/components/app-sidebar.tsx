@@ -68,7 +68,7 @@ export function AppSidebar({ userRole }: AppSidebarProps) {
   return (
     <nav
       aria-label="Navigation principale"
-      className="flex w-24 flex-col border-r bg-muted/30"
+      className="sticky top-0 h-screen flex w-24 flex-col border-r bg-muted/30"
     >
       {/* Logo at top */}
       <div className="flex h-16 items-center justify-center border-b">

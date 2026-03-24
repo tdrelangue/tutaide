@@ -202,6 +202,30 @@ export async function parseAshPdf(formData: FormData): Promise<{
     const buffer = Buffer.from(await file.arrayBuffer());
     let text: string;
     try {
+      // Polyfill DOM types required by pdfjs-dist in a Node/Tauri environment
+      if (typeof globalThis.DOMMatrix === "undefined") {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (globalThis as any).DOMMatrix = class DOMMatrix {
+          a=1;b=0;c=0;d=1;e=0;f=0;
+          constructor(_init?: string | number[]) {}
+          multiply() { return this; }
+          translate() { return this; }
+          scale() { return this; }
+          rotate() { return this; }
+          inverse() { return this; }
+          transformPoint(p: {x?:number;y?:number}) { return { x: p.x??0, y: p.y??0 }; }
+        };
+      }
+      if (typeof globalThis.Path2D === "undefined") {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (globalThis as any).Path2D = class Path2D {};
+      }
+      if (typeof globalThis.ImageData === "undefined") {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (globalThis as any).ImageData = class ImageData {
+          constructor(public data: Uint8ClampedArray, public width: number, public height: number) {}
+        };
+      }
       // pdfjs-dist legacy build works in Node without DOM polyfills
       const pdfjsLib = await import("pdfjs-dist/legacy/build/pdf.mjs");
       // Point to the worker file so pdfjs can load it as a fake worker in Node
@@ -209,8 +233,10 @@ export async function parseAshPdf(formData: FormData): Promise<{
         process.cwd(),
         "node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs"
       );
+      // Strip Windows extended-length prefix (\\?\) which is invalid in file URLs
+      const normalizedWorkerPath = workerPath.replace(/^\\\\\?\\/, "").replace(/\\/g, "/");
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (pdfjsLib as any).GlobalWorkerOptions.workerSrc = `file:///${workerPath.replace(/\\/g, "/")}`;
+      (pdfjsLib as any).GlobalWorkerOptions.workerSrc = `file:///${normalizedWorkerPath}`;
       const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(buffer) });
       const pdf = await loadingTask.promise;
       const pages: string[] = [];
