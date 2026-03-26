@@ -56,7 +56,7 @@ function PreviewBody({
   mimeType: string;
 }) {
   const isPdf = mimeType === "application/pdf";
-  const isImage = mimeType.startsWith("image/");
+  const isImage = (mimeType ?? "").startsWith("image/");
 
   if (isPdf) return <PdfRenderer documentId={documentId} />;
   if (isImage) return <ImageRenderer documentId={documentId} />;
