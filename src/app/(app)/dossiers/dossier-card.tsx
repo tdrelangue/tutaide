@@ -55,7 +55,7 @@ export function DossierCard({ dossier, onSelect, isSelected }: DossierCardProps)
         <CardContent>
           {dossier.documents.length > 0 ? (
             <div className="space-y-1.5">
-              {dossier.documents.map((doc) => (
+              {dossier.documents.slice(0, 3).map((doc) => (
                 <div
                   key={doc.id}
                   className="flex items-center gap-2 text-sm text-muted-foreground"
