@@ -71,12 +71,12 @@ function PreviewBody({
 
 function ImageRenderer({ documentId }: { documentId: string }) {
   return (
-    <div className="flex-1 overflow-auto flex items-center justify-center p-4 min-h-0">
+    <div className="flex-1 overflow-auto flex items-center justify-center p-4">
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={`/api/documents/${documentId}/preview`}
         alt="Aperçu du document"
-        className="max-w-full object-contain rounded max-h-[calc(90vh-120px)]"
+        className="w-auto h-auto max-w-full max-h-[70vh] rounded"
       />
     </div>
   );
