@@ -26,6 +26,7 @@ import {
 import { formatRelativeTime, formatFileSize } from "@/lib/utils";
 import { uploadDocuments, deleteDocument } from "../document-actions";
 import type { DossierWithDocuments } from "../actions";
+import { PdfPreview } from "@/components/pdf-preview";
 
 interface DocumentsTabProps {
   dossier: DossierWithDocuments;
@@ -34,6 +35,7 @@ interface DocumentsTabProps {
 type Document = {
   id: string;
   filename: string;
+  mimeType: string;
   size: number;
   createdAt: Date;
 };
@@ -49,7 +51,7 @@ export function DocumentsTab({ dossier }: DocumentsTabProps) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [documents, setDocuments] = useState<Document[]>(
-    dossier.documents.map((d) => ({ ...d, size: 0 }))
+    dossier.documents.map((d) => ({ ...d, size: 0, mimeType: d.mimeType ?? "application/octet-stream" }))
   );
   const [isUploading, setIsUploading] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
@@ -249,6 +251,11 @@ export function DocumentsTab({ dossier }: DocumentsTabProps) {
                   </p>
                 </div>
                 <div className="flex gap-1 flex-shrink-0">
+                  <PdfPreview
+                    documentId={doc.id}
+                    filename={doc.filename}
+                    mimeType={doc.mimeType}
+                  />
                   <Button
                     variant="ghost"
                     size="icon"
