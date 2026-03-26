@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { hash, compare } from "bcryptjs";
+import nodemailer from "nodemailer";
 import { db } from "@/lib/db";
 import { requireAuth } from "@/lib/auth";
 import { encrypt, decrypt } from "@/lib/encryption";
@@ -73,6 +74,50 @@ export async function getSmtpConfigWithPassword(): Promise<{
     fromName: config.fromName,
     fromEmail: config.fromEmail,
   };
+}
+
+/** Convert raw SMTP errors into plain French messages. */
+function humanizeSmtpError(error: unknown): string {
+  const msg = error instanceof Error ? error.message : String(error);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const code = (error as any)?.code ?? "";
+  if (code === "ECONNREFUSED") return "Connexion refusée — vérifiez l'hôte et le port.";
+  if (code === "ENOTFOUND") return "Serveur introuvable — vérifiez l'adresse SMTP.";
+  if (code === "ETIMEDOUT" || code === "ECONNRESET") return "Délai dépassé — vérifiez le port et votre réseau.";
+  if (msg.includes("535") || msg.toLowerCase().includes("invalid credentials") || msg.toLowerCase().includes("username and password"))
+    return "Identifiants incorrects — vérifiez votre adresse email et mot de passe.";
+  if (msg.includes("534") || msg.toLowerCase().includes("application-specific"))
+    return "Gmail : utilisez un mot de passe d'application, pas votre mot de passe principal.";
+  if (msg.toLowerCase().includes("certificate") || msg.toLowerCase().includes("self-signed"))
+    return "Erreur de certificat SSL — connexion non sécurisée.";
+  return `Erreur de connexion : ${msg}`;
+}
+
+// Test SMTP connection (no email sent)
+export async function testSmtpConnection(
+  data: SmtpConfigFormData
+): Promise<{ success: boolean; message: string }> {
+  try {
+    await requireAuth();
+    const validated = smtpConfigSchema.parse(data);
+
+    const transporter = nodemailer.createTransport({
+      host: validated.smtpHost,
+      port: validated.smtpPort,
+      // Port 465 = SSL, anything else = STARTTLS (nodemailer default)
+      secure: validated.smtpPort === 465,
+      auth: { user: validated.username, pass: validated.password },
+      tls: { rejectUnauthorized: false },
+      connectionTimeout: 8000,
+      greetingTimeout: 5000,
+    });
+
+    await transporter.verify();
+    return { success: true, message: "Connexion réussie — votre configuration SMTP est valide." };
+  } catch (error) {
+    console.error("[testSmtpConnection]", error);
+    return { success: false, message: humanizeSmtpError(error) };
+  }
 }
 
 // Save SMTP config
