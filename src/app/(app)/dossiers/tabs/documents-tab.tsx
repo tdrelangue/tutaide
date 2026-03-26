@@ -231,7 +231,7 @@ export function DocumentsTab({ dossier }: DocumentsTabProps) {
       )}
 
       {documents.length > 0 && (
-        <div className="max-h-64 overflow-y-auto pr-1">
+        <div className="pr-1">
           <div className="space-y-2">
             {documents.map((doc) => (
               <div

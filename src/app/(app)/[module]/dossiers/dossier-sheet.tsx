@@ -30,7 +30,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Separator } from "@/components/ui/separator";
 import { DocumentsTab } from "./tabs/documents-tab";
 import { EmailsTab } from "./tabs/emails-tab";
 import { InfoTab } from "./tabs/info-tab";
@@ -112,17 +111,16 @@ export function DossierSheet({
   return (
     <>
       <Sheet open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
-        <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
-          <SheetHeader className="space-y-1">
-            <SheetTitle className="text-xl">Details Dossier</SheetTitle>
-            <SheetDescription className="sr-only">
-              Informations detaillees sur le dossier de {dossier.fullName}
-            </SheetDescription>
-          </SheetHeader>
-
-          <div className="mt-4 space-y-4">
-            {/* Dossier header info */}
-            <div>
+        <SheetContent className="w-full sm:max-w-lg flex flex-col p-0">
+          {/* Fixed header */}
+          <div className="px-6 pt-6 pb-4 border-b shrink-0">
+            <SheetHeader className="space-y-1">
+              <SheetTitle className="text-xl">Details Dossier</SheetTitle>
+              <SheetDescription className="sr-only">
+                Informations detaillees sur le dossier de {dossier.fullName}
+              </SheetDescription>
+            </SheetHeader>
+            <div className="mt-3">
               <h3 className="text-lg font-semibold">{dossier.fullName}</h3>
               <div className="flex flex-wrap gap-2 mt-2">
                 <Badge variant={moduleVariants[moduleType]}>
@@ -141,10 +139,10 @@ export function DossierSheet({
                 </p>
               )}
             </div>
+          </div>
 
-            <Separator />
-
-            {/* Tabs */}
+          {/* Scrollable content */}
+          <div className="flex-1 overflow-y-auto px-6 py-4">
             <Tabs defaultValue="documents" className="w-full">
               <TabsList className="w-full">
                 <TabsTrigger value="documents" className="flex-1">
@@ -167,52 +165,43 @@ export function DossierSheet({
                 <InfoTab dossier={dossier} />
               </TabsContent>
             </Tabs>
+          </div>
 
-            <Separator />
-
-            {/* Actions */}
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                className="flex-1"
-                onClick={() => setIsEditOpen(true)}
-              >
-                <Pencil className="mr-2 h-4 w-4" aria-hidden="true" />
-                Modifier
-              </Button>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" className="flex-1">
-                    <Mail className="mr-2 h-4 w-4" aria-hidden="true" />
-                    Dernier email
-                    <ChevronDown
-                      className="ml-2 h-4 w-4"
-                      aria-hidden="true"
-                    />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem
-                    onClick={() => setDernierEmailReason("DECES")}
-                  >
-                    Deces
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => setDernierEmailReason("DESSAISISSEMENT")}
-                  >
-                    Dessaisissement
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-              <Button
-                variant="destructive"
-                className="flex-1"
-                onClick={() => setIsDeleteOpen(true)}
-              >
-                <Trash2 className="mr-2 h-4 w-4" aria-hidden="true" />
-                Supprimer
-              </Button>
-            </div>
+          {/* Sticky bottom actions */}
+          <div className="px-6 py-4 border-t shrink-0 flex gap-2">
+            <Button
+              variant="outline"
+              className="flex-1"
+              onClick={() => setIsEditOpen(true)}
+            >
+              <Pencil className="mr-2 h-4 w-4" aria-hidden="true" />
+              Modifier
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" className="flex-1">
+                  <Mail className="mr-2 h-4 w-4" aria-hidden="true" />
+                  Dernier email
+                  <ChevronDown className="ml-2 h-4 w-4" aria-hidden="true" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => setDernierEmailReason("DECES")}>
+                  Deces
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setDernierEmailReason("DESSAISISSEMENT")}>
+                  Dessaisissement
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <Button
+              variant="destructive"
+              className="flex-1"
+              onClick={() => setIsDeleteOpen(true)}
+            >
+              <Trash2 className="mr-2 h-4 w-4" aria-hidden="true" />
+              Supprimer
+            </Button>
           </div>
         </SheetContent>
       </Sheet>

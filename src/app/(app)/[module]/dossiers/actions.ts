@@ -100,7 +100,7 @@ export async function getDossiers(
     const localDocs = dossier.documents.filter((doc) => existsSync(doc.blobUrl));
     return {
       ...dossier,
-      documents: localDocs.slice(0, 3).map(({ blobUrl: _url, ...doc }) => doc),
+      documents: localDocs.map(({ blobUrl: _url, ...doc }) => doc),
       _count: { documents: localDocs.length },
     };
   });
