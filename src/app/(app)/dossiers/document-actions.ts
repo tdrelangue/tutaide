@@ -44,7 +44,7 @@ export async function uploadDocuments(formData: FormData): Promise<{
       return { success: false, error: "Dossier non trouvé" };
     }
 
-    const uploadedDocs: Array<{ id: string; filename: string; size: number; createdAt: Date }> = [];
+    const uploadedDocs: Array<{ id: string; filename: string; mimeType: string; size: number; createdAt: Date }> = [];
     const dir = path.join(getDocumentsBaseDir(), userId, dossierId);
     await fs.mkdir(dir, { recursive: true });
 
@@ -71,7 +71,7 @@ export async function uploadDocuments(formData: FormData): Promise<{
         },
       });
 
-      uploadedDocs.push({ id: doc.id, filename: doc.filename, size: doc.size, createdAt: doc.createdAt });
+      uploadedDocs.push({ id: doc.id, filename: doc.filename, mimeType: doc.mimeType, size: doc.size, createdAt: doc.createdAt });
     }
 
     if (uploadedDocs.length === 0) {

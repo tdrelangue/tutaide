@@ -21,6 +21,7 @@ export type DossierWithDocuments = {
   documents: {
     id: string;
     filename: string;
+    mimeType: string;
     createdAt: Date;
   }[];
   _count: {
@@ -61,6 +62,7 @@ export async function getDossiers(params?: {
         select: {
           id: true,
           filename: true,
+          mimeType: true,
           createdAt: true,
           blobUrl: true,
         },
@@ -92,6 +94,7 @@ export async function getDossier(id: string): Promise<DossierWithDocuments | nul
         select: {
           id: true,
           filename: true,
+          mimeType: true,
           createdAt: true,
           blobUrl: true,
         },
