@@ -19,8 +19,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { sendDernierEmail } from "./dernier-actions";
 import { type DossierWithDocuments } from "./actions";
+import { getTemplatesByCategory } from "../../settings/actions";
 
 const dernierEmailFormSchema = z.object({
   subject: z.string().min(1, "L'objet est requis"),
@@ -90,11 +98,13 @@ export function DernierEmailDialog({
 }: DernierEmailDialogProps) {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
+  const [templates, setTemplates] = useState<{ id: string; name: string; subject: string; body: string; isDefault: boolean }[]>([]);
 
   const {
     register,
     handleSubmit,
     reset,
+    setValue,
     formState: { errors },
   } = useForm<DernierEmailFormData>({
     resolver: zodResolver(dernierEmailFormSchema),
@@ -105,12 +115,30 @@ export function DernierEmailDialog({
   });
 
   useEffect(() => {
-    if (open) {
-      reset({
-        subject: getSubjectForReason(reason, dossier.fullName),
-        body: getBodyForReason(reason, dossier.fullName),
+    if (!open) return;
+    const category = reason === "DECES" ? "DERNIER_DECES" : "DERNIER_DESSAISISSEMENT";
+    getTemplatesByCategory(category)
+      .then((data) => {
+        setTemplates(data);
+        const defaultTpl = data.find((t) => t.isDefault) ?? data[0];
+        if (defaultTpl) {
+          reset({
+            subject: defaultTpl.subject.replace(/\{\{nom_protege\}\}/g, dossier.fullName),
+            body: defaultTpl.body.replace(/\{\{nom_protege\}\}/g, dossier.fullName),
+          });
+        } else {
+          reset({
+            subject: getSubjectForReason(reason, dossier.fullName),
+            body: getBodyForReason(reason, dossier.fullName),
+          });
+        }
+      })
+      .catch(() => {
+        reset({
+          subject: getSubjectForReason(reason, dossier.fullName),
+          body: getBodyForReason(reason, dossier.fullName),
+        });
       });
-    }
   }, [open, reason, dossier, reset]);
 
   async function onSubmit(data: DernierEmailFormData) {
@@ -158,6 +186,33 @@ export function DernierEmailDialog({
         </DialogHeader>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          {/* Template selector */}
+          {templates.length > 1 && (
+            <div className="space-y-2">
+              <Label htmlFor="dernier-template">Modèle</Label>
+              <Select
+                onValueChange={(id) => {
+                  const t = templates.find((tpl) => tpl.id === id);
+                  if (t) {
+                    setValue("subject", t.subject.replace(/\{\{nom_protege\}\}/g, dossier.fullName));
+                    setValue("body", t.body.replace(/\{\{nom_protege\}\}/g, dossier.fullName));
+                  }
+                }}
+              >
+                <SelectTrigger id="dernier-template">
+                  <SelectValue placeholder="Changer de modèle" />
+                </SelectTrigger>
+                <SelectContent>
+                  {templates.map((t) => (
+                    <SelectItem key={t.id} value={t.id}>
+                      {t.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
           {/* Subject */}
           <div className="space-y-2">
             <Label htmlFor="dernier-subject">

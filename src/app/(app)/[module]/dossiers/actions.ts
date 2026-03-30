@@ -9,6 +9,8 @@ import type {
   DossierPriority,
   DossierStatus,
   ModuleType,
+  SendingFrequency,
+  TemplateCategory,
 } from "@prisma/client";
 
 export type DossierWithDocuments = {
@@ -24,6 +26,9 @@ export type DossierWithDocuments = {
   createdAt: Date;
   updatedAt: Date;
   linkedDossierId: string | null;
+  defaultTemplateId: string | null;
+  sendingFrequency: SendingFrequency;
+  defaultTemplate: { id: string; name: string } | null;
   documents: {
     id: string;
     filename: string;
@@ -92,6 +97,9 @@ export async function getDossiers(
           blobUrl: true,
         },
       },
+      defaultTemplate: {
+        select: { id: true, name: true },
+      },
     },
     orderBy,
   });
@@ -125,6 +133,9 @@ export async function getDossier(
           createdAt: true,
           blobUrl: true,
         },
+      },
+      defaultTemplate: {
+        select: { id: true, name: true },
       },
     },
   });
@@ -166,10 +177,12 @@ export async function createDossier(
             bccEmails: dossierData.bccEmails,
             moduleType,
             userId,
+            defaultTemplateId: dossierData.defaultTemplateId ?? null,
+            sendingFrequency: dossierData.sendingFrequency ?? "QUARTERLY",
           },
         });
 
-        // Create the linked dossier in the other module
+        // Create the linked dossier in the other module (no template copy — different module)
         const linkedDossier = await tx.dossier.create({
           data: {
             fullName: dossierData.fullName,
@@ -181,6 +194,7 @@ export async function createDossier(
             bccEmails: dossierData.bccEmails,
             moduleType: otherModule,
             userId,
+            sendingFrequency: dossierData.sendingFrequency ?? "QUARTERLY",
             linkedDossierId: primaryDossier.id,
           },
         });
@@ -210,6 +224,8 @@ export async function createDossier(
         bccEmails: dossierData.bccEmails,
         moduleType,
         userId,
+        defaultTemplateId: dossierData.defaultTemplateId ?? null,
+        sendingFrequency: dossierData.sendingFrequency ?? "QUARTERLY",
       },
     });
 
@@ -265,6 +281,21 @@ export async function updateDossier(
       error: "Erreur lors de la mise a jour du dossier",
     };
   }
+}
+
+export async function getTemplatesForModule(
+  moduleType: ModuleType
+): Promise<{ id: string; name: string; isDefault: boolean }[]> {
+  const userId = await requireAuth();
+  return db.emailTemplate.findMany({
+    where: {
+      userId,
+      dossierId: null,
+      category: moduleType as TemplateCategory,
+    },
+    select: { id: true, name: true, isDefault: true },
+    orderBy: [{ isDefault: "desc" }, { name: "asc" }],
+  });
 }
 
 export async function deleteDossier(

@@ -126,6 +126,7 @@ export function DossiersPageClient({
       id: d.id,
       fullName: d.fullName,
       primaryEmail: d.primaryEmail,
+      defaultTemplateName: d.defaultTemplate?.name ?? null,
     }));
 
   const eligibleDossiers = initialDossiers
