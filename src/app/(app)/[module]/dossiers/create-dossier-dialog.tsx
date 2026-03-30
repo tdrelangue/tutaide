@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -27,7 +27,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { dossierSchema, type DossierFormData } from "@/lib/validations";
-import { createDossier } from "./actions";
+import { createDossier, getTemplatesForModule } from "./actions";
 
 interface CreateDossierDialogProps {
   open: boolean;
@@ -42,8 +42,13 @@ export function CreateDossierDialog({
 }: CreateDossierDialogProps) {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
+  const [templates, setTemplates] = useState<{ id: string; name: string; isDefault: boolean }[]>([]);
 
   const otherModule = moduleType === "APA" ? "ASH" : "APA";
+
+  useEffect(() => {
+    getTemplatesForModule(moduleType).then(setTemplates).catch(() => {});
+  }, [moduleType]);
 
   const {
     register,
@@ -70,6 +75,8 @@ export function CreateDossierDialog({
   const priority = watch("priority");
   const status = watch("status");
   const addToOtherModule = watch("addToOtherModule");
+  const defaultTemplateId = watch("defaultTemplateId");
+  const sendingFrequency = watch("sendingFrequency");
 
   async function onSubmit(data: DossierFormData) {
     setIsLoading(true);
@@ -161,6 +168,51 @@ export function CreateDossierDialog({
                 <SelectContent>
                   <SelectItem value="ACTIVE">Actif</SelectItem>
                   <SelectItem value="CLOSED">Cloture</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="defaultTemplateId">Modèle par défaut</Label>
+              <Select
+                value={defaultTemplateId ?? ""}
+                onValueChange={(value) =>
+                  setValue("defaultTemplateId", value || null)
+                }
+                disabled={isLoading}
+              >
+                <SelectTrigger id="defaultTemplateId">
+                  <SelectValue placeholder="Aucun" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">Aucun</SelectItem>
+                  {templates.map((t) => (
+                    <SelectItem key={t.id} value={t.id}>
+                      {t.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="sendingFrequency">Fréquence d&apos;envoi</Label>
+              <Select
+                value={sendingFrequency}
+                onValueChange={(value) =>
+                  setValue("sendingFrequency", value as DossierFormData["sendingFrequency"])
+                }
+                disabled={isLoading}
+              >
+                <SelectTrigger id="sendingFrequency">
+                  <SelectValue placeholder="Fréquence" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="MONTHLY">Mensuel</SelectItem>
+                  <SelectItem value="QUARTERLY">Trimestriel</SelectItem>
+                  <SelectItem value="BIMONTHLY">Bimestriel</SelectItem>
                 </SelectContent>
               </Select>
             </div>

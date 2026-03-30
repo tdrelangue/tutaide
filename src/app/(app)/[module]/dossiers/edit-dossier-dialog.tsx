@@ -26,7 +26,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { dossierSchema, type DossierFormData } from "@/lib/validations";
-import { updateDossier, type DossierWithDocuments } from "./actions";
+import { updateDossier, getTemplatesForModule, type DossierWithDocuments } from "./actions";
 
 interface EditDossierDialogProps {
   dossier: DossierWithDocuments;
@@ -41,6 +41,11 @@ export function EditDossierDialog({
 }: EditDossierDialogProps) {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
+  const [templates, setTemplates] = useState<{ id: string; name: string; isDefault: boolean }[]>([]);
+
+  useEffect(() => {
+    getTemplatesForModule(dossier.moduleType).then(setTemplates).catch(() => {});
+  }, [dossier.moduleType]);
 
   const {
     register,
@@ -59,11 +64,15 @@ export function EditDossierDialog({
       primaryEmail: dossier.primaryEmail || "",
       ccEmails: dossier.ccEmails,
       bccEmails: dossier.bccEmails,
+      defaultTemplateId: dossier.defaultTemplateId ?? undefined,
+      sendingFrequency: dossier.sendingFrequency ?? "QUARTERLY",
     },
   });
 
   const priority = watch("priority");
   const status = watch("status");
+  const defaultTemplateId = watch("defaultTemplateId");
+  const sendingFrequency = watch("sendingFrequency");
 
   // Reset form when dossier changes
   useEffect(() => {
@@ -75,6 +84,8 @@ export function EditDossierDialog({
       primaryEmail: dossier.primaryEmail || "",
       ccEmails: dossier.ccEmails,
       bccEmails: dossier.bccEmails,
+      defaultTemplateId: dossier.defaultTemplateId ?? undefined,
+      sendingFrequency: dossier.sendingFrequency ?? "QUARTERLY",
     });
   }, [dossier, reset]);
 
@@ -164,6 +175,51 @@ export function EditDossierDialog({
                 <SelectContent>
                   <SelectItem value="ACTIVE">Actif</SelectItem>
                   <SelectItem value="CLOSED">Cloture</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit-defaultTemplateId">Modèle par défaut</Label>
+              <Select
+                value={defaultTemplateId ?? ""}
+                onValueChange={(value) =>
+                  setValue("defaultTemplateId", value || null)
+                }
+                disabled={isLoading}
+              >
+                <SelectTrigger id="edit-defaultTemplateId">
+                  <SelectValue placeholder="Aucun" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">Aucun</SelectItem>
+                  {templates.map((t) => (
+                    <SelectItem key={t.id} value={t.id}>
+                      {t.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="edit-sendingFrequency">Fréquence d&apos;envoi</Label>
+              <Select
+                value={sendingFrequency ?? "QUARTERLY"}
+                onValueChange={(value) =>
+                  setValue("sendingFrequency", value as DossierFormData["sendingFrequency"])
+                }
+                disabled={isLoading}
+              >
+                <SelectTrigger id="edit-sendingFrequency">
+                  <SelectValue placeholder="Fréquence" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="MONTHLY">Mensuel</SelectItem>
+                  <SelectItem value="QUARTERLY">Trimestriel</SelectItem>
+                  <SelectItem value="BIMONTHLY">Bimestriel</SelectItem>
                 </SelectContent>
               </Select>
             </div>

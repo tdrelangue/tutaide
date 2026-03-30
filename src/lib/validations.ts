@@ -23,6 +23,8 @@ export const dossierSchema = z.object({
   ccEmails: z.array(z.string().email()).default([]),
   bccEmails: z.array(z.string().email()).default([]),
   addToOtherModule: z.boolean().default(false),
+  defaultTemplateId: z.string().optional().nullable(),
+  sendingFrequency: z.enum(["MONTHLY", "QUARTERLY", "BIMONTHLY"]).default("QUARTERLY"),
 });
 
 export type DossierFormData = z.infer<typeof dossierSchema>;
@@ -73,8 +75,6 @@ export type SendEmailFormData = z.infer<typeof sendEmailSchema>;
 export const bulkSendSchema = z.object({
   dossierIds: z.array(z.string()).min(1, "Au moins un dossier requis"),
   moduleType: z.enum(["APA", "ASH"]),
-  subject: z.string().min(1, "L'objet est requis"),
-  body: z.string().min(1, "Le contenu est requis"),
 });
 
 export type BulkSendFormData = z.infer<typeof bulkSendSchema>;
@@ -82,8 +82,6 @@ export type BulkSendFormData = z.infer<typeof bulkSendSchema>;
 // Send All (all non-empty dossiers)
 export const sendAllSchema = z.object({
   moduleType: z.enum(["APA", "ASH"]),
-  subject: z.string().min(1, "L'objet est requis"),
-  body: z.string().min(1, "Le contenu est requis"),
 });
 
 export type SendAllFormData = z.infer<typeof sendAllSchema>;
