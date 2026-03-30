@@ -72,7 +72,6 @@ export function EditDossierDialog({
   const priority = watch("priority");
   const status = watch("status");
   const defaultTemplateId = watch("defaultTemplateId");
-  const sendingFrequency = watch("sendingFrequency");
 
   // Reset form when dossier changes
   useEffect(() => {
@@ -180,49 +179,27 @@ export function EditDossierDialog({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="edit-defaultTemplateId">Modèle par défaut</Label>
-              <Select
-                value={defaultTemplateId ?? ""}
-                onValueChange={(value) =>
-                  setValue("defaultTemplateId", value || null)
-                }
-                disabled={isLoading}
-              >
-                <SelectTrigger id="edit-defaultTemplateId">
-                  <SelectValue placeholder="Aucun" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="">Aucun</SelectItem>
-                  {templates.map((t) => (
-                    <SelectItem key={t.id} value={t.id}>
-                      {t.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="edit-sendingFrequency">Fréquence d&apos;envoi</Label>
-              <Select
-                value={sendingFrequency ?? "QUARTERLY"}
-                onValueChange={(value) =>
-                  setValue("sendingFrequency", value as DossierFormData["sendingFrequency"])
-                }
-                disabled={isLoading}
-              >
-                <SelectTrigger id="edit-sendingFrequency">
-                  <SelectValue placeholder="Fréquence" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="MONTHLY">Mensuel</SelectItem>
-                  <SelectItem value="QUARTERLY">Trimestriel</SelectItem>
-                  <SelectItem value="BIMONTHLY">Bimestriel</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+          <div className="space-y-2">
+            <Label htmlFor="edit-defaultTemplateId">Modèle par défaut</Label>
+            <Select
+              value={defaultTemplateId ?? "__none__"}
+              onValueChange={(value) =>
+                setValue("defaultTemplateId", value === "__none__" ? null : value)
+              }
+              disabled={isLoading}
+            >
+              <SelectTrigger id="edit-defaultTemplateId">
+                <SelectValue placeholder="Aucun" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">Aucun</SelectItem>
+                {templates.map((t) => (
+                  <SelectItem key={t.id} value={t.id}>
+                    {t.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="space-y-2">

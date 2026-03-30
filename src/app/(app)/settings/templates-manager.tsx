@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Plus, Pencil, Trash2 } from "lucide-react";
+import { Plus, Pencil, Trash2, Copy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -24,7 +24,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { TemplateDialog } from "./template-dialog";
-import { deleteTemplate, type TemplateData } from "./actions";
+import { deleteTemplate, duplicateTemplate, type TemplateData } from "./actions";
 
 interface TemplatesManagerProps {
   templates: TemplateData[];
@@ -53,6 +53,24 @@ export function TemplatesManager({ templates, onTemplatesChange }: TemplatesMana
   const [editingTemplate, setEditingTemplate] = useState<TemplateData | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isDuplicating, setIsDuplicating] = useState<string | null>(null);
+
+  const handleDuplicate = async (template: TemplateData) => {
+    setIsDuplicating(template.id);
+    try {
+      const result = await duplicateTemplate(template.id);
+      if (result.success && result.newId) {
+        toast.success("Modèle dupliqué — vous pouvez maintenant le modifier");
+        router.refresh();
+      } else {
+        toast.error(result.error || "Erreur lors de la duplication");
+      }
+    } catch {
+      toast.error("Erreur lors de la duplication");
+    } finally {
+      setIsDuplicating(null);
+    }
+  };
 
   const handleCreate = () => {
     setEditingTemplate(null);
@@ -138,6 +156,9 @@ export function TemplatesManager({ templates, onTemplatesChange }: TemplatesMana
                     <Badge variant={categoryVariants[template.category]}>
                       {categoryLabels[template.category]}
                     </Badge>
+                    {template.isGlobal && (
+                      <Badge variant="outline" className="text-xs">Global</Badge>
+                    )}
                     {template.isDefault && (
                       <Badge variant="default">Par défaut</Badge>
                     )}
@@ -147,23 +168,38 @@ export function TemplatesManager({ templates, onTemplatesChange }: TemplatesMana
                   </p>
                 </div>
                 <div className="flex gap-1">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => handleEdit(template)}
-                    aria-label={`Modifier ${template.name}`}
-                  >
-                    <Pencil className="h-4 w-4" aria-hidden="true" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="text-destructive hover:text-destructive"
-                    onClick={() => setDeleteId(template.id)}
-                    aria-label={`Supprimer ${template.name}`}
-                  >
-                    <Trash2 className="h-4 w-4" aria-hidden="true" />
-                  </Button>
+                  {template.isGlobal ? (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleDuplicate(template)}
+                      disabled={isDuplicating === template.id}
+                      aria-label={`Dupliquer ${template.name}`}
+                      title="Dupliquer pour modifier"
+                    >
+                      <Copy className="h-4 w-4" aria-hidden="true" />
+                    </Button>
+                  ) : (
+                    <>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleEdit(template)}
+                        aria-label={`Modifier ${template.name}`}
+                      >
+                        <Pencil className="h-4 w-4" aria-hidden="true" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="text-destructive hover:text-destructive"
+                        onClick={() => setDeleteId(template.id)}
+                        aria-label={`Supprimer ${template.name}`}
+                      >
+                        <Trash2 className="h-4 w-4" aria-hidden="true" />
+                      </Button>
+                    </>
+                  )}
                 </div>
               </div>
             ))}

@@ -314,6 +314,12 @@ export async function findOrCreateAshDossier(
       return { success: true, dossierId: existing.id, created: false };
     }
 
+    // Auto-assign global ASH quarterly default template
+    const defaultTemplate = await db.emailTemplate.findFirst({
+      where: { isGlobal: true, isDefault: true, category: "ASH" },
+      select: { id: true },
+    });
+
     const created = await db.dossier.create({
       data: {
         fullName: normalized,
@@ -321,6 +327,7 @@ export async function findOrCreateAshDossier(
         priority: "NORMAL",
         status: "ACTIVE",
         userId,
+        defaultTemplateId: defaultTemplate?.id ?? null,
       },
       select: { id: true },
     });

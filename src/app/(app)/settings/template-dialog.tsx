@@ -97,6 +97,7 @@ export function TemplateDialog({
           toast.success("Modele mis a jour");
           onComplete?.({
             id: template.id,
+            isGlobal: template.isGlobal,
             ...data,
           });
           onOpenChange(false);
@@ -109,6 +110,7 @@ export function TemplateDialog({
           toast.success("Modele cree");
           onComplete?.({
             id: result.id,
+            isGlobal: false,
             ...data,
           });
           onOpenChange(false);
