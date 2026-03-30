@@ -15,6 +15,32 @@ import {
 } from "@/lib/validations";
 import type { EmailSendStatus, EmailType, EmailReason, ModuleType } from "@prisma/client";
 
+/** Resolve the subject/body template for a dossier, with module-default fallback. */
+async function resolveTemplateForDossier(
+  userId: string,
+  dossierId: string,
+  moduleType: ModuleType
+): Promise<{ subject: string; body: string } | null> {
+  const dossier = await db.dossier.findFirst({
+    where: { id: dossierId, userId },
+    select: {
+      defaultTemplate: { select: { subject: true, body: true } },
+    },
+  });
+
+  if (dossier?.defaultTemplate) {
+    return { subject: dossier.defaultTemplate.subject, body: dossier.defaultTemplate.body };
+  }
+
+  // Fallback: module default template (isDefault = true, category = moduleType)
+  const fallback = await db.emailTemplate.findFirst({
+    where: { userId, dossierId: null, category: moduleType, isDefault: true },
+    select: { subject: true, body: true },
+  });
+
+  return fallback ?? null;
+}
+
 async function getUserSignature(userId: string): Promise<string> {
   const user = await db.user.findUnique({
     where: { id: userId },
@@ -272,6 +298,7 @@ export async function bulkSendAction(
   data: BulkSendFormData
 ): Promise<BulkSendResult[]> {
   const userId = await requireAuth();
+  // BulkSendFormData no longer carries subject/body — resolved per-dossier below
   const validated = bulkSendSchema.parse(data);
   const signature = await getUserSignature(userId);
 
@@ -328,6 +355,17 @@ export async function bulkSendAction(
         continue;
       }
 
+      // Resolve template for this specific dossier
+      const tpl = await resolveTemplateForDossier(userId, dossierId, validated.moduleType as ModuleType);
+      if (!tpl) {
+        results.push({
+          dossierId,
+          success: false,
+          error: "Aucun modèle configuré et aucun modèle par défaut disponible",
+        });
+        continue;
+      }
+
       // TO = government, CC = protege (if set) + dossier CC list
       const recipients = [moduleConfig.destinationEmail];
       const ccRecipients = [
@@ -346,8 +384,8 @@ export async function bulkSendAction(
           recipients,
           ccRecipients,
           bccRecipients: dossier.bccEmails,
-          subject: validated.subject,
-          body: validated.body,
+          subject: tpl.subject,
+          body: tpl.body,
         },
       });
 
@@ -364,8 +402,8 @@ export async function bulkSendAction(
         recipients,
         ccRecipients,
         bccRecipients: dossier.bccEmails,
-        subject: validated.subject,
-        body: validated.body,
+        subject: tpl.subject,
+        body: tpl.body,
         attachmentPaths: dossier.documents.map((d) => d.blobUrl),
         signature,
         moduleType: validated.moduleType as "APA" | "ASH",
@@ -456,7 +494,7 @@ export async function resendEmail(
 // Send emails for ALL non-empty active dossiers in a module
 // ---------------------------------------------------------------------------
 export async function sendAllAction(
-  data: { moduleType: "APA" | "ASH"; subject: string; body: string }
+  data: { moduleType: "APA" | "ASH" }
 ): Promise<BulkSendResult[]> {
   const userId = await requireAuth();
   const validated = sendAllSchema.parse(data);
@@ -506,6 +544,16 @@ export async function sendAllAction(
 
   for (const dossier of dossiers) {
     try {
+      const tpl = await resolveTemplateForDossier(userId, dossier.id, validated.moduleType as ModuleType);
+      if (!tpl) {
+        results.push({
+          dossierId: dossier.id,
+          success: false,
+          error: "Aucun modèle configuré et aucun modèle par défaut disponible",
+        });
+        continue;
+      }
+
       const recipients = [moduleConfig.destinationEmail];
       const ccRecipients = [
         ...(dossier.primaryEmail ? [dossier.primaryEmail] : []),
@@ -523,8 +571,8 @@ export async function sendAllAction(
           recipients,
           ccRecipients,
           bccRecipients: dossier.bccEmails,
-          subject: validated.subject,
-          body: validated.body,
+          subject: tpl.subject,
+          body: tpl.body,
           attachments: {
             create: dossier.documents.map((doc) => ({
               documentId: doc.id,
@@ -546,8 +594,8 @@ export async function sendAllAction(
         recipients,
         ccRecipients,
         bccRecipients: dossier.bccEmails,
-        subject: validated.subject,
-        body: validated.body,
+        subject: tpl.subject,
+        body: tpl.body,
         attachmentPaths: dossier.documents.map((d) => d.blobUrl),
         signature,
         moduleType: validated.moduleType as "APA" | "ASH",

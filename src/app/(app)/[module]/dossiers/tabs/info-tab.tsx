@@ -44,6 +44,13 @@ export function InfoTab({ dossier }: InfoTabProps) {
       )}
 
       <div>
+        <h4 className="text-sm font-medium text-muted-foreground">Modèle par défaut</h4>
+        <p className="mt-1 text-sm">
+          {dossier.defaultTemplate?.name ?? "Modèle global du module"}
+        </p>
+      </div>
+
+      <div>
         <h4 className="text-sm font-medium text-muted-foreground">Notes</h4>
         <p className="mt-1 text-sm whitespace-pre-wrap">
           {dossier.notes || "Aucune note"}

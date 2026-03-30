@@ -24,7 +24,7 @@ function isAllowedFile(file: File): boolean {
 export async function uploadDocuments(formData: FormData): Promise<{
   success: boolean;
   count?: number;
-  documents?: Array<{ id: string; filename: string; size: number; createdAt: Date }>;
+  documents?: Array<{ id: string; filename: string; mimeType: string; size: number; createdAt: Date }>;
   error?: string;
 }> {
   try {

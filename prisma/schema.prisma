@@ -31,24 +31,27 @@ model User {
 }
 
 model Dossier {
-  id              String           @id @default(cuid())
-  fullName        String
-  moduleType      ModuleType       @default(APA)
-  priority        DossierPriority  @default(NORMAL)
-  status          DossierStatus    @default(ACTIVE)
-  notes           String?
-  primaryEmail    String?
-  ccEmails        String[]         @default([])
-  bccEmails       String[]         @default([])
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
-  linkedDossierId String?          @unique
-  userId          String
-  documents       Document[]
-  linkedDossier   Dossier?         @relation("DossierLink", fields: [linkedDossierId], references: [id])
-  linkedBy        Dossier?         @relation("DossierLink")
-  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  sendEvents      EmailSendEvent[]
+  id                String           @id @default(cuid())
+  fullName          String
+  moduleType        ModuleType       @default(APA)
+  priority          DossierPriority  @default(NORMAL)
+  status            DossierStatus    @default(ACTIVE)
+  notes             String?
+  primaryEmail      String?
+  ccEmails          String[]         @default([])
+  bccEmails         String[]         @default([])
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  linkedDossierId   String?          @unique
+  userId            String
+  defaultTemplateId String?
+  sendingFrequency  SendingFrequency @default(QUARTERLY)
+  documents         Document[]
+  linkedDossier     Dossier?         @relation("DossierLink", fields: [linkedDossierId], references: [id])
+  linkedBy          Dossier?         @relation("DossierLink")
+  user              User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sendEvents        EmailSendEvent[]
+  defaultTemplate   EmailTemplate?   @relation("DossierDefaultTemplate", fields: [defaultTemplateId], references: [id], onDelete: SetNull)
 
   @@index([userId])
   @@index([moduleType])
@@ -56,6 +59,7 @@ model Dossier {
   @@index([priority])
   @@index([status])
   @@index([updatedAt])
+  @@index([defaultTemplateId])
 }
 
 model Document {
@@ -77,21 +81,24 @@ model Document {
 }
 
 model EmailTemplate {
-  id        String           @id @default(cuid())
-  name      String
-  subject   String
-  body      String
-  category  TemplateCategory @default(APA)
-  isDefault Boolean          @default(false)
-  createdAt DateTime         @default(now())
-  updatedAt DateTime         @updatedAt
-  userId    String
-  dossierId String?
-  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                     String           @id @default(cuid())
+  name                   String
+  subject                String
+  body                   String
+  category               TemplateCategory @default(APA)
+  isDefault              Boolean          @default(false)
+  isGlobal               Boolean          @default(false)
+  createdAt              DateTime         @default(now())
+  updatedAt              DateTime         @updatedAt
+  userId                 String?
+  dossierId              String?
+  user                   User?            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  dossiersUsingAsDefault Dossier[]        @relation("DossierDefaultTemplate")
 
   @@index([userId])
   @@index([category])
   @@index([dossierId])
+  @@index([isGlobal])
 }
 
 model EmailBatch {
@@ -232,4 +239,10 @@ enum SmtpProvider {
 enum UserRole {
   USER
   ADMIN
+}
+
+enum SendingFrequency {
+  MONTHLY
+  QUARTERLY
+  BIMONTHLY
 }

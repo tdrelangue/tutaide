@@ -1,54 +1,82 @@
 import { db } from "@/lib/db";
 
-const DEFAULT_TEMPLATES = [
+/**
+ * Global templates shared across all users.
+ * Stored once in the DB with isGlobal=true and userId=null.
+ * Users cannot edit these — editing creates a personal copy.
+ */
+const GLOBAL_TEMPLATES = [
   {
-    name: "Email standard APA",
-    subject: "Suivi APA - {{nom_protege}} - {{mois}} {{annee}}",
-    body: `Madame, Monsieur,
+    name: "Standard APA Trimestriel",
+    subject: "Suivi APA - {{nom_protege}} - {{trimestre}}{{suffix}} trimestre {{annee}}",
+    body: `Bonjour,
 
-Veuillez trouver ci-joint les elements relatifs au suivi APA de {{nom_protege}} pour la periode en cours.
+Veuillez trouver ci-joint le rapport trimestriel APA pour {{nom_protege}} ({{trimestre}}{{suffix}} trimestre {{annee}}).
 
-Ce courrier concerne le suivi mensuel dans le cadre de l'Allocation Personnalisee d'Autonomie.
-
-Je reste a votre disposition pour tout complement d'information.
+Cordialement,
 
 {{signature}}`,
     category: "APA" as const,
     isDefault: true,
+    isGlobal: true,
   },
   {
-    name: "Email standard ASH",
-    subject: "Suivi ASH - {{nom_protege}} - {{mois}} {{annee}}",
-    body: `Madame, Monsieur,
+    name: "Standard APA Mensuel",
+    subject: "Suivi APA - {{nom_protege}} - {{mois}} {{annee}}",
+    body: `Bonjour,
 
-Veuillez trouver ci-joint les elements relatifs au suivi ASH de {{nom_protege}} pour la periode en cours.
+Veuillez trouver ci-joint le rapport mensuel APA pour {{nom_protege}} (pour le mois de {{mois}} {{annee}}).
 
-Ce courrier concerne le suivi mensuel dans le cadre de l'Aide Sociale a l'Hebergement.
+Cordialement,
 
-Je reste a votre disposition pour tout complement d'information.
+{{signature}}`,
+    category: "APA" as const,
+    isDefault: false,
+    isGlobal: true,
+  },
+  {
+    name: "Standard ASH Trimestriel",
+    subject: "Suivi ASH - {{nom_protege}} - {{trimestre}}{{suffix}} trimestre {{annee}}",
+    body: `Bonjour,
+
+Veuillez trouver ci-joint le rapport trimestriel ASH pour {{nom_protege}} ({{trimestre}}{{suffix}} trimestre {{annee}}).
+
+Cordialement,
 
 {{signature}}`,
     category: "ASH" as const,
     isDefault: true,
+    isGlobal: true,
   },
   {
-    name: "Dernier email - Deces",
-    subject: "Fin de mesure - Deces - {{nom_protege}}",
+    name: "Standard ASH Mensuel",
+    subject: "Suivi ASH - {{nom_protege}} - {{mois}} {{annee}}",
+    body: `Bonjour,
+
+Veuillez trouver ci-joint le rapport mensuel ASH pour {{nom_protege}} (pour le mois de {{mois}} {{annee}}).
+
+Cordialement,
+
+{{signature}}`,
+    category: "ASH" as const,
+    isDefault: false,
+    isGlobal: true,
+  },
+  {
+    name: "Dernier email - Décès",
+    subject: "Fin de mesure - Décès - {{nom_protege}}",
     body: `Madame, Monsieur,
 
-J'ai le regret de vous informer du deces de {{nom_protege}}.
+J'ai le regret de vous informer du décès de {{nom_protege}}.
 
-Pour cause de deces, je ne serai plus responsable de la gestion de ce dossier. La mesure de protection prend fin de plein droit.
+Pour cause de décès, je ne serai plus responsable de la gestion de ce dossier. La mesure de protection prend fin de plein droit.
 
-Certains documents ou elements peuvent etre manquants car l'evenement a eu lieu en cours de mois. Le suivi pour le mois en cours a ete effectue dans la mesure du possible compte tenu des circonstances.
-
-Les demarches de cloture du dossier sont en cours et les documents seront transmis aux ayants droit dans les meilleurs delais.
-
-Je vous prie d'agreer, Madame, Monsieur, l'expression de mes sinceres condoleances.
+Certains documents ou éléments peuvent être manquants car l'événement a eu lieu en cours de mois. Le suivi pour le mois en cours a été effectué dans la mesure du possible compte tenu des circonstances.
 
 {{signature}}`,
     category: "DERNIER_DECES" as const,
     isDefault: true,
+    isGlobal: true,
   },
   {
     name: "Dernier email - Dessaisissement",
@@ -59,29 +87,35 @@ Je vous informe du dessaisissement concernant la mesure de protection de {{nom_p
 
 Pour cause de dessaisissement, je ne serai plus responsable de la gestion de ce dossier.
 
-Certains documents ou elements peuvent etre manquants car l'evenement a eu lieu en cours de mois. Le suivi pour le mois en cours a ete effectue dans la mesure du possible.
+Certains documents ou éléments peuvent être manquants car l'événement a eu lieu en cours de mois. Le suivi pour le mois en cours a été effectué dans la mesure du possible.
 
-Le dossier sera transmis au nouveau mandataire designe dans les meilleurs delais.
-
-Je vous prie d'agreer, Madame, Monsieur, l'expression de mes salutations distinguees.
+Le dossier sera transmis au nouveau mandataire désigné dans les meilleurs délais.
 
 {{signature}}`,
     category: "DERNIER_DESSAISISSEMENT" as const,
     isDefault: true,
+    isGlobal: true,
   },
 ];
 
-export async function seedDefaultTemplates(userId: string): Promise<void> {
+/** Seed global templates once. Safe to call on every app start — no-ops if already seeded. */
+export async function seedGlobalTemplates(): Promise<void> {
   const existingCount = await db.emailTemplate.count({
-    where: { userId, dossierId: null },
+    where: { isGlobal: true },
   });
-
   if (existingCount > 0) return;
 
   await db.emailTemplate.createMany({
-    data: DEFAULT_TEMPLATES.map((t) => ({
+    data: GLOBAL_TEMPLATES.map((t) => ({
       ...t,
-      userId,
+      userId: null,
     })),
   });
+}
+
+/** @deprecated Use seedGlobalTemplates() instead. Kept for backwards compatibility during migration. */
+export async function seedDefaultTemplates(userId: string): Promise<void> {
+  // No-op: templates are now global, not per-user.
+  // Existing per-user templates are preserved but new users get global ones.
+  void userId;
 }

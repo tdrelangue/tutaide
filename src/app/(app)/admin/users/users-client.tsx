@@ -15,6 +15,7 @@ import {
   Pencil,
   ShieldCheck,
   FolderOpen,
+  FileText,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -42,6 +43,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import Link from "next/link";
 import { CreateUserDialog } from "./create-user-dialog";
 import { EditUserDialog } from "./edit-user-dialog";
 import {
@@ -125,10 +127,18 @@ export function UsersPageClient({ initialUsers }: UsersPageClientProps) {
               </p>
             </div>
           </div>
-          <Button onClick={() => setCreateOpen(true)}>
-            <Plus className="h-4 w-4 mr-2" />
-            Nouvel utilisateur
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" asChild>
+              <Link href="/admin/templates">
+                <FileText className="h-4 w-4 mr-2" />
+                Modèles globaux
+              </Link>
+            </Button>
+            <Button onClick={() => setCreateOpen(true)}>
+              <Plus className="h-4 w-4 mr-2" />
+              Nouvel utilisateur
+            </Button>
+          </div>
         </div>
       </div>
 

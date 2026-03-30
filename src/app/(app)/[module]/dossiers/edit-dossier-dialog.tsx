@@ -26,7 +26,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { dossierSchema, type DossierFormData } from "@/lib/validations";
-import { updateDossier, type DossierWithDocuments } from "./actions";
+import { updateDossier, getTemplatesForModule, type DossierWithDocuments } from "./actions";
 
 interface EditDossierDialogProps {
   dossier: DossierWithDocuments;
@@ -41,6 +41,11 @@ export function EditDossierDialog({
 }: EditDossierDialogProps) {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
+  const [templates, setTemplates] = useState<{ id: string; name: string; isDefault: boolean }[]>([]);
+
+  useEffect(() => {
+    getTemplatesForModule(dossier.moduleType).then(setTemplates).catch(() => {});
+  }, [dossier.moduleType]);
 
   const {
     register,
@@ -59,11 +64,14 @@ export function EditDossierDialog({
       primaryEmail: dossier.primaryEmail || "",
       ccEmails: dossier.ccEmails,
       bccEmails: dossier.bccEmails,
+      defaultTemplateId: dossier.defaultTemplateId ?? undefined,
+      sendingFrequency: dossier.sendingFrequency ?? "QUARTERLY",
     },
   });
 
   const priority = watch("priority");
   const status = watch("status");
+  const defaultTemplateId = watch("defaultTemplateId");
 
   // Reset form when dossier changes
   useEffect(() => {
@@ -75,6 +83,8 @@ export function EditDossierDialog({
       primaryEmail: dossier.primaryEmail || "",
       ccEmails: dossier.ccEmails,
       bccEmails: dossier.bccEmails,
+      defaultTemplateId: dossier.defaultTemplateId ?? undefined,
+      sendingFrequency: dossier.sendingFrequency ?? "QUARTERLY",
     });
   }, [dossier, reset]);
 
@@ -167,6 +177,29 @@ export function EditDossierDialog({
                 </SelectContent>
               </Select>
             </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="edit-defaultTemplateId">Modèle par défaut</Label>
+            <Select
+              value={defaultTemplateId ?? "__none__"}
+              onValueChange={(value) =>
+                setValue("defaultTemplateId", value === "__none__" ? null : value)
+              }
+              disabled={isLoading}
+            >
+              <SelectTrigger id="edit-defaultTemplateId">
+                <SelectValue placeholder="Aucun" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">Aucun</SelectItem>
+                {templates.map((t) => (
+                  <SelectItem key={t.id} value={t.id}>
+                    {t.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="space-y-2">

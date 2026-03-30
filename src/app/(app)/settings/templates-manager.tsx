@@ -29,6 +29,8 @@ import { deleteTemplate, type TemplateData } from "./actions";
 interface TemplatesManagerProps {
   templates: TemplateData[];
   onTemplatesChange: (templates: TemplateData[]) => void;
+  title?: string;
+  defaultCategory?: "APA" | "ASH" | "DERNIER_DECES" | "DERNIER_DESSAISISSEMENT" | "CUSTOM";
 }
 
 const categoryLabels: Record<string, string> = {
@@ -47,7 +49,7 @@ const categoryVariants: Record<string, "secondary" | "outline" | "default"> = {
   CUSTOM: "outline",
 };
 
-export function TemplatesManager({ templates, onTemplatesChange }: TemplatesManagerProps) {
+export function TemplatesManager({ templates, onTemplatesChange, title, defaultCategory }: TemplatesManagerProps) {
   const router = useRouter();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<TemplateData | null>(null);
@@ -88,14 +90,15 @@ export function TemplatesManager({ templates, onTemplatesChange }: TemplatesMana
   const handleDialogComplete = (newTemplate?: TemplateData) => {
     setIsDialogOpen(false);
     if (newTemplate) {
-      if (editingTemplate) {
-        // Update existing
+      const isReplacement = editingTemplate && newTemplate.id === editingTemplate.id;
+      if (isReplacement) {
+        // Personal template updated in place
         onTemplatesChange(
           templates.map((t) => (t.id === newTemplate.id ? newTemplate : t))
         );
       } else {
-        // Add new
-        onTemplatesChange([newTemplate, ...templates]);
+        // New template created (including copy-on-edit of a global)
+        onTemplatesChange([...templates, newTemplate]);
       }
     }
     router.refresh();
@@ -106,7 +109,7 @@ export function TemplatesManager({ templates, onTemplatesChange }: TemplatesMana
       <CardHeader>
         <div className="flex items-center justify-between">
           <div>
-            <CardTitle>Modèles d&apos;emails</CardTitle>
+            <CardTitle>{title ?? "Modèles d\u2019emails"}</CardTitle>
             <CardDescription>
               Créez et gérez vos modèles d&apos;emails réutilisables
             </CardDescription>
@@ -138,6 +141,9 @@ export function TemplatesManager({ templates, onTemplatesChange }: TemplatesMana
                     <Badge variant={categoryVariants[template.category]}>
                       {categoryLabels[template.category]}
                     </Badge>
+                    {template.isGlobal && (
+                      <Badge variant="outline" className="text-xs">Global</Badge>
+                    )}
                     {template.isDefault && (
                       <Badge variant="default">Par défaut</Badge>
                     )}
@@ -155,15 +161,17 @@ export function TemplatesManager({ templates, onTemplatesChange }: TemplatesMana
                   >
                     <Pencil className="h-4 w-4" aria-hidden="true" />
                   </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="text-destructive hover:text-destructive"
-                    onClick={() => setDeleteId(template.id)}
-                    aria-label={`Supprimer ${template.name}`}
-                  >
-                    <Trash2 className="h-4 w-4" aria-hidden="true" />
-                  </Button>
+                  {!template.isGlobal && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="text-destructive hover:text-destructive"
+                      onClick={() => setDeleteId(template.id)}
+                      aria-label={`Supprimer ${template.name}`}
+                    >
+                      <Trash2 className="h-4 w-4" aria-hidden="true" />
+                    </Button>
+                  )}
                 </div>
               </div>
             ))}
@@ -177,6 +185,7 @@ export function TemplatesManager({ templates, onTemplatesChange }: TemplatesMana
         onOpenChange={setIsDialogOpen}
         template={editingTemplate}
         onComplete={handleDialogComplete}
+        defaultCategory={defaultCategory}
       />
 
       {/* Delete Confirmation */}

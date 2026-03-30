@@ -9,6 +9,8 @@ import type {
   DossierPriority,
   DossierStatus,
   ModuleType,
+  SendingFrequency,
+  TemplateCategory,
 } from "@prisma/client";
 
 export type DossierWithDocuments = {
@@ -24,6 +26,9 @@ export type DossierWithDocuments = {
   createdAt: Date;
   updatedAt: Date;
   linkedDossierId: string | null;
+  defaultTemplateId: string | null;
+  sendingFrequency: SendingFrequency;
+  defaultTemplate: { id: string; name: string } | null;
   documents: {
     id: string;
     filename: string;
@@ -92,6 +97,9 @@ export async function getDossiers(
           blobUrl: true,
         },
       },
+      defaultTemplate: {
+        select: { id: true, name: true },
+      },
     },
     orderBy,
   });
@@ -126,6 +134,9 @@ export async function getDossier(
           blobUrl: true,
         },
       },
+      defaultTemplate: {
+        select: { id: true, name: true },
+      },
     },
   });
 
@@ -149,6 +160,12 @@ export async function createDossier(
 
     const { addToOtherModule, ...dossierData } = validated;
 
+    // Auto-assign the global default quarterly template if user didn't choose one
+    const primaryTemplateId = dossierData.defaultTemplateId
+      ?? await getDefaultGlobalTemplateId(moduleType);
+    const otherModuleType = getOtherModuleType(moduleType);
+    const otherTemplateId = await getDefaultGlobalTemplateId(otherModuleType);
+
     if (addToOtherModule) {
       // Create both dossiers in a transaction, linking them together
       const otherModule = getOtherModuleType(moduleType);
@@ -166,10 +183,12 @@ export async function createDossier(
             bccEmails: dossierData.bccEmails,
             moduleType,
             userId,
+            defaultTemplateId: primaryTemplateId,
+            sendingFrequency: dossierData.sendingFrequency ?? "QUARTERLY",
           },
         });
 
-        // Create the linked dossier in the other module
+        // Create the linked dossier in the other module with its own default template
         const linkedDossier = await tx.dossier.create({
           data: {
             fullName: dossierData.fullName,
@@ -181,6 +200,8 @@ export async function createDossier(
             bccEmails: dossierData.bccEmails,
             moduleType: otherModule,
             userId,
+            defaultTemplateId: otherTemplateId,
+            sendingFrequency: dossierData.sendingFrequency ?? "QUARTERLY",
             linkedDossierId: primaryDossier.id,
           },
         });
@@ -210,6 +231,8 @@ export async function createDossier(
         bccEmails: dossierData.bccEmails,
         moduleType,
         userId,
+        defaultTemplateId: primaryTemplateId,
+        sendingFrequency: dossierData.sendingFrequency ?? "QUARTERLY",
       },
     });
 
@@ -265,6 +288,32 @@ export async function updateDossier(
       error: "Erreur lors de la mise a jour du dossier",
     };
   }
+}
+
+export async function getTemplatesForModule(
+  moduleType: ModuleType
+): Promise<{ id: string; name: string; isDefault: boolean; isGlobal: boolean }[]> {
+  const userId = await requireAuth();
+  return db.emailTemplate.findMany({
+    where: {
+      dossierId: null,
+      category: moduleType as TemplateCategory,
+      OR: [{ isGlobal: true }, { userId }],
+    },
+    select: { id: true, name: true, isDefault: true, isGlobal: true },
+    orderBy: [{ isGlobal: "desc" }, { isDefault: "desc" }, { name: "asc" }],
+  });
+}
+
+/** Find the global quarterly default template for a module. Used for auto-assigning on creation. */
+async function getDefaultGlobalTemplateId(
+  moduleType: ModuleType
+): Promise<string | null> {
+  const tpl = await db.emailTemplate.findFirst({
+    where: { isGlobal: true, isDefault: true, category: moduleType as TemplateCategory },
+    select: { id: true },
+  });
+  return tpl?.id ?? null;
 }
 
 export async function deleteDossier(
