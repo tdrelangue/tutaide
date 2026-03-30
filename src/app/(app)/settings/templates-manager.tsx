@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Plus, Pencil, Trash2, Copy } from "lucide-react";
+import { Plus, Pencil, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -24,11 +24,13 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { TemplateDialog } from "./template-dialog";
-import { deleteTemplate, duplicateTemplate, type TemplateData } from "./actions";
+import { deleteTemplate, type TemplateData } from "./actions";
 
 interface TemplatesManagerProps {
   templates: TemplateData[];
   onTemplatesChange: (templates: TemplateData[]) => void;
+  title?: string;
+  defaultCategory?: "APA" | "ASH" | "DERNIER_DECES" | "DERNIER_DESSAISISSEMENT" | "CUSTOM";
 }
 
 const categoryLabels: Record<string, string> = {
@@ -47,30 +49,12 @@ const categoryVariants: Record<string, "secondary" | "outline" | "default"> = {
   CUSTOM: "outline",
 };
 
-export function TemplatesManager({ templates, onTemplatesChange }: TemplatesManagerProps) {
+export function TemplatesManager({ templates, onTemplatesChange, title, defaultCategory }: TemplatesManagerProps) {
   const router = useRouter();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<TemplateData | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [isDuplicating, setIsDuplicating] = useState<string | null>(null);
-
-  const handleDuplicate = async (template: TemplateData) => {
-    setIsDuplicating(template.id);
-    try {
-      const result = await duplicateTemplate(template.id);
-      if (result.success && result.newId) {
-        toast.success("Modèle dupliqué — vous pouvez maintenant le modifier");
-        router.refresh();
-      } else {
-        toast.error(result.error || "Erreur lors de la duplication");
-      }
-    } catch {
-      toast.error("Erreur lors de la duplication");
-    } finally {
-      setIsDuplicating(null);
-    }
-  };
 
   const handleCreate = () => {
     setEditingTemplate(null);
@@ -106,14 +90,15 @@ export function TemplatesManager({ templates, onTemplatesChange }: TemplatesMana
   const handleDialogComplete = (newTemplate?: TemplateData) => {
     setIsDialogOpen(false);
     if (newTemplate) {
-      if (editingTemplate) {
-        // Update existing
+      const isReplacement = editingTemplate && newTemplate.id === editingTemplate.id;
+      if (isReplacement) {
+        // Personal template updated in place
         onTemplatesChange(
           templates.map((t) => (t.id === newTemplate.id ? newTemplate : t))
         );
       } else {
-        // Add new
-        onTemplatesChange([newTemplate, ...templates]);
+        // New template created (including copy-on-edit of a global)
+        onTemplatesChange([...templates, newTemplate]);
       }
     }
     router.refresh();
@@ -124,7 +109,7 @@ export function TemplatesManager({ templates, onTemplatesChange }: TemplatesMana
       <CardHeader>
         <div className="flex items-center justify-between">
           <div>
-            <CardTitle>Modèles d&apos;emails</CardTitle>
+            <CardTitle>{title ?? "Modèles d\u2019emails"}</CardTitle>
             <CardDescription>
               Créez et gérez vos modèles d&apos;emails réutilisables
             </CardDescription>
@@ -168,37 +153,24 @@ export function TemplatesManager({ templates, onTemplatesChange }: TemplatesMana
                   </p>
                 </div>
                 <div className="flex gap-1">
-                  {template.isGlobal ? (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => handleEdit(template)}
+                    aria-label={`Modifier ${template.name}`}
+                  >
+                    <Pencil className="h-4 w-4" aria-hidden="true" />
+                  </Button>
+                  {!template.isGlobal && (
                     <Button
                       variant="ghost"
                       size="icon"
-                      onClick={() => handleDuplicate(template)}
-                      disabled={isDuplicating === template.id}
-                      aria-label={`Dupliquer ${template.name}`}
-                      title="Dupliquer pour modifier"
+                      className="text-destructive hover:text-destructive"
+                      onClick={() => setDeleteId(template.id)}
+                      aria-label={`Supprimer ${template.name}`}
                     >
-                      <Copy className="h-4 w-4" aria-hidden="true" />
+                      <Trash2 className="h-4 w-4" aria-hidden="true" />
                     </Button>
-                  ) : (
-                    <>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleEdit(template)}
-                        aria-label={`Modifier ${template.name}`}
-                      >
-                        <Pencil className="h-4 w-4" aria-hidden="true" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="text-destructive hover:text-destructive"
-                        onClick={() => setDeleteId(template.id)}
-                        aria-label={`Supprimer ${template.name}`}
-                      >
-                        <Trash2 className="h-4 w-4" aria-hidden="true" />
-                      </Button>
-                    </>
                   )}
                 </div>
               </div>
@@ -213,6 +185,7 @@ export function TemplatesManager({ templates, onTemplatesChange }: TemplatesMana
         onOpenChange={setIsDialogOpen}
         template={editingTemplate}
         onComplete={handleDialogComplete}
+        defaultCategory={defaultCategory}
       />
 
       {/* Delete Confirmation */}
