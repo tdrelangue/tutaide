@@ -1,6 +1,6 @@
 {
   "productName": "Tutaide",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "identifier": "com.tutaide.app",
   "build": {
     "devUrl": "http://localhost:3000",
