@@ -5,7 +5,7 @@ import { hash } from "bcryptjs";
 import { db } from "@/lib/db";
 import { requireAdmin, startImpersonation, stopImpersonation } from "@/lib/auth";
 import { z } from "zod";
-import { seedDefaultTemplates } from "@/lib/default-templates";
+import { seedGlobalTemplates } from "@/lib/default-templates";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -106,7 +106,7 @@ export async function createUser(data: {
       },
     });
 
-    await seedDefaultTemplates(user.id);
+    await seedGlobalTemplates();
 
     revalidatePath("/admin/users");
     return { success: true, id: user.id };
@@ -228,4 +228,80 @@ export async function startImpersonationAction(
 export async function stopImpersonationAction(): Promise<void> {
   await stopImpersonation();
   revalidatePath("/");
+}
+
+// ---------------------------------------------------------------------------
+// Global template management (admin only)
+// ---------------------------------------------------------------------------
+
+export type GlobalTemplateData = {
+  id: string;
+  name: string;
+  subject: string;
+  body: string;
+  category: "APA" | "ASH" | "DERNIER_DECES" | "DERNIER_DESSAISISSEMENT" | "CUSTOM";
+  isDefault: boolean;
+};
+
+export async function getGlobalTemplates(): Promise<GlobalTemplateData[]> {
+  await requireAdmin();
+  const templates = await db.emailTemplate.findMany({
+    where: { isGlobal: true },
+    orderBy: [{ category: "asc" }, { name: "asc" }],
+    select: { id: true, name: true, subject: true, body: true, category: true, isDefault: true },
+  });
+  return templates as GlobalTemplateData[];
+}
+
+export async function createGlobalTemplate(data: {
+  name: string;
+  subject: string;
+  body: string;
+  category: "APA" | "ASH" | "DERNIER_DECES" | "DERNIER_DESSAISISSEMENT" | "CUSTOM";
+  isDefault: boolean;
+}): Promise<{ success: boolean; id?: string; error?: string }> {
+  try {
+    await requireAdmin();
+    const template = await db.emailTemplate.create({
+      data: { ...data, isGlobal: true, userId: null },
+    });
+    revalidatePath("/admin/users");
+    return { success: true, id: template.id };
+  } catch (error) {
+    console.error("Error creating global template:", error);
+    return { success: false, error: "Erreur lors de la création" };
+  }
+}
+
+export async function updateGlobalTemplate(
+  id: string,
+  data: Partial<{ name: string; subject: string; body: string; isDefault: boolean }>
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    await requireAdmin();
+    const existing = await db.emailTemplate.findFirst({ where: { id, isGlobal: true } });
+    if (!existing) return { success: false, error: "Modèle introuvable" };
+    await db.emailTemplate.update({ where: { id }, data });
+    revalidatePath("/admin/users");
+    return { success: true };
+  } catch (error) {
+    console.error("Error updating global template:", error);
+    return { success: false, error: "Erreur lors de la mise à jour" };
+  }
+}
+
+export async function deleteGlobalTemplate(
+  id: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    await requireAdmin();
+    const existing = await db.emailTemplate.findFirst({ where: { id, isGlobal: true } });
+    if (!existing) return { success: false, error: "Modèle introuvable" };
+    await db.emailTemplate.delete({ where: { id } });
+    revalidatePath("/admin/users");
+    return { success: true };
+  } catch (error) {
+    console.error("Error deleting global template:", error);
+    return { success: false, error: "Erreur lors de la suppression" };
+  }
 }

@@ -4,7 +4,7 @@ import { compare } from "bcryptjs";
 import { cookies } from "next/headers";
 import { db } from "./db";
 import { authConfig } from "./auth.config";
-import { seedDefaultTemplates } from "./default-templates";
+import { seedGlobalTemplates } from "./default-templates";
 
 const IMPERSONATION_COOKIE = "tutaide-impersonate";
 
@@ -41,8 +41,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         const isValid = await compare(password, user.passwordHash);
         if (!isValid) return null;
 
-        // Seed default email templates for users who don't have any
-        seedDefaultTemplates(user.id).catch(() => {});
+        // Seed global templates once if not already present
+        seedGlobalTemplates().catch(() => {});
 
         return {
           id: user.id,

@@ -87,16 +87,18 @@ model EmailTemplate {
   body                   String
   category               TemplateCategory @default(APA)
   isDefault              Boolean          @default(false)
+  isGlobal               Boolean          @default(false)
   createdAt              DateTime         @default(now())
   updatedAt              DateTime         @updatedAt
-  userId                 String
+  userId                 String?
   dossierId              String?
-  user                   User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user                   User?            @relation(fields: [userId], references: [id], onDelete: Cascade)
   dossiersUsingAsDefault Dossier[]        @relation("DossierDefaultTemplate")
 
   @@index([userId])
   @@index([category])
   @@index([dossierId])
+  @@index([isGlobal])
 }
 
 model EmailBatch {

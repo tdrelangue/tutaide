@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
-import { Loader2 } from "lucide-react";
+import { Loader2, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -45,6 +45,7 @@ export function TemplateDialog({
 }: TemplateDialogProps) {
   const [isLoading, setIsLoading] = useState(false);
   const isEditing = !!template;
+  const isGlobal = template?.isGlobal ?? false;
 
   const {
     register,
@@ -67,7 +68,6 @@ export function TemplateDialog({
   const category = watch("category");
   const isDefault = watch("isDefault");
 
-  // Reset form when template changes
   useEffect(() => {
     if (template) {
       reset({
@@ -92,28 +92,47 @@ export function TemplateDialog({
     setIsLoading(true);
     try {
       if (isEditing && template) {
-        const result = await updateTemplate(template.id, data);
-        if (result.success) {
-          toast.success("Modele mis a jour");
-          onComplete?.({
-            id: template.id,
-            ...data,
-          });
-          onOpenChange(false);
+        if (isGlobal) {
+          // Check if anything actually changed
+          const unchanged =
+            data.name === template.name &&
+            data.subject === template.subject &&
+            data.body === template.body &&
+            data.category === template.category &&
+            data.isDefault === template.isDefault;
+
+          if (unchanged) {
+            onOpenChange(false);
+            return;
+          }
+
+          // Create a personal copy with the user's changes
+          const result = await createTemplate(data);
+          if (result.success && result.id) {
+            toast.success("Copie personnelle créée avec vos modifications");
+            onComplete?.({ id: result.id, isGlobal: false, ...data });
+            onOpenChange(false);
+          } else {
+            toast.error(result.error || "Erreur lors de la création");
+          }
         } else {
-          toast.error(result.error || "Erreur lors de la mise a jour");
+          const result = await updateTemplate(template.id, data);
+          if (result.success) {
+            toast.success("Modèle mis à jour");
+            onComplete?.({ id: template.id, isGlobal: false, ...data });
+            onOpenChange(false);
+          } else {
+            toast.error(result.error || "Erreur lors de la mise à jour");
+          }
         }
       } else {
         const result = await createTemplate(data);
         if (result.success && result.id) {
-          toast.success("Modele cree");
-          onComplete?.({
-            id: result.id,
-            ...data,
-          });
+          toast.success("Modèle créé");
+          onComplete?.({ id: result.id, isGlobal: false, ...data });
           onOpenChange(false);
         } else {
-          toast.error(result.error || "Erreur lors de la creation");
+          toast.error(result.error || "Erreur lors de la création");
         }
       }
     } catch {
@@ -133,19 +152,26 @@ export function TemplateDialog({
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>
-            {isEditing ? "Modifier le modele" : "Nouveau modele"}
+            {isEditing ? "Modifier le modèle" : "Nouveau modèle"}
           </DialogTitle>
           <DialogDescription>
             {isEditing
-              ? "Modifiez les informations du modele d'email"
-              : "Creez un nouveau modele d'email reutilisable"}
+              ? "Modifiez les informations du modèle d'email"
+              : "Créez un nouveau modèle d'email réutilisable"}
           </DialogDescription>
         </DialogHeader>
+
+        {isGlobal && (
+          <div className="flex items-start gap-2 rounded-md border border-muted bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+            <Info className="h-4 w-4 mt-0.5 shrink-0" aria-hidden="true" />
+            <span>Modèle partagé — vos modifications créeront une copie personnelle.</span>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="template-name">
-              Nom du modele <span className="text-destructive">*</span>
+              Nom du modèle <span className="text-destructive">*</span>
             </Label>
             <Input
               id="template-name"
@@ -162,7 +188,7 @@ export function TemplateDialog({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="template-category">Categorie</Label>
+            <Label htmlFor="template-category">Catégorie</Label>
             <Select
               value={category}
               onValueChange={(value) =>
@@ -171,14 +197,14 @@ export function TemplateDialog({
               disabled={isLoading}
             >
               <SelectTrigger id="template-category">
-                <SelectValue placeholder="Selectionner une categorie" />
+                <SelectValue placeholder="Sélectionner une catégorie" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="APA">APA</SelectItem>
                 <SelectItem value="ASH">ASH</SelectItem>
-                <SelectItem value="DERNIER_DECES">Dernier email - Deces</SelectItem>
+                <SelectItem value="DERNIER_DECES">Dernier email - Décès</SelectItem>
                 <SelectItem value="DERNIER_DESSAISISSEMENT">Dernier email - Dessaisissement</SelectItem>
-                <SelectItem value="CUSTOM">Personnalise</SelectItem>
+                <SelectItem value="CUSTOM">Personnalisé</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -219,7 +245,7 @@ export function TemplateDialog({
               </p>
             )}
             <p className="text-xs text-muted-foreground">
-              Vous pouvez utiliser des variables : {"{{nom}}"}, {"{{date}}"}, etc.
+              Variables : {"{{nom_protege}}"}, {"{{trimestre}}"}, {"{{annee}}"}, {"{{mois}}"}, {"{{signature}}"}
             </p>
           </div>
 
@@ -228,10 +254,13 @@ export function TemplateDialog({
               id="template-isDefault"
               checked={isDefault}
               onCheckedChange={(checked) => setValue("isDefault", checked as boolean)}
-              disabled={isLoading}
+              disabled={isLoading || isGlobal}
             />
-            <Label htmlFor="template-isDefault" className="cursor-pointer">
-              Definir comme modele par defaut
+            <Label
+              htmlFor="template-isDefault"
+              className={isGlobal ? "cursor-not-allowed opacity-50" : "cursor-pointer"}
+            >
+              Définir comme modèle par défaut
             </Label>
           </div>
 
@@ -248,7 +277,7 @@ export function TemplateDialog({
               {isLoading && (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
               )}
-              {isEditing ? "Enregistrer" : "Creer"}
+              {isEditing ? "Enregistrer" : "Créer"}
             </Button>
           </DialogFooter>
         </form>

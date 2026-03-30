@@ -43,19 +43,11 @@ export function InfoTab({ dossier }: InfoTabProps) {
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <h4 className="text-sm font-medium text-muted-foreground">Modèle par défaut</h4>
-          <p className="mt-1 text-sm">
-            {dossier.defaultTemplate?.name ?? "Modèle global du module"}
-          </p>
-        </div>
-        <div>
-          <h4 className="text-sm font-medium text-muted-foreground">Fréquence d&apos;envoi</h4>
-          <p className="mt-1 text-sm">
-            {{ MONTHLY: "Mensuel", QUARTERLY: "Trimestriel", BIMONTHLY: "Bimestriel" }[dossier.sendingFrequency]}
-          </p>
-        </div>
+      <div>
+        <h4 className="text-sm font-medium text-muted-foreground">Modèle par défaut</h4>
+        <p className="mt-1 text-sm">
+          {dossier.defaultTemplate?.name ?? "Modèle global du module"}
+        </p>
       </div>
 
       <div>

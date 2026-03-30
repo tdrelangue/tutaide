@@ -171,15 +171,19 @@ export type TemplateData = {
   body: string;
   category: TemplateCategory;
   isDefault: boolean;
+  isGlobal: boolean;
 };
 
-// Get templates
+// Get templates — returns global templates first, then user's personal templates
 export async function getTemplates(): Promise<TemplateData[]> {
   const userId = await requireAuth();
 
   const templates = await db.emailTemplate.findMany({
-    where: { userId, dossierId: null }, // Only global templates
-    orderBy: { createdAt: "desc" },
+    where: {
+      dossierId: null,
+      OR: [{ isGlobal: true }, { userId }],
+    },
+    orderBy: [{ isGlobal: "desc" }, { isDefault: "desc" }, { name: "asc" }],
     select: {
       id: true,
       name: true,
@@ -187,6 +191,7 @@ export async function getTemplates(): Promise<TemplateData[]> {
       body: true,
       category: true,
       isDefault: true,
+      isGlobal: true,
     },
   });
 
@@ -216,7 +221,7 @@ export async function createTemplate(
   }
 }
 
-// Update template
+// Update template — global templates cannot be edited by regular users
 export async function updateTemplate(
   id: string,
   data: Partial<EmailTemplateFormData>
@@ -224,14 +229,14 @@ export async function updateTemplate(
   try {
     const userId = await requireAuth();
 
-    // Verify ownership
     const existing = await db.emailTemplate.findFirst({
-      where: { id, userId },
+      where: { id },
+      select: { userId: true, isGlobal: true },
     });
 
-    if (!existing) {
-      return { success: false, error: "Modèle non trouvé" };
-    }
+    if (!existing) return { success: false, error: "Modèle non trouvé" };
+    if (existing.isGlobal) return { success: false, error: "Impossible de modifier un modèle global" };
+    if (existing.userId !== userId) return { success: false, error: "Modèle non trouvé" };
 
     const validated = emailTemplateSchema.partial().parse(data);
 
@@ -248,21 +253,21 @@ export async function updateTemplate(
   }
 }
 
-// Delete template
+// Delete template — global templates cannot be deleted by regular users
 export async function deleteTemplate(
   id: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const userId = await requireAuth();
 
-    // Verify ownership
     const existing = await db.emailTemplate.findFirst({
-      where: { id, userId },
+      where: { id },
+      select: { userId: true, isGlobal: true },
     });
 
-    if (!existing) {
-      return { success: false, error: "Modèle non trouvé" };
-    }
+    if (!existing) return { success: false, error: "Modèle non trouvé" };
+    if (existing.isGlobal) return { success: false, error: "Impossible de supprimer un modèle global" };
+    if (existing.userId !== userId) return { success: false, error: "Modèle non trouvé" };
 
     await db.emailTemplate.delete({
       where: { id },
@@ -367,7 +372,41 @@ export async function saveModuleConfig(
   }
 }
 
-// Get templates by category
+// Duplicate a template as a personal copy (used when user wants to edit a global template)
+export async function duplicateTemplate(
+  id: string
+): Promise<{ success: boolean; newId?: string; error?: string }> {
+  try {
+    const userId = await requireAuth();
+
+    const source = await db.emailTemplate.findFirst({
+      where: { id },
+      select: { name: true, subject: true, body: true, category: true },
+    });
+
+    if (!source) return { success: false, error: "Modèle non trouvé" };
+
+    const copy = await db.emailTemplate.create({
+      data: {
+        name: `${source.name} (copie)`,
+        subject: source.subject,
+        body: source.body,
+        category: source.category,
+        isDefault: false,
+        isGlobal: false,
+        userId,
+      },
+    });
+
+    revalidatePath("/settings");
+    return { success: true, newId: copy.id };
+  } catch (error) {
+    console.error("Error duplicating template:", error);
+    return { success: false, error: "Erreur lors de la duplication" };
+  }
+}
+
+// Get templates by category — includes global templates + user's personal ones
 export async function getTemplatesByCategory(
   category: TemplateCategory
 ): Promise<TemplateData[]> {
@@ -375,11 +414,11 @@ export async function getTemplatesByCategory(
 
   const templates = await db.emailTemplate.findMany({
     where: {
-      userId,
       dossierId: null,
       category,
+      OR: [{ isGlobal: true }, { userId }],
     },
-    orderBy: { createdAt: "desc" },
+    orderBy: [{ isGlobal: "desc" }, { isDefault: "desc" }, { name: "asc" }],
     select: {
       id: true,
       name: true,
@@ -387,6 +426,7 @@ export async function getTemplatesByCategory(
       body: true,
       category: true,
       isDefault: true,
+      isGlobal: true,
     },
   });
 

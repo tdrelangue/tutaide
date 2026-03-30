@@ -76,7 +76,6 @@ export function CreateDossierDialog({
   const status = watch("status");
   const addToOtherModule = watch("addToOtherModule");
   const defaultTemplateId = watch("defaultTemplateId");
-  const sendingFrequency = watch("sendingFrequency");
 
   async function onSubmit(data: DossierFormData) {
     setIsLoading(true);
@@ -173,49 +172,27 @@ export function CreateDossierDialog({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="defaultTemplateId">Modèle par défaut</Label>
-              <Select
-                value={defaultTemplateId ?? ""}
-                onValueChange={(value) =>
-                  setValue("defaultTemplateId", value || null)
-                }
-                disabled={isLoading}
-              >
-                <SelectTrigger id="defaultTemplateId">
-                  <SelectValue placeholder="Aucun" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="">Aucun</SelectItem>
-                  {templates.map((t) => (
-                    <SelectItem key={t.id} value={t.id}>
-                      {t.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="sendingFrequency">Fréquence d&apos;envoi</Label>
-              <Select
-                value={sendingFrequency}
-                onValueChange={(value) =>
-                  setValue("sendingFrequency", value as DossierFormData["sendingFrequency"])
-                }
-                disabled={isLoading}
-              >
-                <SelectTrigger id="sendingFrequency">
-                  <SelectValue placeholder="Fréquence" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="MONTHLY">Mensuel</SelectItem>
-                  <SelectItem value="QUARTERLY">Trimestriel</SelectItem>
-                  <SelectItem value="BIMONTHLY">Bimestriel</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+          <div className="space-y-2">
+            <Label htmlFor="defaultTemplateId">Modèle par défaut</Label>
+            <Select
+              value={defaultTemplateId ?? "__none__"}
+              onValueChange={(value) =>
+                setValue("defaultTemplateId", value === "__none__" ? null : value)
+              }
+              disabled={isLoading}
+            >
+              <SelectTrigger id="defaultTemplateId">
+                <SelectValue placeholder="Aucun" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">Aucun</SelectItem>
+                {templates.map((t) => (
+                  <SelectItem key={t.id} value={t.id}>
+                    {t.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="space-y-2">
