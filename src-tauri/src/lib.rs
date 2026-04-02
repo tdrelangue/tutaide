@@ -27,8 +27,8 @@ pub fn run() {
                 let server_dir = resource_dir.join("nextjs-server");
                 let server_path = server_dir.join("server.js");
 
-                // Debug log at %TEMP%\tutaide.log
-                let log_path = std::env::temp_dir().join("tutaide.log");
+                // Debug log at %TEMP%\tutellia.log
+                let log_path = std::env::temp_dir().join("tutellia.log");
                 let mut log =
                     std::fs::File::create(&log_path).expect("failed to create log");
                 writeln!(log, "resource_dir = {:?}", resource_dir).ok();

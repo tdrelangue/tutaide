@@ -1,0 +1,92 @@
+CONTRAT DE LICENCE UTILISATEUR FINAL (CLUF)
+Logiciel Tutellia — Orig AI
+Version 1.0 — Avril 2026
+
+PRÉAMBULE
+Le présent contrat est conclu entre :
+L'Éditeur : Thomas Drelangue, entrepreneur individuel, opérant sous le nom commercial Orig AI, immatriculé sous le numéro SIRET [SIRET], dont le siège est situé en Corrèze (France), ci-après désigné « l'Éditeur ».
+Le Licencié : toute personne physique ou morale ayant souscrit un abonnement au logiciel Tutellia, ci-après désigné « le Licencié ».
+Le fait d'installer, d'accéder ou d'utiliser le logiciel Tutellia vaut acceptation pleine et entière des dispositions du présent contrat.
+
+ARTICLE 1 — OBJET
+Le présent contrat a pour objet de définir les conditions dans lesquelles l'Éditeur concède au Licencié un droit d'utilisation non exclusif, non transférable et révocable du logiciel Tutellia (ci-après « le Logiciel »), application de bureau destinée à la gestion et à la transmission de dossiers APA et ASH à destination des mandataires judiciaires à la protection des majeurs (MJPM).
+
+ARTICLE 2 — PROPRIÉTÉ INTELLECTUELLE
+Le Logiciel, son code source, son architecture, ses interfaces, sa documentation et l'ensemble de ses composants sont et demeurent la propriété exclusive de l'Éditeur, protégés par le droit d'auteur en application des articles L. 111-1 et suivants du Code de la propriété intellectuelle français.
+Le présent contrat ne constitue en aucun cas une cession de droits de propriété intellectuelle. Le Licencié n'acquiert qu'un droit d'usage limité aux conditions définies ci-après.
+La marque Tutellia est déposée à l'Institut National de la Propriété Industrielle (INPI). Toute utilisation de cette marque sans autorisation écrite préalable de l'Éditeur est interdite.
+
+ARTICLE 3 — ÉTENDUE DE LA LICENCE
+3.1 Droit accordé
+Sous réserve du paiement de l'abonnement en vigueur et du respect des conditions du présent contrat, l'Éditeur accorde au Licencié le droit d'installer et d'utiliser le Logiciel sur le nombre de postes défini dans le bon de commande ou la confirmation d'abonnement correspondante.
+3.2 Restrictions
+Le Licencié s'interdit expressément de :
+
+- Reproduire, copier ou distribuer le Logiciel à des tiers ;
+- Céder, louer, prêter ou sous-licencier le Logiciel ;
+- Décompiler, désassembler, faire de l'ingénierie inverse ou tenter d'accéder au code source du Logiciel ;
+- Modifier, adapter ou créer des œuvres dérivées à partir du Logiciel ;
+- Supprimer ou altérer les mentions de propriété intellectuelle, marques ou avertissements présents dans le Logiciel ;
+- Utiliser le Logiciel à des fins illicites ou contraires aux dispositions légales applicables, notamment en matière de protection des données personnelles.
+
+ARTICLE 4 — ABONNEMENT ET CONDITIONS FINANCIÈRES
+4.1 Modèle d'abonnement
+L'accès au Logiciel est conditionné à la souscription d'un abonnement mensuel ou annuel, dont le tarif est fixé par l'Éditeur et communiqué au Licencié lors de la souscription. Les tarifs en vigueur sont disponibles sur demande auprès de l'Éditeur.
+4.2 Paiement
+Le Licencié s'engage à régler les sommes dues aux échéances convenues. Tout retard de paiement pourra entraîner la suspension de l'accès au Logiciel dans les conditions prévues à l'article 5.
+4.3 Révision tarifaire
+L'Éditeur se réserve le droit de modifier ses tarifs, sous réserve d'en informer le Licencié par écrit au moins 30 jours avant l'entrée en vigueur de la nouvelle tarification. Le Licencié dispose alors d'un délai de 15 jours pour résilier le contrat sans pénalité.
+
+ARTICLE 5 — SUSPENSION ET RÉSILIATION
+5.1 Défaut de paiement
+En cas de non-paiement à l'échéance, l'Éditeur adressera au Licencié une mise en demeure par tout moyen écrit. À l'issue d'un délai de grâce de 15 jours calendaires suivant cette mise en demeure, sans régularisation de la situation, l'Éditeur se réserve le droit de suspendre l'accès au Logiciel sans préavis supplémentaire.
+La suspension ne constitue pas une résiliation. Le Licencié peut réactiver l'accès en régularisant les sommes dues.
+5.2 Résiliation pour manquement
+En cas de violation des dispositions du présent contrat, notamment des restrictions prévues à l'article 3.2, l'Éditeur pourra résilier la licence de plein droit, sans mise en demeure préalable, après notification écrite au Licencié.
+5.3 Résiliation à l'initiative du Licencié
+Le Licencié peut résilier son abonnement à tout moment, sous réserve de respecter le préavis défini dans son bon de commande (par défaut : 30 jours avant la prochaine échéance). Aucun remboursement ne sera effectué pour les périodes déjà facturées.
+5.4 Effets de la résiliation
+À la date de résiliation effective, le droit d'utilisation du Logiciel prend fin. Le Licencié s'engage à cesser toute utilisation du Logiciel et à désinstaller celui-ci de l'ensemble des postes concernés. Les données locales restent accessibles au Licencié pendant une période de 30 jours suivant la résiliation, afin de lui permettre d'en assurer l'export.
+
+ARTICLE 6 — DONNÉES PERSONNELLES ET RGPD
+6.1 Responsabilité du traitement
+Dans le cadre de l'utilisation du Logiciel, le Licencié est seul responsable du traitement des données personnelles des personnes protégées dont il assure la gestion. Le Licencié agit en qualité de responsable de traitement au sens du Règlement (UE) 2016/679 (RGPD).
+6.2 Stockage local
+Les données relatives aux dossiers gérés via le Logiciel sont stockées localement sur les postes du Licencié. L'Éditeur n'a pas accès aux données personnelles des personnes protégées et n'en est pas le sous-traitant au sens du RGPD.
+6.3 Données de compte
+Les seules données collectées par l'Éditeur sont celles nécessaires à la gestion de l'abonnement (identité, coordonnées, données de facturation). Ces données sont traitées conformément à la politique de confidentialité de l'Éditeur, disponible sur demande.
+
+ARTICLE 7 — GARANTIES ET RESPONSABILITÉ
+7.1 Disponibilité
+L'Éditeur s'engage à maintenir le Logiciel en état de fonctionnement et à corriger les anomalies signalées dans un délai raisonnable. Aucune garantie de disponibilité continue n'est toutefois accordée.
+7.2 Limitation de responsabilité
+L'Éditeur ne saurait être tenu responsable de :
+
+- Toute perte de données résultant d'une mauvaise utilisation du Logiciel par le Licencié ;
+- Tout dommage indirect, consécutif ou immatériel lié à l'utilisation ou à l'impossibilité d'utiliser le Logiciel ;
+- Toute incompatibilité du Logiciel avec des systèmes tiers non expressément supportés.
+
+La responsabilité de l'Éditeur, en cas de dommage direct prouvé, est limitée au montant des sommes effectivement perçues par l'Éditeur au titre de l'abonnement du Licencié au cours des 12 derniers mois.
+7.3 Obligation du Licencié
+Le Licencié est seul responsable de la sauvegarde régulière de ses données et du respect des obligations légales qui lui incombent dans le cadre de son activité de mandataire judiciaire.
+
+ARTICLE 8 — MISES À JOUR ET ÉVOLUTIONS
+L'Éditeur se réserve le droit de faire évoluer le Logiciel (nouvelles fonctionnalités, corrections, modules supplémentaires) à sa discrétion. Les mises à jour incluses dans l'abonnement seront déployées sans surcoût. Des modules additionnels pourront faire l'objet d'une tarification spécifique, communiquée au préalable au Licencié.
+
+ARTICLE 9 — CONFIDENTIALITÉ
+Chaque partie s'engage à traiter comme confidentielles toutes les informations de nature sensible échangées dans le cadre du présent contrat, et à ne pas les divulguer à des tiers sans accord préalable écrit de l'autre partie.
+
+ARTICLE 10 — DROIT APPLICABLE ET JURIDICTION
+Le présent contrat est soumis au droit français. En cas de litige relatif à son interprétation ou à son exécution, les parties s'engagent à rechercher une solution amiable avant tout recours judiciaire.
+À défaut d'accord amiable dans un délai de 30 jours à compter de la notification du différend, le litige sera soumis aux tribunaux compétents du ressort du siège de l'Éditeur (Brive-la-Gaillarde, Corrèze).
+
+ARTICLE 11 — DISPOSITIONS GÉNÉRALES
+
+- Si une clause du présent contrat est déclarée nulle ou inapplicable, les autres clauses demeurent en vigueur.
+- Le fait pour l'Éditeur de ne pas se prévaloir d'un manquement du Licencié ne vaut pas renonciation à se prévaloir de manquements ultérieurs.
+- Le présent contrat constitue l'intégralité de l'accord entre les parties concernant l'objet défini à l'article 1, et remplace tout accord antérieur.
+
+---
+Document établi par Orig AI — Thomas Drelangue
+À compléter : numéro SIRET, tarifs en vigueur, nombre de postes par abonnement
+Ce modèle ne constitue pas un conseil juridique. Pour toute situation complexe, consulter un avocat spécialisé en propriété intellectuelle.

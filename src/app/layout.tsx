@@ -7,7 +7,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Tut'aide - Gestion des dossiers MJPM",
+  title: "Tutellia - Gestion des dossiers MJPM",
   description: "Application de gestion des dossiers pour les mandataires judiciaires à la protection des majeurs",
   icons: {
     icon: "/icon.ico",

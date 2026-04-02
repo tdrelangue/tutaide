@@ -75,11 +75,11 @@ export function AppSidebar({ userRole }: AppSidebarProps) {
         <Link
           href="/apa/dossiers"
           className="flex h-11 w-11 items-center justify-center rounded-lg overflow-hidden transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-          aria-label="Tut'aide - Accueil"
+          aria-label="Tutellia - Accueil"
         >
           <Image
             src="/icon.png"
-            alt="Tut'aide"
+            alt="Tutellia"
             width={44}
             height={44}
             className="object-contain"

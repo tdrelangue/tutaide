@@ -1,7 +1,7 @@
 {
-  "productName": "Tutaide",
+  "productName": "Tutellia",
   "version": "1.0.0",
-  "identifier": "com.tutaide.app",
+  "identifier": "com.tutellia.app",
   "build": {
     "devUrl": "http://localhost:3000",
     "beforeDevCommand": "npm run dev",
@@ -10,7 +10,7 @@
   "app": {
     "windows": [
       {
-        "title": "Tut'aide",
+        "title": "Tutellia",
         "width": 1280,
         "height": 800,
         "minWidth": 900,

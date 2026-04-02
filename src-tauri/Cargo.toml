@@ -1,12 +1,12 @@
 [package]
-name = "tutaide"
-version = "0.1.0"
-description = "Tut'aide - Application MJPM"
-authors = ["you"]
+name = "tutellia"
+version = "1.0.0"
+description = "Tutellia - Application MJPM"
+authors = ["Thomas Drelangue - Orig AI"]
 edition = "2021"
 
 [lib]
-name = "tutaide_lib"
+name = "tutellia_lib"
 crate-type = ["lib", "cdylib", "staticlib"]
 
 [build-dependencies]
