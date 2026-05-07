@@ -1,6 +1,9 @@
 # Dependencies
 /node_modules
 
+# Release config (contains signing password — never commit)
+.release-config.ps1
+
 # Build outputs
 /.next/
 /out/
