@@ -193,6 +193,7 @@ model ModuleConfig {
 enum ModuleType {
   APA
   ASH
+  PCH
 }
 
 enum DossierPriority {
@@ -209,6 +210,7 @@ enum DossierStatus {
 enum TemplateCategory {
   APA
   ASH
+  PCH
   DERNIER_DECES
   DERNIER_DESSAISISSEMENT
   CUSTOM

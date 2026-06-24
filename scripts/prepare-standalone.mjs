@@ -115,21 +115,24 @@ if (existsSync(ssrChunksDir)) {
 
     // Find where the base package actually lives in the standalone tree
     const basePath = findPackagePath(standalone, baseName);
-    // Use a RELATIVE path from the shim to the package so the shim works on any
-    // machine regardless of where the app is installed (absolute paths break).
-    const requireArg = basePath
-      ? JSON.stringify(relative(shimDir, basePath).replace(/\\/g, "/"))
-      : JSON.stringify(baseName);
 
     mkdirSync(shimDir, { recursive: true });
-    writeFileSync(
-      join(shimDir, "package.json"),
-      JSON.stringify({ name: shimName, version: "1.0.0", main: "index.js" }, null, 2)
-    );
-    writeFileSync(join(shimDir, "index.js"), `module.exports = require(${requireArg});\n`);
 
-    const location = basePath ? "(found at absolute path)" : "(base package not found — may still work)";
-    console.log(`Turbopack shim: ${shimName} → ${baseName} ${location}`);
+    if (basePath) {
+      // Copy the entire real package into the shim directory so all subpath
+      // imports work (e.g. @prisma/client-{hash}/scripts/default-index.js).
+      // A simple index.js redirect is not enough when Turbopack requires subpaths.
+      cpSync(basePath, shimDir, { recursive: true, force: true });
+      console.log(`Turbopack shim: ${shimName} → ${baseName} (copied)`);
+    } else {
+      // Fallback: simple re-export shim — subpath imports will not work
+      writeFileSync(
+        join(shimDir, "package.json"),
+        JSON.stringify({ name: shimName, version: "1.0.0", main: "index.js" }, null, 2)
+      );
+      writeFileSync(join(shimDir, "index.js"), `module.exports = require(${JSON.stringify(baseName)});\n`);
+      console.log(`Turbopack shim: ${shimName} → ${baseName} (base package not found — may still work)`);
+    }
     shimCount++;
   }
 

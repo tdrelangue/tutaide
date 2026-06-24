@@ -1,6 +1,6 @@
 {
   "productName": "Tutellia",
-  "version": "1.0.0",
+  "version": "2.0.3",
   "identifier": "com.tutellia.app",
   "build": {
     "devUrl": "http://localhost:3000",
@@ -41,6 +41,12 @@
   "plugins": {
     "shell": {
       "open": true
+    },
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDZEQjlBODM4MDkzREJDOUEKUldTYXZEMEpPS2k1YlRNZ0g3NTNHS2dMWnRCZVN2UTJHaitGa2xBQU02R1lqWDlzYW9Ed0ZnTm0K",
+      "endpoints": [
+        "https://orig-audit.netlify.app/releases/tutellia/latest.json"
+      ]
     }
   }
 }
