@@ -33,6 +33,10 @@ const moduleStyles: Record<string, { badge: string; indicator: string }> = {
     badge: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300",
     indicator: "bg-emerald-600",
   },
+  pch: {
+    badge: "bg-violet-100 text-violet-800 dark:bg-violet-900/30 dark:text-violet-300",
+    indicator: "bg-violet-600",
+  },
 };
 
 export function ModuleNav({ module, moduleLabel }: ModuleNavProps) {

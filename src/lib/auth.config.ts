@@ -33,7 +33,7 @@ export const authConfig: NextAuthConfig = {
       if (isPublicPath) {
         // Redirect logged-in users away from login
         if (isLoggedIn && nextUrl.pathname === "/login") {
-          return Response.redirect(new URL("/apa/dossiers", nextUrl));
+          return Response.redirect(new URL("/dashboard", nextUrl));
         }
         return true;
       }
@@ -45,7 +45,7 @@ export const authConfig: NextAuthConfig = {
       if (nextUrl.pathname.startsWith("/admin")) {
         const role = auth?.user?.role;
         if (role !== "ADMIN") {
-          return Response.redirect(new URL("/apa/dossiers", nextUrl));
+          return Response.redirect(new URL("/dashboard", nextUrl));
         }
       }
 

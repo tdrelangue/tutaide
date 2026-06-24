@@ -6,13 +6,13 @@ export default async function LoginPage() {
   const session = await auth();
 
   if (session?.user) {
-    redirect("/dossiers");
+    redirect("/dashboard");
   }
 
   return (
     <div className="w-full max-w-sm">
       <div className="mb-8 text-center">
-        <h1 className="text-3xl font-bold tracking-tight">Tut&apos;aide</h1>
+        <h1 className="text-3xl font-bold tracking-tight">Tutellia</h1>
         <p className="mt-2 text-muted-foreground">
           Gestion des dossiers MJPM
         </p>

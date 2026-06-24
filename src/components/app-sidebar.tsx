@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
-import { FolderOpen, Settings, ShieldCheck } from "lucide-react";
+import { FolderOpen, Settings, ShieldCheck, LayoutDashboard } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface NavItem {
@@ -17,6 +17,15 @@ interface NavItem {
   /** Accent color for the module indicator */
   accentClass?: string;
 }
+
+const dashboardItem: NavItem = {
+  href: "/dashboard",
+  icon: LayoutDashboard,
+  label: "Tableau de bord",
+  shortLabel: "Accueil",
+  description: "Vue d'ensemble",
+  activePrefix: "/dashboard",
+};
 
 const moduleItems: NavItem[] = [
   {
@@ -36,6 +45,15 @@ const moduleItems: NavItem[] = [
     description: "Dossiers ASH",
     activePrefix: "/ash",
     accentClass: "bg-emerald-600",
+  },
+  {
+    href: "/pch/dossiers",
+    icon: FolderOpen,
+    label: "PCH - Prestation de Compensation du Handicap",
+    shortLabel: "PCH",
+    description: "Dossiers PCH",
+    activePrefix: "/pch",
+    accentClass: "bg-violet-600",
   },
 ];
 
@@ -60,10 +78,15 @@ const settingsItem: NavItem = {
 
 interface AppSidebarProps {
   userRole: "USER" | "ADMIN";
+  activeModules: string[];
 }
 
-export function AppSidebar({ userRole }: AppSidebarProps) {
+export function AppSidebar({ userRole, activeModules }: AppSidebarProps) {
   const pathname = usePathname();
+
+  const visibleModules = moduleItems.filter((item) =>
+    activeModules.includes(item.activePrefix.replace("/", ""))
+  );
 
   return (
     <nav
@@ -73,7 +96,7 @@ export function AppSidebar({ userRole }: AppSidebarProps) {
       {/* Logo at top */}
       <div className="flex h-16 items-center justify-center border-b">
         <Link
-          href="/apa/dossiers"
+          href="/dashboard"
           className="flex h-11 w-11 items-center justify-center rounded-lg overflow-hidden transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           aria-label="Tutellia - Accueil"
         >
@@ -89,10 +112,20 @@ export function AppSidebar({ userRole }: AppSidebarProps) {
         </Link>
       </div>
 
-      {/* Main modules */}
-      <div className="flex-1 py-4">
+      {/* Dashboard */}
+      <div className="pt-4 pb-1">
         <ul className="flex flex-col items-center gap-1 list-none p-0 m-0" role="list">
-          {moduleItems.map((item) => {
+          <SidebarItem
+            item={dashboardItem}
+            isActive={pathname.startsWith(dashboardItem.activePrefix)}
+          />
+        </ul>
+      </div>
+
+      {/* Active modules only */}
+      <div className="flex-1 py-1">
+        <ul className="flex flex-col items-center gap-1 list-none p-0 m-0" role="list">
+          {visibleModules.map((item) => {
             const isActive = pathname.startsWith(item.activePrefix);
             return (
               <SidebarItem key={item.href} item={item} isActive={isActive} />

@@ -34,7 +34,7 @@ export const emailTemplateSchema = z.object({
   name: z.string().min(2, "Le nom du modèle est requis"),
   subject: z.string().min(1, "L'objet est requis"),
   body: z.string().min(1, "Le contenu est requis"),
-  category: z.enum(["APA", "ASH", "DERNIER_DECES", "DERNIER_DESSAISISSEMENT", "CUSTOM"]).default("APA"),
+  category: z.enum(["APA", "ASH", "PCH", "DERNIER_DECES", "DERNIER_DESSAISISSEMENT", "CUSTOM"]).default("APA"),
   isDefault: z.boolean().default(false),
 });
 
@@ -42,7 +42,7 @@ export type EmailTemplateFormData = z.infer<typeof emailTemplateSchema>;
 
 // SMTP Config
 export const smtpConfigSchema = z.object({
-  provider: z.enum(["GMAIL", "OUTLOOK", "OTHER"]).default("OTHER"),
+  provider: z.enum(["GMAIL", "OUTLOOK", "OVH", "IONOS", "OTHER"]).default("OTHER"),
   smtpHost: z.string().min(1, "L'hôte SMTP est requis"),
   smtpPort: z.coerce.number().int().positive().default(587),
   secure: z.boolean().default(true),

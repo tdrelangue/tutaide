@@ -1,12 +1,13 @@
 import { notFound } from "next/navigation";
 import { ModuleNav } from "./module-nav";
 
-const VALID_MODULES = ["apa", "ash"] as const;
+const VALID_MODULES = ["apa", "ash", "pch"] as const;
 type Module = (typeof VALID_MODULES)[number];
 
 const MODULE_LABELS: Record<Module, string> = {
   apa: "APA",
   ash: "ASH",
+  pch: "PCH",
 };
 
 function isValidModule(value: string): value is Module {

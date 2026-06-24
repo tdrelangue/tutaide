@@ -1,0 +1,92 @@
+"use client";
+
+import { useEffect, useState, useCallback } from "react";
+import { check, type Update } from "@tauri-apps/plugin-updater";
+import { relaunch } from "@tauri-apps/plugin-process";
+import { isTauri, invoke } from "@tauri-apps/api/core";
+import { toast } from "sonner";
+
+// ─── Download + install (no dialog — caller handles confirmation) ─────────────
+
+export async function downloadAndInstall(
+  update: Update,
+  onProgress?: (pct: number) => void
+): Promise<void> {
+  let downloaded = 0;
+  let total = 0;
+
+  await invoke("kill_server");
+
+  await update.downloadAndInstall((event) => {
+    switch (event.event) {
+      case "Started":
+        total = event.data.contentLength ?? 0;
+        break;
+      case "Progress":
+        downloaded += event.data.chunkLength;
+        if (total > 0 && onProgress) {
+          onProgress(Math.round((downloaded / total) * 100));
+        }
+        break;
+    }
+  });
+
+  await relaunch();
+}
+
+// ─── Manual check — returns result, no dialogs ───────────────────────────────
+
+export type UpdateCheckResult =
+  | { type: "up-to-date"; version: string }
+  | { type: "available"; update: Update }
+  | { type: "error"; detail: string }
+  | { type: "not-tauri" };
+
+export async function checkForUpdates(): Promise<UpdateCheckResult> {
+  if (!(await isTauri())) {
+    return { type: "not-tauri" };
+  }
+  try {
+    const update = await check();
+    if (!update) {
+      const { getVersion } = await import("@tauri-apps/api/app");
+      const version = await getVersion();
+      return { type: "up-to-date", version };
+    }
+    return { type: "available", update };
+  } catch (err) {
+    return { type: "error", detail: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+// ─── Silent startup checker ───────────────────────────────────────────────────
+
+export function UpdaterStartupCheck() {
+  const [ran, setRan] = useState(false);
+
+  const silentCheck = useCallback(async () => {
+    if (ran) return;
+    setRan(true);
+
+    if (!(await isTauri())) return;
+
+    try {
+      const update = await check();
+      if (!update) return;
+
+      toast.info(`Mise à jour disponible : v${update.version}`, {
+        description: "Rendez-vous sur le tableau de bord pour l'installer.",
+        duration: 8000,
+      });
+    } catch {
+      // Silently ignore startup failures
+    }
+  }, [ran]);
+
+  useEffect(() => {
+    const timer = setTimeout(silentCheck, 3000);
+    return () => clearTimeout(timer);
+  }, [silentCheck]);
+
+  return null;
+}
