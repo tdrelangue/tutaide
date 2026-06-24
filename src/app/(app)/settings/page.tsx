@@ -8,12 +8,13 @@ import {
 import { SettingsPageClient } from "./settings-client";
 
 export default async function SettingsPage() {
-  const [smtpConfig, moduleConfigs, apaTemplates, ashTemplates, decesTemplates, dessaisTemplates, signature] =
+  const [smtpConfig, moduleConfigs, apaTemplates, ashTemplates, pchTemplates, decesTemplates, dessaisTemplates, signature] =
     await Promise.all([
       getSmtpConfig(),
       getAllModuleConfigs(),
       getTemplatesByCategory("APA"),
       getTemplatesByCategory("ASH"),
+      getTemplatesByCategory("PCH"),
       getTemplatesByCategory("DERNIER_DECES"),
       getTemplatesByCategory("DERNIER_DESSAISISSEMENT"),
       getSignature(),
@@ -26,6 +27,7 @@ export default async function SettingsPage() {
         initialModuleConfigs={moduleConfigs}
         initialApaTemplates={apaTemplates}
         initialAshTemplates={ashTemplates}
+        initialPchTemplates={pchTemplates}
         initialDecesTemplates={decesTemplates}
         initialDessaisTemplates={dessaisTemplates}
         initialSignature={signature}

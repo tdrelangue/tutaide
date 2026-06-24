@@ -31,10 +31,11 @@ type ModuleConfigFormData = z.infer<typeof moduleConfigSchema>;
 interface ModuleConfigTabProps {
   moduleType: ModuleType;
   moduleLabel: string;
-  moduleColor: "blue" | "emerald";
+  moduleColor: "blue" | "emerald" | "violet";
   initialConfig: ModuleConfigData;
   initialTemplates: TemplateData[];
   onTemplatesChange: (templates: TemplateData[]) => void;
+  defaultDestinationEmail?: string;
 }
 
 export function ModuleConfigTab({
@@ -44,6 +45,7 @@ export function ModuleConfigTab({
   initialConfig,
   initialTemplates,
   onTemplatesChange,
+  defaultDestinationEmail,
 }: ModuleConfigTabProps) {
   const [isSaving, setIsSaving] = useState(false);
   const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
@@ -59,6 +61,10 @@ export function ModuleConfigTab({
       badge: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300",
       indicator: "bg-emerald-600",
     },
+    violet: {
+      badge: "bg-violet-100 text-violet-800 dark:bg-violet-900/30 dark:text-violet-300",
+      indicator: "bg-violet-600",
+    },
   };
 
   const styles = colorClasses[moduleColor];
@@ -70,7 +76,7 @@ export function ModuleConfigTab({
   } = useForm<ModuleConfigFormData>({
     resolver: zodResolver(moduleConfigSchema),
     defaultValues: {
-      destinationEmail: initialConfig?.destinationEmail || "",
+      destinationEmail: initialConfig?.destinationEmail || defaultDestinationEmail || "",
       imapFolder: initialConfig?.imapFolder || "",
     },
   });

@@ -14,9 +14,11 @@ interface SettingsPageClientProps {
   initialModuleConfigs: {
     apa: ModuleConfigData;
     ash: ModuleConfigData;
+    pch: ModuleConfigData;
   };
   initialApaTemplates: TemplateData[];
   initialAshTemplates: TemplateData[];
+  initialPchTemplates: TemplateData[];
   initialDecesTemplates: TemplateData[];
   initialDessaisTemplates: TemplateData[];
   initialSignature: string;
@@ -27,6 +29,7 @@ export function SettingsPageClient({
   initialModuleConfigs,
   initialApaTemplates,
   initialAshTemplates,
+  initialPchTemplates,
   initialDecesTemplates,
   initialDessaisTemplates,
   initialSignature,
@@ -34,8 +37,10 @@ export function SettingsPageClient({
   const [smtpConfig] = useState(initialSmtpConfig);
   const [apaConfig] = useState(initialModuleConfigs.apa);
   const [ashConfig] = useState(initialModuleConfigs.ash);
+  const [pchConfig] = useState(initialModuleConfigs.pch);
   const [apaTemplates, setApaTemplates] = useState(initialApaTemplates);
   const [ashTemplates, setAshTemplates] = useState(initialAshTemplates);
+  const [pchTemplates, setPchTemplates] = useState(initialPchTemplates);
   const [decesTemplates, setDecesTemplates] = useState(initialDecesTemplates);
   const [dessaisTemplates, setDessaisTemplates] = useState(initialDessaisTemplates);
 
@@ -54,7 +59,7 @@ export function SettingsPageClient({
       {/* Content with Tabs */}
       <div className="flex-1 overflow-auto p-6">
         <Tabs defaultValue="general" className="w-full">
-          <TabsList className="grid w-full max-w-2xl grid-cols-5">
+          <TabsList className="grid w-full max-w-3xl grid-cols-6">
             <TabsTrigger value="general" className="flex items-center gap-2">
               <Settings className="h-4 w-4" />
               Général
@@ -70,6 +75,10 @@ export function SettingsPageClient({
             <TabsTrigger value="ash" className="flex items-center gap-2">
               <FileText className="h-4 w-4" />
               ASH
+            </TabsTrigger>
+            <TabsTrigger value="pch" className="flex items-center gap-2">
+              <FileText className="h-4 w-4" />
+              PCH
             </TabsTrigger>
             <TabsTrigger value="dernier" className="flex items-center gap-2">
               <FileText className="h-4 w-4" />
@@ -112,6 +121,18 @@ export function SettingsPageClient({
               initialConfig={ashConfig}
               initialTemplates={ashTemplates}
               onTemplatesChange={setAshTemplates}
+            />
+          </TabsContent>
+
+          <TabsContent value="pch" className="mt-6">
+            <ModuleConfigTab
+              moduleType="PCH"
+              moduleLabel="PCH - Prestation de Compensation du Handicap"
+              moduleColor="violet"
+              initialConfig={pchConfig}
+              initialTemplates={pchTemplates}
+              onTemplatesChange={setPchTemplates}
+              defaultDestinationEmail="correze-autonomie@correze.fr"
             />
           </TabsContent>
 

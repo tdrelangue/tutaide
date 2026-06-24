@@ -33,7 +33,7 @@ interface TemplateDialogProps {
   onOpenChange: (open: boolean) => void;
   template: TemplateData | null;
   onComplete?: (template?: TemplateData) => void;
-  defaultCategory?: "APA" | "ASH" | "DERNIER_DECES" | "DERNIER_DESSAISISSEMENT" | "CUSTOM";
+  defaultCategory?: "APA" | "ASH" | "PCH" | "DERNIER_DECES" | "DERNIER_DESSAISISSEMENT" | "CUSTOM";
 }
 
 export function TemplateDialog({

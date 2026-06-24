@@ -261,14 +261,17 @@ export async function parseAshPdf(formData: FormData): Promise<{
     //   "M. PHILIPPE CASTILLON Protégé :  01/06/2022"
     // Fallback: label-first format "Protégé : M. FIRSTNAME LASTNAME"
     const protegeMatch =
-      text.match(/(?:M\.?|Mme\.?|Dr\.?)\s+([A-ZÀÂÄÉÈÊËÎÏÔÙÛÜÇ][A-ZÀÂÄÉÈÊËÎÏÔÙÛÜÇ\s'-]+?)\s+Prot[eé]g[eé]/i) ??
-      text.match(/Prot[eé]g[eé]\s*:\s*(?:M\.?|Mme\.?|Dr\.?)?\s*([A-ZÀÂÄÉÈÊËÎÏÔÙÛÜÇ\s'-]+)/i);
+      text.match(/((?:Mlle\.?|Mme\.?|M\.?|Dr\.?)\s+[A-ZÀÂÄÉÈÊËÎÏÔÙÛÜÇ][A-ZÀÂÄÉÈÊËÎÏÔÙÛÜÇ\s'-]+?)\s+Prot[eé]g[eé]/i) ??
+      text.match(/Prot[eé]g[eé]\s*:\s*((?:Mlle\.?|Mme\.?|M\.?|Dr\.?)?\s*[A-ZÀÂÄÉÈÊËÎÏÔÙÛÜÇ][A-ZÀÂÄÉÈÊËÎÏÔÙÛÜÇ\s'-]+)/);
     if (!protegeMatch) {
       return { success: false, error: "Nom du protégé introuvable dans le PDF" };
     }
 
-    // Normalize: "PHILIPPE CASTILLON" → keep last word as surname
-    const rawName = protegeMatch[1].trim().replace(/\s+/g, " ");
+    // Normalize: strip civility prefix, trailing isolated uppercase letters (e.g. "A" from "Aide"), and extra spaces
+    const rawName = protegeMatch[1].trim().replace(/\s+/g, " ")
+      .replace(/^(?:Mlle\.?\s+|Mme\.?\s+|M\.?\s+|Dr\.?\s+)/i, "")  // remove civility
+      .replace(/(\s+[A-ZÀÂÄÉÈÊËÎÏÔÙÛÜÇ])+$/, "")         // remove trailing single uppercase word(s)
+      .trim();
     const parts = rawName.split(" ");
     const surname = parts[parts.length - 1]; // e.g. "CASTILLON"
     const protegeName = rawName; // full name for dossier matching

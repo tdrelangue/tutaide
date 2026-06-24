@@ -130,11 +130,16 @@ export async function saveSmtpConfig(
 
     const encryptedPassword = encrypt(validated.password);
 
+    const dbProvider: SmtpProvider =
+      validated.provider === "GMAIL" || validated.provider === "OUTLOOK"
+        ? validated.provider
+        : "OTHER";
+
     await db.smtpConfig.upsert({
       where: { userId },
       create: {
         userId,
-        provider: validated.provider,
+        provider: dbProvider,
         smtpHost: validated.smtpHost,
         smtpPort: validated.smtpPort,
         secure: validated.secure,
@@ -144,7 +149,7 @@ export async function saveSmtpConfig(
         fromEmail: validated.fromEmail,
       },
       update: {
-        provider: validated.provider,
+        provider: dbProvider,
         smtpHost: validated.smtpHost,
         smtpPort: validated.smtpPort,
         secure: validated.secure,
@@ -317,6 +322,7 @@ export async function getModuleConfig(
 export async function getAllModuleConfigs(): Promise<{
   apa: ModuleConfigData;
   ash: ModuleConfigData;
+  pch: ModuleConfigData;
 }> {
   const userId = await requireAuth();
 
@@ -333,6 +339,7 @@ export async function getAllModuleConfigs(): Promise<{
   return {
     apa: configs.find((c) => c.moduleType === "APA") || null,
     ash: configs.find((c) => c.moduleType === "ASH") || null,
+    pch: configs.find((c) => c.moduleType === "PCH") || null,
   };
 }
 

@@ -41,12 +41,15 @@ export type DossierWithDocuments = {
 };
 
 function getOtherModuleType(moduleType: ModuleType): ModuleType {
-  return moduleType === "APA" ? "ASH" : "APA";
+  if (moduleType === "APA") return "ASH";
+  if (moduleType === "ASH") return "PCH";
+  return "APA";
 }
 
 function revalidateModulePaths(): void {
   revalidatePath("/apa/dossiers");
   revalidatePath("/ash/dossiers");
+  revalidatePath("/pch/dossiers");
 }
 
 export async function getDossiers(
