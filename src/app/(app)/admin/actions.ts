@@ -10,6 +10,13 @@ import { seedGlobalTemplates } from "@/lib/default-templates";
 import { encrypt, decrypt } from "@/lib/encryption";
 import { systemConfigSchema, type SystemConfigFormData, broadcastEmailSchema, type BroadcastEmailFormData } from "@/lib/validations";
 import { sendEmail } from "@/lib/mailer-client";
+import {
+  DEFAULT_UPDATE_ENDPOINTS,
+  getSavedUpdateEndpoint,
+  inspectUpdateManifest,
+  saveUpdateEndpoint,
+  type ManifestCheck,
+} from "@/lib/update-endpoints";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -514,6 +521,51 @@ export async function saveSystemConfig(
     return { success: true };
   } catch (error) {
     console.error("Error saving system config:", error);
+    return { success: false, error: "Erreur lors de l'enregistrement" };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Update channel URL — where desktop installs look for latest.json.
+// Admin-only. See lib/update-endpoints.ts.
+// ---------------------------------------------------------------------------
+
+export type UpdaterSettingsData = {
+  savedEndpoint: string | null;
+  defaultEndpoints: string[];
+};
+
+export async function getUpdaterSettings(): Promise<UpdaterSettingsData> {
+  await requireAdmin();
+  return {
+    savedEndpoint: await getSavedUpdateEndpoint(),
+    defaultEndpoints: [...DEFAULT_UPDATE_ENDPOINTS],
+  };
+}
+
+/** Fetches the manifest at `url` so the admin never saves a broken address. */
+export async function testUpdaterEndpoint(url: string): Promise<ManifestCheck> {
+  await requireAdmin();
+  return inspectUpdateManifest(url.trim());
+}
+
+/** Saves the update URL after checking it serves a manifest; null restores the defaults. */
+export async function saveUpdaterEndpoint(
+  url: string | null
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    await requireAdmin();
+    if (url === null) {
+      await saveUpdateEndpoint(null);
+    } else {
+      const check = await inspectUpdateManifest(url.trim());
+      if (!check.ok) return { success: false, error: check.error };
+      await saveUpdateEndpoint(url.trim());
+    }
+    revalidatePath("/admin/system-config");
+    return { success: true };
+  } catch (error) {
+    console.error("Error saving update endpoint:", error);
     return { success: false, error: "Erreur lors de l'enregistrement" };
   }
 }

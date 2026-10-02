@@ -140,7 +140,7 @@ export function UsersPageClient({ initialUsers }: UsersPageClientProps) {
             <Button variant="outline" asChild>
               <Link href="/admin/system-config">
                 <KeyRound className="h-4 w-4 mr-2" />
-                Récupération mot de passe
+                Configuration système
               </Link>
             </Button>
             <Button variant="outline" asChild>
