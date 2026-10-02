@@ -46,6 +46,7 @@
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDZEQjlBODM4MDkzREJDOUEKUldTYXZEMEpPS2k1YlRNZ0g3NTNHS2dMWnRCZVN2UTJHaitGa2xBQU02R1lqWDlzYW9Ed0ZnTm0K",
       "endpoints": [
+        "https://www.origai.fr/releases/tutellia/latest.json",
         "https://orig-audit.netlify.app/releases/tutellia/latest.json"
       ]
     }

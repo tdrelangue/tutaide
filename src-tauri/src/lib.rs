@@ -1,4 +1,5 @@
 use tauri::Manager;
+use tauri_plugin_updater::UpdaterExt;
 use std::sync::Mutex;
 
 struct ServerProcess(Mutex<Option<std::process::Child>>);
@@ -12,6 +13,62 @@ fn kill_server(state: tauri::State<ServerProcess>) {
     }
 }
 
+/// Same shape as the updater plugin's own check result, so the JS side can wrap
+/// it in the plugin's `Update` class and reuse its download/install flow.
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct UpdateMetadata {
+    rid: tauri::ResourceId,
+    current_version: String,
+    version: String,
+    date: Option<String>,
+    body: Option<String>,
+    raw_json: serde_json::Value,
+}
+
+/// Like the plugin's `check`, but with endpoints chosen at runtime (saved by the
+/// admin in the database, see web/src/lib/update-endpoints.ts) instead of only
+/// the ones baked into tauri.conf.json. Endpoints are tried in order. The
+/// signing public key still comes from tauri.conf.json.
+#[tauri::command]
+async fn check_for_update(
+    webview: tauri::Webview,
+    endpoints: Vec<String>,
+    allow_downgrades: bool,
+) -> Result<Option<UpdateMetadata>, String> {
+    let urls = endpoints
+        .iter()
+        .map(|e| tauri::Url::parse(e))
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?;
+    let mut builder = webview.updater_builder().endpoints(urls).map_err(|e| e.to_string())?;
+    if allow_downgrades {
+        builder = builder.version_comparator(|current, update| update.version != current);
+    }
+    let update = builder
+        .build()
+        .map_err(|e| e.to_string())?
+        .check()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(update.map(|update| {
+        let date = update
+            .raw_json
+            .get("pub_date")
+            .and_then(|v| v.as_str())
+            .map(String::from);
+        UpdateMetadata {
+            current_version: update.current_version.clone(),
+            version: update.version.clone(),
+            date,
+            body: update.body.clone(),
+            raw_json: update.raw_json.clone(),
+            rid: webview.resources_table().add(update),
+        }
+    }))
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -19,7 +76,7 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_process::init())
-        .invoke_handler(tauri::generate_handler![kill_server])
+        .invoke_handler(tauri::generate_handler![kill_server, check_for_update])
         .setup(|app| {
             app.manage(ServerProcess(Mutex::new(None)));
 

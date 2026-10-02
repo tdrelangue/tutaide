@@ -213,6 +213,13 @@ model PasswordResetToken {
   @@index([userId])
 }
 
+/// Key/value settings editable by the software admin (e.g. "updater.endpoint").
+model AppSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
 /// Singleton row (fixed id "system") holding the app-wide SMTP config used
 /// to send account-recovery emails. Admin-only, independent of per-user SmtpConfig.
 model SystemConfig {

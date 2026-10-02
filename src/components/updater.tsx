@@ -1,10 +1,28 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { check, type Update } from "@tauri-apps/plugin-updater";
+import { check, Update } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { isTauri, invoke } from "@tauri-apps/api/core";
 import { toast } from "sonner";
+import { getUpdateEndpointsAction } from "@/lib/update-actions";
+
+type UpdateMetadata = ConstructorParameters<typeof Update>[0];
+
+/**
+ * Checks the update URLs from the database (admin-editable) via the
+ * check_for_update Rust command. Falls back to the plugin's built-in check
+ * (endpoints from tauri.conf.json) if that path fails for any reason.
+ */
+async function findUpdate(allowDowngrades: boolean): Promise<Update | null> {
+  try {
+    const endpoints = await getUpdateEndpointsAction();
+    const metadata = await invoke<UpdateMetadata | null>("check_for_update", { endpoints, allowDowngrades });
+    return metadata ? new Update(metadata) : null;
+  } catch {
+    return check(allowDowngrades ? { allowDowngrades: true } : undefined);
+  }
+}
 
 // ─── Download + install (no dialog — caller handles confirmation) ─────────────
 
@@ -47,7 +65,7 @@ export async function checkForUpdates(): Promise<UpdateCheckResult> {
     return { type: "not-tauri" };
   }
   try {
-    const update = await check();
+    const update = await findUpdate(false);
     if (!update) {
       const { getVersion } = await import("@tauri-apps/api/app");
       const version = await getVersion();
@@ -70,7 +88,7 @@ export async function checkForUpdatesForce(): Promise<UpdateCheckResult> {
     return { type: "not-tauri" };
   }
   try {
-    const update = await check({ allowDowngrades: true });
+    const update = await findUpdate(true);
     if (!update) {
       const { getVersion } = await import("@tauri-apps/api/app");
       const version = await getVersion();
@@ -94,7 +112,7 @@ export function UpdaterStartupCheck() {
     if (!(await isTauri())) return;
 
     try {
-      const update = await check();
+      const update = await findUpdate(false);
       if (!update) return;
 
       toast.info(`Mise à jour disponible : v${update.version}`, {
