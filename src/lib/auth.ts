@@ -101,6 +101,12 @@ export async function requireAuth(): Promise<string> {
   return userId;
 }
 
+/** Non-throwing ADMIN role check, for conditionally rendering admin-only UI. */
+export async function isCurrentUserAdmin(): Promise<boolean> {
+  const session = await auth();
+  return session?.user?.role === "ADMIN";
+}
+
 /** Require ADMIN role. Always returns the real admin's ID (not impersonated). */
 export async function requireAdmin(): Promise<string> {
   const session = await auth();

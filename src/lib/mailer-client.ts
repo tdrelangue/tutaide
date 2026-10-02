@@ -26,6 +26,9 @@ export interface SendEmailPayload {
   moduleType?: "APA" | "ASH";
   dossierName?: string;
   imapFolder?: string;
+  trimestre?: string;
+  mois?: string;
+  annee?: string;
 }
 
 export interface SendEmailResponse {
@@ -37,12 +40,21 @@ export interface SendEmailResponse {
 /** Resolve template placeholders. */
 function resolvePlaceholders(
   text: string,
-  vars: { signature?: string; dossierName?: string }
+  vars: {
+    signature?: string;
+    dossierName?: string;
+    trimestre?: string;
+    mois?: string;
+    annee?: string;
+  }
 ): string {
   const now = new Date();
-  const mois = now.toLocaleDateString("fr-FR", { month: "long" });
-  const annee = now.getFullYear().toString();
-  const tri = Math.ceil((now.getMonth() + 1) / 3).toString();
+  const moisNum = vars.mois ? parseInt(vars.mois, 10) : now.getMonth() + 1;
+  const mois = new Date(2000, moisNum - 1, 1).toLocaleDateString("fr-FR", {
+    month: "long",
+  });
+  const annee = vars.annee ?? now.getFullYear().toString();
+  const tri = vars.trimestre ?? Math.ceil((now.getMonth() + 1) / 3).toString();
   const suffix = tri === "1" ? "er" : "eme";
 
   return text
@@ -128,6 +140,9 @@ export async function sendEmail(
     const vars = {
       signature: payload.signature,
       dossierName: payload.dossierName,
+      trimestre: payload.trimestre,
+      mois: payload.mois,
+      annee: payload.annee,
     };
     const subject = resolvePlaceholders(payload.subject, vars);
     const body = resolvePlaceholders(payload.body, vars);

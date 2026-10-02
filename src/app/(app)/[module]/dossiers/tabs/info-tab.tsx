@@ -1,13 +1,14 @@
 "use client";
 
 import { formatRelativeTime } from "@/lib/utils";
-import type { DossierWithDocuments } from "../actions";
+import type { DossierWithDocuments, GroupMember } from "../actions";
 
 interface InfoTabProps {
   dossier: DossierWithDocuments;
+  groupMembers?: GroupMember[];
 }
 
-export function InfoTab({ dossier }: InfoTabProps) {
+export function InfoTab({ dossier, groupMembers = [] }: InfoTabProps) {
   return (
     <div className="space-y-4">
       <div>
@@ -15,11 +16,11 @@ export function InfoTab({ dossier }: InfoTabProps) {
         <p className="mt-1">{dossier.moduleType}</p>
       </div>
 
-      {dossier.linkedDossierId && (
+      {groupMembers.length > 0 && (
         <div>
-          <h4 className="text-sm font-medium text-muted-foreground">Dossier lié</h4>
+          <h4 className="text-sm font-medium text-muted-foreground">Dossier(s) lié(s)</h4>
           <p className="mt-1 text-sm">
-            Lié au module {dossier.moduleType === "APA" ? "ASH" : "APA"}
+            Lié au module {groupMembers.map((m) => m.moduleType).join(", ")}
           </p>
         </div>
       )}

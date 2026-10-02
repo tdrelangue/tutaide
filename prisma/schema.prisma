@@ -8,23 +8,30 @@ datasource db {
 }
 
 model User {
-  id            String           @id @default(cuid())
-  email         String           @unique
-  name          String?
-  passwordHash  String
-  role          UserRole         @default(USER)
-  archivedAt    DateTime?
-  createdAt     DateTime         @default(now())
-  updatedAt     DateTime         @updatedAt
-  signature     String?
-  orgId         String?
-  documents     Document[]
-  dossiers      Dossier[]
-  batches       EmailBatch[]
-  sendEvents    EmailSendEvent[]
-  templates     EmailTemplate[]
-  smtpConfig    SmtpConfig?
-  moduleConfigs ModuleConfig[]
+  id                       String               @id @default(cuid())
+  email                    String               @unique
+  name                     String?
+  passwordHash             String
+  role                     UserRole             @default(USER)
+  archivedAt               DateTime?
+  createdAt                DateTime             @default(now())
+  updatedAt                DateTime             @updatedAt
+  signature                String?
+  orgId                    String?
+  /// Paying account: must hold an active Stripe subscription. False = free
+  /// account (admin-created accounts default to free; self-signup sets true).
+  billingRequired          Boolean              @default(false)
+  /// Entreprise plan: custom yearly price in euro cents, set by the admin.
+  /// Null = individual plan (STRIPE_PRICE_INDIVIDUAL).
+  billingCustomAmountCents Int?
+  documents                Document[]
+  dossiers                 Dossier[]
+  batches                  EmailBatch[]
+  sendEvents               EmailSendEvent[]
+  templates                EmailTemplate[]
+  smtpConfig               SmtpConfig?
+  moduleConfigs            ModuleConfig[]
+  resetTokens              PasswordResetToken[]
 
   @@index([email])
   @@index([orgId])
@@ -42,13 +49,15 @@ model Dossier {
   bccEmails         String[]         @default([])
   createdAt         DateTime         @default(now())
   updatedAt         DateTime         @updatedAt
+  groupId           String?
+  // Kept only so the currently-installed/running app build (compiled before
+  // this column was removed) doesn't error out querying a missing column.
+  // Not used by current app code — safe to drop once that instance is retired.
   linkedDossierId   String?          @unique
   userId            String
   defaultTemplateId String?
   sendingFrequency  SendingFrequency @default(QUARTERLY)
   documents         Document[]
-  linkedDossier     Dossier?         @relation("DossierLink", fields: [linkedDossierId], references: [id])
-  linkedBy          Dossier?         @relation("DossierLink")
   user              User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   sendEvents        EmailSendEvent[]
   defaultTemplate   EmailTemplate?   @relation("DossierDefaultTemplate", fields: [defaultTemplateId], references: [id], onDelete: SetNull)
@@ -60,6 +69,7 @@ model Dossier {
   @@index([status])
   @@index([updatedAt])
   @@index([defaultTemplateId])
+  @@index([groupId])
 }
 
 model Document {
@@ -190,6 +200,34 @@ model ModuleConfig {
   @@index([userId])
 }
 
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  codeHash  String
+  attempts  Int       @default(0)
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+/// Singleton row (fixed id "system") holding the app-wide SMTP config used
+/// to send account-recovery emails. Admin-only, independent of per-user SmtpConfig.
+model SystemConfig {
+  id                String   @id @default("system")
+  smtpHost          String
+  smtpPort          Int      @default(587)
+  secure            Boolean  @default(true)
+  username          String
+  encryptedPassword String
+  fromName          String
+  fromEmail         String
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
 enum ModuleType {
   APA
   ASH
@@ -246,5 +284,4 @@ enum UserRole {
 enum SendingFrequency {
   MONTHLY
   QUARTERLY
-  BIMONTHLY
 }

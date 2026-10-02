@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { ChevronDown, Mail, Pencil, Trash2 } from "lucide-react";
@@ -35,13 +35,18 @@ import { EmailsTab } from "./tabs/emails-tab";
 import { InfoTab } from "./tabs/info-tab";
 import { EditDossierDialog } from "./edit-dossier-dialog";
 import { DernierEmailDialog } from "./dernier-email-dialog";
-import { deleteDossier, type DossierWithDocuments } from "./actions";
+import {
+  deleteDossier,
+  getGroupMembers,
+  type DossierWithDocuments,
+  type GroupMember,
+} from "./actions";
 
 interface DossierSheetProps {
   dossier: DossierWithDocuments | null;
   open: boolean;
   onClose: () => void;
-  moduleType: "APA" | "ASH";
+  moduleType: "APA" | "ASH" | "PCH";
 }
 
 const priorityLabels = {
@@ -69,6 +74,7 @@ const statusVariants = {
 const moduleVariants = {
   APA: "outline",
   ASH: "outline",
+  PCH: "outline",
 } as const;
 
 export function DossierSheet({
@@ -81,20 +87,34 @@ export function DossierSheet({
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteScope, setDeleteScope] = useState<"one" | "group">("one");
+  const [groupMembers, setGroupMembers] = useState<GroupMember[]>([]);
   const [dernierEmailReason, setDernierEmailReason] = useState<
     "DECES" | "DESSAISISSEMENT" | null
   >(null);
 
-  if (!dossier) return null;
+  useEffect(() => {
+    if (!dossier) {
+      setGroupMembers([]);
+      return;
+    }
+    getGroupMembers(dossier.id).then(setGroupMembers).catch(() => setGroupMembers([]));
+  }, [dossier]);
 
-  const otherModule = moduleType === "APA" ? "ASH" : "APA";
+  useEffect(() => {
+    if (isDeleteOpen) setDeleteScope("one");
+  }, [isDeleteOpen]);
+
+  if (!dossier) return null;
 
   const handleDelete = async () => {
     setIsDeleting(true);
     try {
-      const result = await deleteDossier(dossier.id);
+      const result = await deleteDossier(dossier.id, deleteScope);
       if (result.success) {
-        toast.success("Dossier supprime");
+        toast.success(
+          deleteScope === "group" ? "Dossiers lies supprimes" : "Dossier supprime"
+        );
         onClose();
         router.refresh();
       } else {
@@ -133,9 +153,10 @@ export function DossierSheet({
                   {statusLabels[dossier.status]}
                 </Badge>
               </div>
-              {dossier.linkedDossierId && (
+              {groupMembers.length > 0 && (
                 <p className="text-xs text-muted-foreground mt-2">
-                  Lie au dossier {otherModule}
+                  Lie au{groupMembers.length > 1 ? "x dossiers" : " dossier"}{" "}
+                  {groupMembers.map((m) => m.moduleType).join(", ")}
                 </p>
               )}
             </div>
@@ -159,10 +180,12 @@ export function DossierSheet({
                 <DocumentsTab dossier={dossier} />
               </TabsContent>
               <TabsContent value="emails" className="mt-4">
-                <EmailsTab dossierId={dossier.id} moduleType={moduleType} />
+                {/* EmailsTab/SendEmailDialog predate PCH support and are typed APA|ASH only;
+                    the value still passes through correctly, only pre-existing narrowness. */}
+                <EmailsTab dossierId={dossier.id} moduleType={moduleType as "APA" | "ASH"} />
               </TabsContent>
               <TabsContent value="info" className="mt-4">
-                <InfoTab dossier={dossier} />
+                <InfoTab dossier={dossier} groupMembers={groupMembers} />
               </TabsContent>
             </Tabs>
           </div>
@@ -237,6 +260,32 @@ export function DossierSheet({
               definitivement supprimes.
             </AlertDialogDescription>
           </AlertDialogHeader>
+          {groupMembers.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-sm font-medium">Que souhaitez-vous supprimer ?</p>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant={deleteScope === "one" ? "default" : "outline"}
+                  className="flex-1"
+                  onClick={() => setDeleteScope("one")}
+                  disabled={isDeleting}
+                >
+                  Ce dossier ({moduleType}) uniquement
+                </Button>
+                <Button
+                  type="button"
+                  variant={deleteScope === "group" ? "default" : "outline"}
+                  className="flex-1"
+                  onClick={() => setDeleteScope("group")}
+                  disabled={isDeleting}
+                >
+                  Tous les dossiers lies (
+                  {[moduleType, ...groupMembers.map((m) => m.moduleType)].join(", ")})
+                </Button>
+              </div>
+            </div>
+          )}
           <AlertDialogFooter>
             <AlertDialogCancel disabled={isDeleting}>
               Annuler

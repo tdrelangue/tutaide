@@ -1,6 +1,6 @@
 {
   "productName": "Tutellia",
-  "version": "2.0.3",
+  "version": "2.0.7",
   "identifier": "com.tutellia.app",
   "build": {
     "devUrl": "http://localhost:3000",
@@ -26,6 +26,7 @@
   "bundle": {
     "active": true,
     "targets": "nsis",
+    "createUpdaterArtifacts": true,
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

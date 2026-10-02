@@ -3,6 +3,7 @@
     "frontendDist": "../src-tauri/dist"
   },
   "bundle": {
+    "createUpdaterArtifacts": true,
     "resources": {
       "binaries/node-win.exe": "node.exe",
       "../.next/standalone/": "nextjs-server/"

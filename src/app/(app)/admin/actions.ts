@@ -2,10 +2,14 @@
 
 import { revalidatePath } from "next/cache";
 import { hash } from "bcryptjs";
+import nodemailer from "nodemailer";
 import { db } from "@/lib/db";
 import { requireAdmin, startImpersonation, stopImpersonation } from "@/lib/auth";
 import { z } from "zod";
 import { seedGlobalTemplates } from "@/lib/default-templates";
+import { encrypt, decrypt } from "@/lib/encryption";
+import { systemConfigSchema, type SystemConfigFormData, broadcastEmailSchema, type BroadcastEmailFormData } from "@/lib/validations";
+import { sendEmail } from "@/lib/mailer-client";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -16,6 +20,8 @@ export type AdminUserData = {
   email: string;
   name: string | null;
   role: "USER" | "ADMIN";
+  billingRequired: boolean;
+  billingCustomAmountCents: number | null;
   archivedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
@@ -34,6 +40,8 @@ const createUserSchema = z.object({
   name: z.string().min(2, "Le nom doit contenir au moins 2 caracteres").optional(),
   password: z.string().min(8, "Le mot de passe doit contenir au moins 8 caracteres"),
   role: z.enum(["USER", "ADMIN"]).default("USER"),
+  billingRequired: z.boolean().default(false),
+  billingCustomAmountCents: z.number().int().positive().max(10_000_000).nullable().default(null),
 });
 
 const updateUserSchema = z.object({
@@ -45,6 +53,8 @@ const updateUserSchema = z.object({
     .optional()
     .or(z.literal("")),
   role: z.enum(["USER", "ADMIN"]).optional(),
+  billingRequired: z.boolean().optional(),
+  billingCustomAmountCents: z.number().int().positive().max(10_000_000).nullable().optional(),
 });
 
 // ---------------------------------------------------------------------------
@@ -62,6 +72,8 @@ export async function getUsers(): Promise<AdminUserData[]> {
       email: true,
       name: true,
       role: true,
+      billingRequired: true,
+      billingCustomAmountCents: true,
       archivedAt: true,
       createdAt: true,
       updatedAt: true,
@@ -83,6 +95,8 @@ export async function createUser(data: {
   name?: string;
   password: string;
   role?: "USER" | "ADMIN";
+  billingRequired?: boolean;
+  billingCustomAmountCents?: number | null;
 }): Promise<{ success: boolean; id?: string; error?: string }> {
   try {
     await requireAdmin();
@@ -103,6 +117,8 @@ export async function createUser(data: {
         name: validated.name ?? null,
         passwordHash,
         role: validated.role ?? "USER",
+        billingRequired: validated.billingRequired,
+        billingCustomAmountCents: validated.billingCustomAmountCents,
       },
     });
 
@@ -124,6 +140,8 @@ export async function updateUser(
     name?: string | null;
     password?: string;
     role?: "USER" | "ADMIN";
+    billingRequired?: boolean;
+    billingCustomAmountCents?: number | null;
   }
 ): Promise<{ success: boolean; error?: string }> {
   try {
@@ -149,6 +167,10 @@ export async function updateUser(
     if (validated.email) updateData.email = validated.email.toLowerCase();
     if (validated.name !== undefined) updateData.name = validated.name;
     if (validated.role) updateData.role = validated.role;
+    if (validated.billingRequired !== undefined) updateData.billingRequired = validated.billingRequired;
+    if (validated.billingCustomAmountCents !== undefined) {
+      updateData.billingCustomAmountCents = validated.billingCustomAmountCents;
+    }
     if (validated.password && validated.password.length > 0) {
       updateData.passwordHash = await hash(validated.password, 12);
     }
@@ -303,5 +325,195 @@ export async function deleteGlobalTemplate(
   } catch (error) {
     console.error("Error deleting global template:", error);
     return { success: false, error: "Erreur lors de la suppression" };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Broadcast email — admin sends a single email to every active user.
+// Uses the ADMIN's own personal SmtpConfig (not the recovery SystemConfig),
+// so the message comes from the admin's real identity. Recipients are BCC'd
+// so users never see each other's email addresses.
+// ---------------------------------------------------------------------------
+
+/** Send an email to every active (non-archived) user. Admin only. */
+export async function sendBroadcastEmail(
+  data: BroadcastEmailFormData
+): Promise<{ success: boolean; sentCount?: number; error?: string }> {
+  try {
+    const adminId = await requireAdmin();
+    const validated = broadcastEmailSchema.parse(data);
+
+    const admin = await db.user.findUnique({
+      where: { id: adminId },
+      select: { email: true, smtpConfig: true },
+    });
+
+    if (!admin?.smtpConfig) {
+      return {
+        success: false,
+        error: "Configurez d'abord votre SMTP personnel dans Paramètres.",
+      };
+    }
+
+    const activeUsers = await db.user.findMany({
+      where: { archivedAt: null },
+      select: { email: true },
+    });
+
+    const bccList = activeUsers
+      .map((u) => u.email)
+      .filter((email) => email !== admin.email);
+
+    if (bccList.length === 0) {
+      return { success: false, error: "Aucun destinataire actif à contacter." };
+    }
+
+    const smtpConfig = admin.smtpConfig;
+    const result = await sendEmail({
+      smtp: {
+        host: smtpConfig.smtpHost,
+        port: smtpConfig.smtpPort,
+        secure: smtpConfig.secure,
+        username: smtpConfig.username,
+        password: decrypt(smtpConfig.encryptedPassword),
+        fromName: smtpConfig.fromName,
+        fromEmail: smtpConfig.fromEmail,
+      },
+      recipients: [admin.email],
+      bccRecipients: bccList,
+      subject: validated.subject,
+      body: validated.body,
+    });
+
+    if (!result.success) {
+      return { success: false, error: result.error || "Échec de l'envoi" };
+    }
+
+    return { success: true, sentCount: bccList.length };
+  } catch (error) {
+    console.error("Error sending broadcast email:", error);
+    return { success: false, error: "Erreur lors de l'envoi" };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// System SMTP config — app-wide, used only for account-recovery emails.
+// Admin-only. Independent of each user's personal SmtpConfig.
+// ---------------------------------------------------------------------------
+
+const SYSTEM_CONFIG_ID = "system";
+
+export type SystemConfigData = {
+  smtpHost: string;
+  smtpPort: number;
+  secure: boolean;
+  username: string;
+  fromName: string;
+  fromEmail: string;
+} | null;
+
+/** Get the system recovery-email SMTP config (without password), admin only. */
+export async function getSystemConfig(): Promise<SystemConfigData> {
+  await requireAdmin();
+
+  const config = await db.systemConfig.findUnique({
+    where: { id: SYSTEM_CONFIG_ID },
+    select: {
+      smtpHost: true,
+      smtpPort: true,
+      secure: true,
+      username: true,
+      fromName: true,
+      fromEmail: true,
+    },
+  });
+
+  return config;
+}
+
+function humanizeSystemSmtpError(error: unknown): string {
+  const msg = error instanceof Error ? error.message : String(error);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const code = (error as any)?.code ?? "";
+  if (code === "ECONNREFUSED") return "Connexion refusée — vérifiez l'hôte et le port.";
+  if (code === "ENOTFOUND") return "Serveur introuvable — vérifiez l'adresse SMTP.";
+  if (code === "ETIMEDOUT" || code === "ECONNRESET") return "Délai dépassé — vérifiez le port et votre réseau.";
+  if (
+    msg.includes("535") ||
+    msg.toLowerCase().includes("invalid credentials") ||
+    msg.toLowerCase().includes("username and password")
+  )
+    return "Identifiants incorrects — vérifiez l'adresse email et le mot de passe.";
+  if (msg.toLowerCase().includes("certificate") || msg.toLowerCase().includes("self-signed"))
+    return "Erreur de certificat SSL — connexion non sécurisée.";
+  return `Erreur de connexion : ${msg}`;
+}
+
+/** Test the system recovery SMTP connection without saving or sending an email. Admin only. */
+export async function testSystemSmtpConnection(
+  data: SystemConfigFormData
+): Promise<{ success: boolean; message: string }> {
+  try {
+    await requireAdmin();
+    const validated = systemConfigSchema.parse(data);
+
+    const transporter = nodemailer.createTransport({
+      host: validated.smtpHost,
+      port: validated.smtpPort,
+      secure: validated.smtpPort === 465,
+      auth: { user: validated.username, pass: validated.password },
+      tls: { rejectUnauthorized: false },
+      connectionTimeout: 8000,
+      greetingTimeout: 5000,
+    });
+
+    await transporter.verify();
+    return { success: true, message: "Connexion réussie — la configuration est valide." };
+  } catch (error) {
+    const message = humanizeSystemSmtpError(error);
+    // Log only the humanized message — raw SMTP errors can embed base64 auth credentials.
+    console.error("[testSystemSmtpConnection]", message);
+    return { success: false, message };
+  }
+}
+
+/** Save the system recovery SMTP config. Admin only. */
+export async function saveSystemConfig(
+  data: SystemConfigFormData
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    await requireAdmin();
+    const validated = systemConfigSchema.parse(data);
+
+    const encryptedPassword = encrypt(validated.password);
+
+    await db.systemConfig.upsert({
+      where: { id: SYSTEM_CONFIG_ID },
+      create: {
+        id: SYSTEM_CONFIG_ID,
+        smtpHost: validated.smtpHost,
+        smtpPort: validated.smtpPort,
+        secure: validated.secure,
+        username: validated.username,
+        encryptedPassword,
+        fromName: validated.fromName,
+        fromEmail: validated.fromEmail,
+      },
+      update: {
+        smtpHost: validated.smtpHost,
+        smtpPort: validated.smtpPort,
+        secure: validated.secure,
+        username: validated.username,
+        encryptedPassword,
+        fromName: validated.fromName,
+        fromEmail: validated.fromEmail,
+      },
+    });
+
+    revalidatePath("/admin/system-config");
+    return { success: true };
+  } catch (error) {
+    console.error("Error saving system config:", error);
+    return { success: false, error: "Erreur lors de l'enregistrement" };
   }
 }

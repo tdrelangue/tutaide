@@ -12,6 +12,7 @@ import {
   sendAllSchema,
   type SendEmailFormData,
   type BulkSendFormData,
+  type SendAllFormData,
 } from "@/lib/validations";
 import type { EmailSendStatus, EmailType, EmailReason, ModuleType } from "@prisma/client";
 
@@ -265,6 +266,9 @@ export async function sendEmailAction(
       moduleType: validated.moduleType as "APA" | "ASH" | undefined,
       dossierName,
       imapFolder,
+      trimestre: validated.trimestre,
+      mois: validated.mois,
+      annee: validated.annee,
     });
 
     await db.emailSendEvent.update({
@@ -409,6 +413,8 @@ export async function bulkSendAction(
         moduleType: validated.moduleType as "APA" | "ASH",
         dossierName: dossier.fullName,
         imapFolder: moduleConfig.imapFolder ?? undefined,
+        trimestre: validated.trimestre,
+        annee: validated.annee,
       });
 
       await db.emailSendEvent.update({
@@ -494,7 +500,7 @@ export async function resendEmail(
 // Send emails for ALL non-empty active dossiers in a module
 // ---------------------------------------------------------------------------
 export async function sendAllAction(
-  data: { moduleType: "APA" | "ASH" }
+  data: SendAllFormData
 ): Promise<BulkSendResult[]> {
   const userId = await requireAuth();
   const validated = sendAllSchema.parse(data);
@@ -601,6 +607,8 @@ export async function sendAllAction(
         moduleType: validated.moduleType as "APA" | "ASH",
         dossierName: dossier.fullName,
         imapFolder: moduleConfig.imapFolder ?? undefined,
+        trimestre: validated.trimestre,
+        annee: validated.annee,
       });
 
       await db.emailSendEvent.update({

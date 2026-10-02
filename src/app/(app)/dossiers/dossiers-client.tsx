@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Plus, Search, SortAsc } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,12 @@ import { DossierCard } from "./dossier-card";
 import { DossierSheet } from "./dossier-sheet";
 import { CreateDossierDialog } from "./create-dossier-dialog";
 import type { DossierWithDocuments } from "./actions";
+import {
+  loadLegacyDossiersFilterPrefs,
+  loadNameSortBasis,
+  saveLegacyDossiersFilterPrefs,
+} from "@/lib/local-prefs";
+import { compareByName } from "@/lib/name-sort";
 
 interface DossiersPageClientProps {
   initialDossiers: DossierWithDocuments[];
@@ -36,6 +42,26 @@ export function DossiersPageClient({
   const [selectedDossier, setSelectedDossier] = useState<DossierWithDocuments | null>(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [search, setSearch] = useState(initialSearch);
+
+  // Restore the last-used priority filter and sort order, saved locally on
+  // this machine, when landing on the page without explicit filter/sort in
+  // the URL (fresh navigation, not a back/forward).
+  const hasRestoredPrefs = useRef(false);
+  useEffect(() => {
+    if (hasRestoredPrefs.current) return;
+    hasRestoredPrefs.current = true;
+
+    if (searchParams.has("priority") || searchParams.has("sort")) return;
+
+    const prefs = loadLegacyDossiersFilterPrefs();
+    if (!prefs) return;
+
+    const params = new URLSearchParams(searchParams.toString());
+    if (prefs.priority) params.set("priority", prefs.priority);
+    if (prefs.sort) params.set("sort", prefs.sort);
+    router.replace(`/dossiers?${params.toString()}`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const updateParams = useCallback(
     (updates: Record<string, string | undefined>) => {
@@ -62,12 +88,32 @@ export function DossiersPageClient({
   };
 
   const handlePriorityChange = (value: string) => {
-    updateParams({ priority: value || undefined });
+    const priority = (value || undefined) as
+      | "NORMAL"
+      | "PRIORITAIRE"
+      | "URGENT"
+      | undefined;
+    updateParams({ priority });
+    saveLegacyDossiersFilterPrefs({ priority, sort: initialSort });
   };
 
   const handleSortChange = (value: string) => {
     updateParams({ sort: value });
+    saveLegacyDossiersFilterPrefs({ priority: initialPriority, sort: value });
   };
+
+  // Alphabetical sorts are keyed off the last name (or first name, per the
+  // user's local preference in Settings) rather than raw string order,
+  // since "fullName" is free text stored as "Prénom Nom".
+  const displayedDossiers = useMemo(() => {
+    if (!initialSort.startsWith("fullName")) return initialDossiers;
+
+    const basis = loadNameSortBasis();
+    const direction = initialSort.endsWith("desc") ? -1 : 1;
+    return [...initialDossiers].sort(
+      (a, b) => direction * compareByName(a.fullName, b.fullName, basis)
+    );
+  }, [initialDossiers, initialSort]);
 
   const handleSelectDossier = (dossier: DossierWithDocuments) => {
     setSelectedDossier(dossier);
@@ -150,7 +196,7 @@ export function DossiersPageClient({
 
       {/* Content */}
       <div className="flex-1 overflow-auto p-6">
-        {initialDossiers.length === 0 ? (
+        {displayedDossiers.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 text-center">
             <p className="text-muted-foreground mb-4">
               {search || initialPriority
@@ -170,7 +216,7 @@ export function DossiersPageClient({
             role="list"
             aria-label="Liste des dossiers"
           >
-            {initialDossiers.map((dossier) => (
+            {displayedDossiers.map((dossier) => (
               <DossierCard
                 key={dossier.id}
                 dossier={dossier}

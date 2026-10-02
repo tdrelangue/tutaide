@@ -58,7 +58,7 @@ function PreviewBody({
   const isPdf = mimeType === "application/pdf";
   const isImage = (mimeType ?? "").startsWith("image/");
 
-  if (isPdf) return <PdfRenderer documentId={documentId} />;
+  if (isPdf) return <PdfRenderer url={`/api/documents/${documentId}/preview`} />;
   if (isImage) return <ImageRenderer documentId={documentId} />;
   return (
     <div className="flex items-center justify-center py-12 text-muted-foreground text-sm">
@@ -84,7 +84,7 @@ function ImageRenderer({ documentId }: { documentId: string }) {
 
 // ── PDF renderer (pdfjs-dist, client-side) ──────────────────────────────────
 
-function PdfRenderer({ documentId }: { documentId: string }) {
+export function PdfRenderer({ url }: { url: string }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [numPages, setNumPages] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
@@ -107,7 +107,6 @@ function PdfRenderer({ documentId }: { documentId: string }) {
         // Worker lives in /public so it's available at this path in both dev and prod
         pdfjsLib.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
 
-        const url = `/api/documents/${documentId}/preview`;
         const pdf = await pdfjsLib.getDocument(url).promise;
 
         if (!cancelled) {
@@ -127,7 +126,7 @@ function PdfRenderer({ documentId }: { documentId: string }) {
 
     load();
     return () => { cancelled = true; };
-  }, [documentId]);
+  }, [url]);
 
   // Render the current page whenever currentPage or pdf changes
   const renderPage = useCallback(async (pageNum: number) => {

@@ -6,7 +6,7 @@ import { ModuleConfigTab } from "./module-config-tab";
 import { GeneralSettingsTab } from "./general-settings-tab";
 import { TemplatesManager } from "./templates-manager";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Mail, FileText, Settings } from "lucide-react";
+import { Mail, FileText, Settings, CreditCard } from "lucide-react";
 import type { SmtpConfigData, ModuleConfigData, TemplateData } from "./actions";
 
 interface SettingsPageClientProps {
@@ -22,6 +22,8 @@ interface SettingsPageClientProps {
   initialDecesTemplates: TemplateData[];
   initialDessaisTemplates: TemplateData[];
   initialSignature: string;
+  initialTab?: string;
+  billingTab: React.ReactNode;
 }
 
 export function SettingsPageClient({
@@ -33,6 +35,8 @@ export function SettingsPageClient({
   initialDecesTemplates,
   initialDessaisTemplates,
   initialSignature,
+  initialTab,
+  billingTab,
 }: SettingsPageClientProps) {
   const [smtpConfig] = useState(initialSmtpConfig);
   const [apaConfig] = useState(initialModuleConfigs.apa);
@@ -58,8 +62,8 @@ export function SettingsPageClient({
 
       {/* Content with Tabs */}
       <div className="flex-1 overflow-auto p-6">
-        <Tabs defaultValue="general" className="w-full">
-          <TabsList className="grid w-full max-w-3xl grid-cols-6">
+        <Tabs defaultValue={initialTab === "abonnement" ? "abonnement" : "general"} className="w-full">
+          <TabsList className="grid w-full max-w-4xl grid-cols-7">
             <TabsTrigger value="general" className="flex items-center gap-2">
               <Settings className="h-4 w-4" />
               Général
@@ -83,6 +87,10 @@ export function SettingsPageClient({
             <TabsTrigger value="dernier" className="flex items-center gap-2">
               <FileText className="h-4 w-4" />
               Dernier
+            </TabsTrigger>
+            <TabsTrigger value="abonnement" className="flex items-center gap-2">
+              <CreditCard className="h-4 w-4" />
+              Abonnement
             </TabsTrigger>
           </TabsList>
 
@@ -151,6 +159,9 @@ export function SettingsPageClient({
                 defaultCategory="DERNIER_DESSAISISSEMENT"
               />
             </div>
+          </TabsContent>
+          <TabsContent value="abonnement" className="mt-6">
+            {billingTab}
           </TabsContent>
         </Tabs>
       </div>

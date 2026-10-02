@@ -206,6 +206,9 @@ export async function sendEmailAction(
       attachmentPaths,
       signature,
       dossierName,
+      trimestre: validated.trimestre,
+      mois: validated.mois,
+      annee: validated.annee,
     });
 
     // Update event status

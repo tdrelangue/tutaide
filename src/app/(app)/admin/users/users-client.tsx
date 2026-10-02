@@ -16,6 +16,8 @@ import {
   ShieldCheck,
   FolderOpen,
   FileText,
+  KeyRound,
+  Send,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -52,6 +54,7 @@ import {
   startImpersonationAction,
 } from "../actions";
 import type { AdminUserData } from "../actions";
+import { centsToEuros } from "./billing-required-field";
 
 interface UsersPageClientProps {
   initialUsers: AdminUserData[];
@@ -132,6 +135,18 @@ export function UsersPageClient({ initialUsers }: UsersPageClientProps) {
               <Link href="/admin/templates">
                 <FileText className="h-4 w-4 mr-2" />
                 Modèles globaux
+              </Link>
+            </Button>
+            <Button variant="outline" asChild>
+              <Link href="/admin/system-config">
+                <KeyRound className="h-4 w-4 mr-2" />
+                Récupération mot de passe
+              </Link>
+            </Button>
+            <Button variant="outline" asChild>
+              <Link href="/admin/broadcast">
+                <Send className="h-4 w-4 mr-2" />
+                Email à tous
               </Link>
             </Button>
             <Button onClick={() => setCreateOpen(true)}>
@@ -246,6 +261,13 @@ function UserRow({
                 Admin
               </Badge>
             )}
+            <Badge variant="outline" className="text-xs">
+              {!user.billingRequired
+                ? "Offert"
+                : user.billingCustomAmountCents === null
+                  ? "Payant · Individuel"
+                  : `Payant · Entreprise ${centsToEuros(user.billingCustomAmountCents)} €/an`}
+            </Badge>
             {isArchived ? (
               <Badge variant="secondary" className="text-xs bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
                 Archive

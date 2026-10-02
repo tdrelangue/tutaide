@@ -24,6 +24,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { BillingRequiredField, centsToEuros, eurosToCents } from "./billing-required-field";
 import { updateUser } from "../actions";
 import type { AdminUserData } from "../actions";
 
@@ -36,6 +37,12 @@ const schema = z.object({
     .optional()
     .or(z.literal("")),
   role: z.enum(["USER", "ADMIN"]),
+  billingRequired: z.boolean(),
+  billingPlan: z.enum(["individual", "entreprise"]),
+  customAmount: z.string(),
+}).refine((d) => !d.billingRequired || d.billingPlan === "individual" || eurosToCents(d.customAmount) !== null, {
+  message: "Indiquez un prix annuel valide (ex. 1200)",
+  path: ["customAmount"],
 });
 
 type FormData = z.infer<typeof schema>;
@@ -68,10 +75,16 @@ export function EditUserDialog({
       name: user.name ?? "",
       password: "",
       role: user.role,
+      billingRequired: user.billingRequired,
+      billingPlan: user.billingCustomAmountCents === null ? "individual" : "entreprise",
+      customAmount: centsToEuros(user.billingCustomAmountCents),
     },
   });
 
   const role = watch("role");
+  const billingRequired = watch("billingRequired");
+  const billingPlan = watch("billingPlan");
+  const customAmount = watch("customAmount");
 
   async function onSubmit(data: FormData) {
     setIsSaving(true);
@@ -81,6 +94,8 @@ export function EditUserDialog({
         name?: string | null;
         password?: string;
         role?: "USER" | "ADMIN";
+        billingRequired?: boolean;
+        billingCustomAmountCents?: number | null;
       } = {};
 
       if (data.email !== user.email) updateData.email = data.email;
@@ -91,6 +106,13 @@ export function EditUserDialog({
         updateData.password = data.password;
       }
       if (data.role !== user.role) updateData.role = data.role;
+      if (data.billingRequired !== user.billingRequired) {
+        updateData.billingRequired = data.billingRequired;
+      }
+      const customCents = data.billingPlan === "entreprise" ? eurosToCents(data.customAmount) : null;
+      if (customCents !== user.billingCustomAmountCents) {
+        updateData.billingCustomAmountCents = customCents;
+      }
 
       if (Object.keys(updateData).length === 0) {
         toast.info("Aucune modification");
@@ -182,6 +204,20 @@ export function EditUserDialog({
               </SelectContent>
             </Select>
           </div>
+
+          <BillingRequiredField
+            id="edit-billing"
+            checked={billingRequired}
+            onCheckedChange={(v) => setValue("billingRequired", v)}
+            plan={billingPlan}
+            onPlanChange={(v) => setValue("billingPlan", v)}
+            amount={customAmount}
+            onAmountChange={(v) => setValue("customAmount", v)}
+            amountError={errors.customAmount?.message}
+            disabled={isSaving}
+            warnOnEnable={!user.billingRequired}
+            hasExistingPrice={user.billingRequired}
+          />
 
           <DialogFooter>
             <Button

@@ -1,5 +1,6 @@
 import { PrismaClient, DossierPriority, DossierStatus, ModuleType, TemplateCategory } from "@prisma/client";
 import { hash } from "bcryptjs";
+import { randomUUID } from "crypto";
 
 const prisma = new PrismaClient();
 
@@ -109,7 +110,9 @@ async function main() {
     },
   ];
 
-  // Create a dossier that exists in both modules (linked)
+  // Create a dossier that exists in both modules (grouped)
+  const groupId = randomUUID();
+
   const linkedApa = await prisma.dossier.create({
     data: {
       fullName: "Marie-Claire Dupuis",
@@ -118,11 +121,12 @@ async function main() {
       status: DossierStatus.ACTIVE,
       primaryEmail: "apa-departement@conseil-general.fr",
       notes: "Dossier APA + ASH. Double suivi nécessaire.",
+      groupId,
       userId: user.id,
     },
   });
 
-  const linkedAsh = await prisma.dossier.create({
+  await prisma.dossier.create({
     data: {
       fullName: "Marie-Claire Dupuis",
       moduleType: ModuleType.ASH,
@@ -130,15 +134,9 @@ async function main() {
       status: DossierStatus.ACTIVE,
       primaryEmail: "ash-departement@conseil-general.fr",
       notes: "Dossier APA + ASH. Double suivi nécessaire.",
-      linkedDossierId: linkedApa.id,
+      groupId,
       userId: user.id,
     },
-  });
-
-  // Update APA dossier with link back
-  await prisma.dossier.update({
-    where: { id: linkedApa.id },
-    data: { linkedDossierId: linkedAsh.id },
   });
 
   console.log(`Created linked dossier: ${linkedApa.fullName} (APA ↔ ASH)`);

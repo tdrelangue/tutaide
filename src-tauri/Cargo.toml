@@ -1,6 +1,6 @@
 [package]
 name = "tutellia"
-version = "2.0.2"
+version = "2.0.7"
 description = "Tutellia - Application MJPM"
 authors = ["Thomas Drelangue - Orig AI"]
 edition = "2021"

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Plus, Search, SortAsc, Send, CheckSquare, Filter, ChevronDown, ChevronUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -19,6 +19,12 @@ import { BulkSendDialog } from "./bulk-send-dialog";
 import { SendAllDialog } from "./send-all-dialog";
 import { AshImportZone } from "./ash-import-zone";
 import type { DossierWithDocuments } from "./actions";
+import {
+  loadDossiersFilterPrefs,
+  loadNameSortBasis,
+  saveDossiersFilterPrefs,
+} from "@/lib/local-prefs";
+import { compareByName } from "@/lib/name-sort";
 
 interface DossiersPageClientProps {
   moduleType: "APA" | "ASH";
@@ -52,6 +58,26 @@ export function DossiersPageClient({
 
   const basePath = `/${moduleType.toLowerCase()}/dossiers`;
 
+  // Restore the last-used status filter and sort order for this module,
+  // saved locally on this machine, when landing on the page without
+  // explicit filter/sort in the URL (fresh navigation, not a back/forward).
+  const hasRestoredPrefs = useRef(false);
+  useEffect(() => {
+    if (hasRestoredPrefs.current) return;
+    hasRestoredPrefs.current = true;
+
+    if (searchParams.has("status") || searchParams.has("sort")) return;
+
+    const prefs = loadDossiersFilterPrefs(moduleType);
+    if (!prefs) return;
+
+    const params = new URLSearchParams(searchParams.toString());
+    if (prefs.status) params.set("status", prefs.status);
+    if (prefs.sort) params.set("sort", prefs.sort);
+    router.replace(`${basePath}?${params.toString()}`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const updateParams = useCallback(
     (updates: Record<string, string | undefined>) => {
       const params = new URLSearchParams(searchParams.toString());
@@ -76,12 +102,28 @@ export function DossiersPageClient({
   };
 
   const handleStatusChange = (value: string) => {
-    updateParams({ status: value === "ALL" ? undefined : value });
+    const status = value === "ALL" ? undefined : (value as "ACTIVE" | "CLOSED");
+    updateParams({ status });
+    saveDossiersFilterPrefs(moduleType, { status, sort: initialSort });
   };
 
   const handleSortChange = (value: string) => {
     updateParams({ sort: value });
+    saveDossiersFilterPrefs(moduleType, { status: initialStatus, sort: value });
   };
+
+  // Alphabetical sorts are keyed off the last name (or first name, per the
+  // user's local preference in Settings) rather than raw string order,
+  // since "fullName" is free text stored as "Prénom Nom".
+  const displayedDossiers = useMemo(() => {
+    if (!initialSort.startsWith("fullName")) return initialDossiers;
+
+    const basis = loadNameSortBasis();
+    const direction = initialSort.endsWith("desc") ? -1 : 1;
+    return [...initialDossiers].sort(
+      (a, b) => direction * compareByName(a.fullName, b.fullName, basis)
+    );
+  }, [initialDossiers, initialSort]);
 
   const handleSelectDossier = (dossier: DossierWithDocuments) => {
     if (selectionMode) return;
@@ -127,6 +169,7 @@ export function DossiersPageClient({
       fullName: d.fullName,
       primaryEmail: d.primaryEmail,
       defaultTemplateName: d.defaultTemplate?.name ?? null,
+      sendingFrequency: d.sendingFrequency,
     }));
 
   const eligibleDossiers = initialDossiers
@@ -135,6 +178,7 @@ export function DossiersPageClient({
       id: d.id,
       fullName: d.fullName,
       documentCount: d.documents.length,
+      sendingFrequency: d.sendingFrequency,
     }));
 
   // Determine empty state message
@@ -292,7 +336,7 @@ export function DossiersPageClient({
 
       {/* Content */}
       <div className="flex-1 overflow-auto p-6">
-        {initialDossiers.length === 0 ? (
+        {displayedDossiers.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 text-center">
             <p className="text-muted-foreground mb-4">
               {getEmptyStateMessage()}
@@ -310,7 +354,7 @@ export function DossiersPageClient({
             role="list"
             aria-label={`Liste des dossiers ${moduleType}`}
           >
-            {initialDossiers.map((dossier) => (
+            {displayedDossiers.map((dossier) => (
               <DossierCard
                 key={dossier.id}
                 dossier={dossier}

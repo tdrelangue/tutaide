@@ -24,6 +24,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { BillingRequiredField, eurosToCents } from "./billing-required-field";
 import { createUser } from "../actions";
 
 const schema = z.object({
@@ -31,6 +32,12 @@ const schema = z.object({
   name: z.string().min(2, "Au moins 2 caracteres").optional().or(z.literal("")),
   password: z.string().min(8, "Au moins 8 caracteres"),
   role: z.enum(["USER", "ADMIN"]),
+  billingRequired: z.boolean(),
+  billingPlan: z.enum(["individual", "entreprise"]),
+  customAmount: z.string(),
+}).refine((d) => !d.billingRequired || d.billingPlan === "individual" || eurosToCents(d.customAmount) !== null, {
+  message: "Indiquez un prix annuel valide (ex. 1200)",
+  path: ["customAmount"],
 });
 
 type FormData = z.infer<typeof schema>;
@@ -62,10 +69,16 @@ export function CreateUserDialog({
       name: "",
       password: "",
       role: "USER",
+      billingRequired: false,
+      billingPlan: "individual",
+      customAmount: "",
     },
   });
 
   const role = watch("role");
+  const billingRequired = watch("billingRequired");
+  const billingPlan = watch("billingPlan");
+  const customAmount = watch("customAmount");
 
   async function onSubmit(data: FormData) {
     setIsSaving(true);
@@ -75,6 +88,8 @@ export function CreateUserDialog({
         name: data.name || undefined,
         password: data.password,
         role: data.role,
+        billingRequired: data.billingRequired,
+        billingCustomAmountCents: data.billingPlan === "entreprise" ? eurosToCents(data.customAmount) : null,
       });
       if (result.success) {
         toast.success("Utilisateur cree");
@@ -158,6 +173,20 @@ export function CreateUserDialog({
               </SelectContent>
             </Select>
           </div>
+
+          <BillingRequiredField
+            id="create-billing"
+            checked={billingRequired}
+            onCheckedChange={(v) => setValue("billingRequired", v)}
+            plan={billingPlan}
+            onPlanChange={(v) => setValue("billingPlan", v)}
+            amount={customAmount}
+            onAmountChange={(v) => setValue("customAmount", v)}
+            amountError={errors.customAmount?.message}
+            disabled={isSaving}
+            warnOnEnable={false}
+            hasExistingPrice={false}
+          />
 
           <DialogFooter>
             <Button

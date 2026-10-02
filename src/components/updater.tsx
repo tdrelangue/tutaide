@@ -59,6 +59,29 @@ export async function checkForUpdates(): Promise<UpdateCheckResult> {
   }
 }
 
+/**
+ * Same as checkForUpdates, but with allowDowngrades so the artifact at the
+ * update endpoint is always returned — even if its version is equal to or
+ * lower than the running app. Lets admins re-test the updater against the
+ * exact build currently published, without faking an older local version.
+ */
+export async function checkForUpdatesForce(): Promise<UpdateCheckResult> {
+  if (!(await isTauri())) {
+    return { type: "not-tauri" };
+  }
+  try {
+    const update = await check({ allowDowngrades: true });
+    if (!update) {
+      const { getVersion } = await import("@tauri-apps/api/app");
+      const version = await getVersion();
+      return { type: "up-to-date", version };
+    }
+    return { type: "available", update };
+  } catch (err) {
+    return { type: "error", detail: err instanceof Error ? err.message : String(err) };
+  }
+}
+
 // ─── Silent startup checker ───────────────────────────────────────────────────
 
 export function UpdaterStartupCheck() {

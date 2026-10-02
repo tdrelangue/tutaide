@@ -6,8 +6,12 @@ import {
   getSignature,
 } from "./actions";
 import { SettingsPageClient } from "./settings-client";
+import { BillingTab } from "./billing-tab";
 
-export default async function SettingsPage() {
+type SearchParams = Promise<{ tab?: string; checkout?: string; session_id?: string }>;
+
+export default async function SettingsPage({ searchParams }: { searchParams: SearchParams }) {
+  const { tab, checkout, session_id: sessionId } = await searchParams;
   const [smtpConfig, moduleConfigs, apaTemplates, ashTemplates, pchTemplates, decesTemplates, dessaisTemplates, signature] =
     await Promise.all([
       getSmtpConfig(),
@@ -31,6 +35,12 @@ export default async function SettingsPage() {
         initialDecesTemplates={decesTemplates}
         initialDessaisTemplates={dessaisTemplates}
         initialSignature={signature}
+        initialTab={tab}
+        billingTab={
+          <Suspense fallback={<p role="status" className="text-sm text-muted-foreground">Chargement de l&apos;abonnement…</p>}>
+            <BillingTab checkout={checkout} sessionId={sessionId} fresh={tab === "abonnement"} />
+          </Suspense>
+        }
       />
     </Suspense>
   );

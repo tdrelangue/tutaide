@@ -1,7 +1,10 @@
 import { getAllModuleConfigs } from "@/app/(app)/settings/actions";
-import { FolderOpen, Bell } from "lucide-react";
+import { isCurrentUserAdmin } from "@/lib/auth";
+import { FolderOpen, Bell, BookOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 import { UpdateCheckButton } from "./update-check-button";
+import { ForceUpdateButton } from "./force-update-button";
 import pkg from "../../../../package.json";
 
 const MODULE_META: Record<
@@ -33,6 +36,7 @@ const MODULE_META: Record<
 
 export default async function DashboardPage() {
   const moduleConfigs = await getAllModuleConfigs();
+  const isAdmin = await isCurrentUserAdmin();
 
   const activeModules = (
     Object.entries(moduleConfigs) as [string, { destinationEmail: string } | null][]
@@ -110,7 +114,33 @@ export default async function DashboardPage() {
                 </p>
               </div>
             </div>
-            <UpdateCheckButton />
+            <div className="flex items-center gap-2">
+              {isAdmin && <ForceUpdateButton />}
+              <UpdateCheckButton />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Guides */}
+      <section>
+        <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+          Documentation
+        </h2>
+        <div className="rounded-lg border bg-card p-5 shadow-sm">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <BookOpen className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
+              <div>
+                <p className="text-sm font-medium">Guides d&apos;utilisation</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Guide de mise à jour et guide de dépannage.
+                </p>
+              </div>
+            </div>
+            <Button variant="outline" asChild>
+              <a href="/guides">Consulter les guides</a>
+            </Button>
           </div>
         </div>
       </section>

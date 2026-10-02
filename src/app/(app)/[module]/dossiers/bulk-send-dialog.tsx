@@ -14,13 +14,21 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  PeriodePicker,
+  computeDefaultPeriode,
+  type MoisValue,
+  type TrimestreValue,
+} from "@/components/period-picker";
 import { bulkSendAction } from "../history/actions";
+import type { SendingFrequency } from "@prisma/client";
 
 interface SelectedDossier {
   id: string;
   fullName: string;
   primaryEmail: string | null;
   defaultTemplateName: string | null;
+  sendingFrequency: SendingFrequency;
 }
 
 interface BulkSendResult {
@@ -45,13 +53,32 @@ export function BulkSendDialog({
 }: BulkSendDialogProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [results, setResults] = useState<BulkSendResult[] | null>(null);
+  const [trimestre, setTrimestre] = useState<TrimestreValue>(
+    () => computeDefaultPeriode().trimestre
+  );
+  const [mois, setMois] = useState<MoisValue>(() => computeDefaultPeriode().mois);
+  const [annee, setAnnee] = useState<string>(
+    () => computeDefaultPeriode().annee
+  );
 
   const dossiersWithoutEmail = selectedDossiers.filter((d) => !d.primaryEmail);
   const dossiersWithEmail = selectedDossiers.filter((d) => !!d.primaryEmail);
 
+  // Show the trimester picker if any selected dossier is quarterly, and the
+  // month picker if any is monthly — both at once when the batch mixes
+  // cadences.
+  const showTrimestre = selectedDossiers.some(
+    (d) => d.sendingFrequency === "QUARTERLY"
+  );
+  const showMois = selectedDossiers.some((d) => d.sendingFrequency === "MONTHLY");
+
   useEffect(() => {
     if (open) {
       setResults(null);
+      const defaults = computeDefaultPeriode();
+      setTrimestre(defaults.trimestre);
+      setMois(defaults.mois);
+      setAnnee(defaults.annee);
     }
   }, [open]);
 
@@ -66,6 +93,9 @@ export function BulkSendDialog({
       const actionResults = await bulkSendAction({
         dossierIds: dossiersWithEmail.map((d) => d.id),
         moduleType,
+        trimestre,
+        mois,
+        annee,
       });
 
       const mappedResults: BulkSendResult[] = actionResults.map((r) => {
@@ -144,6 +174,19 @@ export function BulkSendDialog({
           </div>
         ) : (
           <div className="space-y-4">
+            <PeriodePicker
+              showTrimestre={showTrimestre}
+              showMois={showMois}
+              trimestre={trimestre}
+              mois={mois}
+              annee={annee}
+              onTrimestreChange={setTrimestre}
+              onMoisChange={setMois}
+              onAnneeChange={setAnnee}
+              disabled={isLoading}
+              helperText="Appliquée à tous les dossiers de cet envoi. Vérifiez avant d'envoyer des rapports en retard."
+            />
+
             {/* Warning for dossiers without email */}
             {dossiersWithoutEmail.length > 0 && (
               <div className="flex items-start gap-2 rounded-md border border-yellow-300 bg-yellow-50 p-3 dark:border-yellow-600 dark:bg-yellow-950">

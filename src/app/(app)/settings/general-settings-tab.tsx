@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -12,8 +12,17 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Loader2, Check, AlertCircle } from "lucide-react";
 import { updatePassword, updateSignature } from "./actions";
+import { loadNameSortBasis, saveNameSortBasis } from "@/lib/local-prefs";
+import type { NameSortBasis } from "@/lib/name-sort";
 
 interface GeneralSettingsTabProps {
   initialSignature: string;
@@ -39,6 +48,18 @@ export function GeneralSettingsTab({
     type: "success" | "error";
     text: string;
   } | null>(null);
+
+  // Alphabetical sort basis — stored locally on this machine, not the account
+  const [nameSortBasis, setNameSortBasis] = useState<NameSortBasis>("LAST_NAME");
+  useEffect(() => {
+    setNameSortBasis(loadNameSortBasis());
+  }, []);
+
+  const handleNameSortBasisChange = (value: string) => {
+    const basis = value as NameSortBasis;
+    setNameSortBasis(basis);
+    saveNameSortBasis(basis);
+  };
 
   const handlePasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -176,6 +197,31 @@ export function GeneralSettingsTab({
               Mettre a jour
             </Button>
           </form>
+        </CardContent>
+      </Card>
+
+      {/* Alphabetical sort basis */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Tri alphabetique des dossiers</CardTitle>
+          <CardDescription>
+            Choisissez si le tri "Nom A-Z / Z-A" des dossiers se base sur le
+            nom de famille ou le prenom. Reglage propre a cet ordinateur.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-2 max-w-xs">
+            <Label htmlFor="nameSortBasis">Trier par</Label>
+            <Select value={nameSortBasis} onValueChange={handleNameSortBasisChange}>
+              <SelectTrigger id="nameSortBasis">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="LAST_NAME">Nom de famille</SelectItem>
+                <SelectItem value="FIRST_NAME">Prenom</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </CardContent>
       </Card>
 

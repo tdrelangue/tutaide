@@ -14,12 +14,20 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  PeriodePicker,
+  computeDefaultPeriode,
+  type MoisValue,
+  type TrimestreValue,
+} from "@/components/period-picker";
 import { sendAllAction } from "../history/actions";
+import type { SendingFrequency } from "@prisma/client";
 
 interface EligibleDossier {
   id: string;
   fullName: string;
   documentCount: number;
+  sendingFrequency: SendingFrequency;
 }
 
 interface SendAllResult {
@@ -44,10 +52,29 @@ export function SendAllDialog({
 }: SendAllDialogProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [results, setResults] = useState<SendAllResult[] | null>(null);
+  const [trimestre, setTrimestre] = useState<TrimestreValue>(
+    () => computeDefaultPeriode().trimestre
+  );
+  const [mois, setMois] = useState<MoisValue>(() => computeDefaultPeriode().mois);
+  const [annee, setAnnee] = useState<string>(
+    () => computeDefaultPeriode().annee
+  );
+
+  // Show the trimester picker if any eligible dossier is quarterly, and the
+  // month picker if any is monthly — both at once when the batch mixes
+  // cadences.
+  const showTrimestre = eligibleDossiers.some(
+    (d) => d.sendingFrequency === "QUARTERLY"
+  );
+  const showMois = eligibleDossiers.some((d) => d.sendingFrequency === "MONTHLY");
 
   useEffect(() => {
     if (open) {
       setResults(null);
+      const defaults = computeDefaultPeriode();
+      setTrimestre(defaults.trimestre);
+      setMois(defaults.mois);
+      setAnnee(defaults.annee);
     }
   }, [open]);
 
@@ -59,7 +86,7 @@ export function SendAllDialog({
 
     setIsLoading(true);
     try {
-      const actionResults = await sendAllAction({ moduleType });
+      const actionResults = await sendAllAction({ moduleType, trimestre, mois, annee });
 
       const mappedResults: SendAllResult[] = actionResults.map((r) => {
         const dossier = eligibleDossiers.find((d) => d.id === r.dossierId);
@@ -134,6 +161,19 @@ export function SendAllDialog({
           </div>
         ) : (
           <div className="space-y-4">
+            <PeriodePicker
+              showTrimestre={showTrimestre}
+              showMois={showMois}
+              trimestre={trimestre}
+              mois={mois}
+              annee={annee}
+              onTrimestreChange={setTrimestre}
+              onMoisChange={setMois}
+              onAnneeChange={setAnnee}
+              disabled={isLoading}
+              helperText="Appliquée à tous les dossiers de cet envoi. Vérifiez avant d'envoyer des rapports en retard."
+            />
+
             {/* Eligible dossiers list */}
             <div className="space-y-2">
               <p className="text-sm font-medium">

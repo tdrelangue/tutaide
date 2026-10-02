@@ -29,10 +29,14 @@ import {
 import { dossierSchema, type DossierFormData } from "@/lib/validations";
 import { createDossier, getTemplatesForModule } from "./actions";
 
+type FullModuleType = "APA" | "ASH" | "PCH";
+
+const ALL_MODULES: FullModuleType[] = ["APA", "ASH", "PCH"];
+
 interface CreateDossierDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  moduleType: "APA" | "ASH";
+  moduleType: FullModuleType;
 }
 
 export function CreateDossierDialog({
@@ -44,7 +48,7 @@ export function CreateDossierDialog({
   const [isLoading, setIsLoading] = useState(false);
   const [templates, setTemplates] = useState<{ id: string; name: string; isDefault: boolean }[]>([]);
 
-  const otherModule = moduleType === "APA" ? "ASH" : "APA";
+  const otherModules = ALL_MODULES.filter((m) => m !== moduleType);
 
   useEffect(() => {
     getTemplatesForModule(moduleType).then(setTemplates).catch(() => {});
@@ -68,14 +72,23 @@ export function CreateDossierDialog({
       primaryEmail: "",
       ccEmails: [],
       bccEmails: [],
-      addToOtherModule: false,
+      additionalModules: [],
     },
   });
 
   const priority = watch("priority");
   const status = watch("status");
-  const addToOtherModule = watch("addToOtherModule");
+  const additionalModules = watch("additionalModules") ?? [];
   const defaultTemplateId = watch("defaultTemplateId");
+
+  const toggleAdditionalModule = (module: FullModuleType, checked: boolean) => {
+    setValue(
+      "additionalModules",
+      checked
+        ? [...additionalModules, module]
+        : additionalModules.filter((m) => m !== module)
+    );
+  };
 
   async function onSubmit(data: DossierFormData) {
     setIsLoading(true);
@@ -224,21 +237,25 @@ export function CreateDossierDialog({
             />
           </div>
 
-          <div className="flex items-center space-x-2">
-            <Checkbox
-              id="addToOtherModule"
-              checked={addToOtherModule}
-              onCheckedChange={(checked) =>
-                setValue("addToOtherModule", checked === true)
-              }
-              disabled={isLoading}
-            />
-            <Label
-              htmlFor="addToOtherModule"
-              className="text-sm font-normal cursor-pointer"
-            >
-              Ajouter aussi a l&apos;{otherModule}
-            </Label>
+          <div className="space-y-2">
+            {otherModules.map((module) => (
+              <div key={module} className="flex items-center space-x-2">
+                <Checkbox
+                  id={`additionalModule-${module}`}
+                  checked={additionalModules.includes(module)}
+                  onCheckedChange={(checked) =>
+                    toggleAdditionalModule(module, checked === true)
+                  }
+                  disabled={isLoading}
+                />
+                <Label
+                  htmlFor={`additionalModule-${module}`}
+                  className="text-sm font-normal cursor-pointer"
+                >
+                  Aussi creer en {module}
+                </Label>
+              </div>
+            ))}
           </div>
 
           <DialogFooter>

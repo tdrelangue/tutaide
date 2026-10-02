@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { requireAuth } from "@/lib/auth";
 import { dossierSchema, type DossierFormData } from "@/lib/validations";
-import type { DossierPriority, DossierStatus } from "@prisma/client";
+import type { DossierPriority, DossierStatus, SendingFrequency } from "@prisma/client";
 
 export type DossierWithDocuments = {
   id: string;
@@ -83,6 +83,18 @@ export async function getDossiers(params?: {
   });
 }
 
+/** Lightweight lookup used to decide which period picker (trimestre/mois) to show when sending an email for this dossier. */
+export async function getDossierSendingFrequency(
+  id: string
+): Promise<SendingFrequency | null> {
+  const userId = await requireAuth();
+  const dossier = await db.dossier.findFirst({
+    where: { id, userId },
+    select: { sendingFrequency: true },
+  });
+  return dossier?.sendingFrequency ?? null;
+}
+
 export async function getDossier(id: string): Promise<DossierWithDocuments | null> {
   const userId = await requireAuth();
 
@@ -117,9 +129,9 @@ export async function createDossier(data: DossierFormData): Promise<{ success: b
     const userId = await requireAuth();
     const validated = dossierSchema.parse(data);
 
-    // Strip addToOtherModule — not a DB field, only used at creation time in the module version
+    // Strip additionalModules — not a DB field, only used at creation time in the module version
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { addToOtherModule: _ignored, ...dossierData } = validated;
+    const { additionalModules: _ignored, ...dossierData } = validated;
 
     const dossier = await db.dossier.create({
       data: {
@@ -155,11 +167,15 @@ export async function updateDossier(
 
     const validated = dossierSchema.partial().parse(data);
 
+    // Strip additionalModules — not a DB field, only used at creation time in the module version
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { additionalModules: _ignored, ...updatePayload } = validated;
+
     await db.dossier.update({
       where: { id },
       data: {
-        ...validated,
-        primaryEmail: validated.primaryEmail || null,
+        ...updatePayload,
+        primaryEmail: updatePayload.primaryEmail || null,
       },
     });
 

@@ -6,6 +6,56 @@ export const loginSchema = z.object({
   password: z.string().min(1, "Mot de passe requis"),
 });
 
+export const requestPasswordResetSchema = z.object({
+  email: z.string().email("Email invalide"),
+});
+
+export const verifyResetCodeSchema = z.object({
+  email: z.string().email("Email invalide"),
+  code: z.string().regex(/^\d{6}$/, "Le code doit contenir 6 chiffres"),
+});
+
+export const resetPasswordSchema = z.object({
+  email: z.string().email("Email invalide"),
+  code: z.string().regex(/^\d{6}$/, "Le code doit contenir 6 chiffres"),
+  newPassword: z.string().min(8, "Le mot de passe doit contenir au moins 8 caractères"),
+});
+
+// Broadcast email (admin -> all active users)
+export const broadcastEmailSchema = z.object({
+  subject: z.string().min(1, "L'objet est requis"),
+  body: z.string().min(1, "Le contenu est requis"),
+});
+
+export type BroadcastEmailFormData = z.infer<typeof broadcastEmailSchema>;
+
+// System SMTP Config (account-recovery emails, admin-only)
+export const systemConfigSchema = z.object({
+  smtpHost: z.string().min(1, "L'hôte SMTP est requis"),
+  smtpPort: z.coerce.number().int().positive().default(587),
+  secure: z.boolean().default(true),
+  username: z.string().min(1, "Le nom d'utilisateur est requis"),
+  password: z.string().min(1, "Le mot de passe est requis"),
+  fromName: z.string().min(1, "Le nom d'expéditeur est requis"),
+  fromEmail: z.string().email("Email d'expéditeur invalide"),
+});
+
+export type SystemConfigFormData = z.infer<typeof systemConfigSchema>;
+
+export const signupSchema = z
+  .object({
+    name: z.string().trim().min(2, "Le nom doit contenir au moins 2 caractères").max(100),
+    email: z.string().trim().email("Email invalide"),
+    password: z.string().min(8, "Le mot de passe doit contenir au moins 8 caractères").max(200),
+    confirmPassword: z.string(),
+  })
+  .refine((d) => d.password === d.confirmPassword, {
+    message: "Les mots de passe ne correspondent pas",
+    path: ["confirmPassword"],
+  });
+
+export type SignupFormData = z.infer<typeof signupSchema>;
+
 export const registerSchema = z.object({
   email: z.string().email("Email invalide"),
   password: z.string().min(8, "Le mot de passe doit contenir au moins 8 caractères"),
@@ -15,16 +65,16 @@ export const registerSchema = z.object({
 // Dossier
 export const dossierSchema = z.object({
   fullName: z.string().min(2, "Le nom complet est requis"),
-  moduleType: z.enum(["APA", "ASH"]).default("APA"),
+  moduleType: z.enum(["APA", "ASH", "PCH"]).default("APA"),
   priority: z.enum(["NORMAL", "PRIORITAIRE", "URGENT"]).default("NORMAL"),
   status: z.enum(["ACTIVE", "CLOSED"]).default("ACTIVE"),
   notes: z.string().optional(),
   primaryEmail: z.string().email("Email invalide").optional().or(z.literal("")),
   ccEmails: z.array(z.string().email()).default([]),
   bccEmails: z.array(z.string().email()).default([]),
-  addToOtherModule: z.boolean().default(false),
+  additionalModules: z.array(z.enum(["APA", "ASH", "PCH"])).default([]),
   defaultTemplateId: z.string().optional().nullable(),
-  sendingFrequency: z.enum(["MONTHLY", "QUARTERLY", "BIMONTHLY"]).default("QUARTERLY"),
+  sendingFrequency: z.enum(["MONTHLY", "QUARTERLY"]).default("QUARTERLY"),
 });
 
 export type DossierFormData = z.infer<typeof dossierSchema>;
@@ -67,6 +117,9 @@ export const sendEmailSchema = z.object({
   subject: z.string().min(1, "L'objet est requis"),
   body: z.string().min(1, "Le contenu est requis"),
   attachmentIds: z.array(z.string()).default([]),
+  trimestre: z.enum(["1", "2", "3", "4"]).optional(),
+  mois: z.enum(["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"]).optional(),
+  annee: z.string().optional(),
 });
 
 export type SendEmailFormData = z.infer<typeof sendEmailSchema>;
@@ -75,6 +128,9 @@ export type SendEmailFormData = z.infer<typeof sendEmailSchema>;
 export const bulkSendSchema = z.object({
   dossierIds: z.array(z.string()).min(1, "Au moins un dossier requis"),
   moduleType: z.enum(["APA", "ASH"]),
+  trimestre: z.enum(["1", "2", "3", "4"]).optional(),
+  mois: z.enum(["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"]).optional(),
+  annee: z.string().optional(),
 });
 
 export type BulkSendFormData = z.infer<typeof bulkSendSchema>;
@@ -82,6 +138,9 @@ export type BulkSendFormData = z.infer<typeof bulkSendSchema>;
 // Send All (all non-empty dossiers)
 export const sendAllSchema = z.object({
   moduleType: z.enum(["APA", "ASH"]),
+  trimestre: z.enum(["1", "2", "3", "4"]).optional(),
+  mois: z.enum(["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"]).optional(),
+  annee: z.string().optional(),
 });
 
 export type SendAllFormData = z.infer<typeof sendAllSchema>;

@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -27,7 +28,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { sendDernierEmail } from "./dernier-actions";
-import { type DossierWithDocuments } from "./actions";
+import { getGroupMembers, type DossierWithDocuments, type GroupMember } from "./actions";
 import { getTemplatesByCategory } from "../../settings/actions";
 
 const dernierEmailFormSchema = z.object({
@@ -86,7 +87,7 @@ interface DernierEmailDialogProps {
   onOpenChange: (open: boolean) => void;
   dossier: DossierWithDocuments;
   reason: "DECES" | "DESSAISISSEMENT";
-  moduleType: "APA" | "ASH";
+  moduleType: "APA" | "ASH" | "PCH";
 }
 
 export function DernierEmailDialog({
@@ -99,6 +100,23 @@ export function DernierEmailDialog({
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
   const [templates, setTemplates] = useState<{ id: string; name: string; subject: string; body: string; isDefault: boolean }[]>([]);
+  const [groupMembers, setGroupMembers] = useState<GroupMember[]>([]);
+  const [selectedSiblingIds, setSelectedSiblingIds] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (!open) return;
+    setSelectedSiblingIds(new Set());
+    getGroupMembers(dossier.id).then(setGroupMembers).catch(() => setGroupMembers([]));
+  }, [open, dossier.id]);
+
+  const toggleSibling = (id: string, checked: boolean) => {
+    setSelectedSiblingIds((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  };
 
   const {
     register,
@@ -144,22 +162,33 @@ export function DernierEmailDialog({
   async function onSubmit(data: DernierEmailFormData) {
     setIsLoading(true);
     try {
-      const result = await sendDernierEmail({
-        dossierId: dossier.id,
-        moduleType,
+      const dossierIds = [dossier.id, ...selectedSiblingIds];
+      const results = await sendDernierEmail({
+        dossierIds,
         reason,
         subject: data.subject,
         body: data.body,
       });
 
-      if (result.success) {
+      const succeeded = results.filter((r) => r.success);
+      const failed = results.filter((r) => !r.success);
+
+      if (failed.length === 0) {
         toast.success(
-          `Dernier email envoye et dossier cloture (${getReasonLabel(reason)})`
+          dossierIds.length > 1
+            ? `Dernier email envoye et dossiers clotures (${succeeded.map((r) => r.moduleType).join(", ")})`
+            : `Dernier email envoye et dossier cloture (${getReasonLabel(reason)})`
+        );
+        onOpenChange(false);
+        router.refresh();
+      } else if (succeeded.length > 0) {
+        toast.warning(
+          `Envoye pour ${succeeded.map((r) => r.moduleType).join(", ")}, echec pour ${failed.map((r) => r.moduleType).join(", ")}`
         );
         onOpenChange(false);
         router.refresh();
       } else {
-        toast.error(result.error || "Erreur lors de l'envoi du dernier email");
+        toast.error(failed[0]?.error || "Erreur lors de l'envoi du dernier email");
       }
     } catch {
       toast.error("Erreur lors de l'envoi du dernier email");
@@ -260,6 +289,35 @@ export function DernierEmailDialog({
               </p>
             )}
           </div>
+
+          {/* Cascade to linked dossiers in other modules — unselected by default */}
+          {groupMembers.length > 0 && (
+            <div className="space-y-2">
+              <Label>Aussi envoyer et cloturer</Label>
+              {groupMembers.map((member) => (
+                <div key={member.id} className="flex items-center space-x-2">
+                  <Checkbox
+                    id={`sibling-${member.id}`}
+                    checked={selectedSiblingIds.has(member.id)}
+                    onCheckedChange={(checked) =>
+                      toggleSibling(member.id, checked === true)
+                    }
+                    disabled={isLoading}
+                  />
+                  <Label
+                    htmlFor={`sibling-${member.id}`}
+                    className="text-sm font-normal cursor-pointer"
+                  >
+                    {member.moduleType}
+                  </Label>
+                </div>
+              ))}
+              <p className="text-xs text-muted-foreground">
+                Non selectionne par defaut. Cochez pour envoyer le meme message
+                a l&apos;organisme et cloturer le dossier correspondant.
+              </p>
+            </div>
+          )}
 
           <DialogFooter>
             <Button

@@ -28,11 +28,15 @@ export const authConfig: NextAuthConfig = {
     authorized({ auth, request: { nextUrl } }) {
       const isLoggedIn = !!auth?.user;
       const isPublicPath = nextUrl.pathname === "/login" ||
-                          nextUrl.pathname.startsWith("/api/auth");
+                          nextUrl.pathname === "/signup" ||
+                          nextUrl.pathname === "/forgot-password" ||
+                          nextUrl.pathname.startsWith("/api/auth") ||
+                          // Called server-to-server by desktop installs (see lib/billing.ts)
+                          nextUrl.pathname.startsWith("/api/billing/");
 
       if (isPublicPath) {
-        // Redirect logged-in users away from login
-        if (isLoggedIn && nextUrl.pathname === "/login") {
+        // Redirect logged-in users away from login / signup
+        if (isLoggedIn && (nextUrl.pathname === "/login" || nextUrl.pathname === "/signup")) {
           return Response.redirect(new URL("/dashboard", nextUrl));
         }
         return true;

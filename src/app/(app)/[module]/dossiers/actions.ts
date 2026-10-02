@@ -1,6 +1,7 @@
 "use server";
 
 import { existsSync } from "fs";
+import { randomUUID } from "crypto";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { requireAuth } from "@/lib/auth";
@@ -25,7 +26,7 @@ export type DossierWithDocuments = {
   bccEmails: string[];
   createdAt: Date;
   updatedAt: Date;
-  linkedDossierId: string | null;
+  groupId: string | null;
   defaultTemplateId: string | null;
   sendingFrequency: SendingFrequency;
   defaultTemplate: { id: string; name: string } | null;
@@ -40,10 +41,25 @@ export type DossierWithDocuments = {
   };
 };
 
-function getOtherModuleType(moduleType: ModuleType): ModuleType {
-  if (moduleType === "APA") return "ASH";
-  if (moduleType === "ASH") return "PCH";
-  return "APA";
+export type GroupMember = {
+  id: string;
+  moduleType: ModuleType;
+  status: DossierStatus;
+};
+
+/** Other dossiers sharing this dossier's group (created together across modules), excluding itself. */
+export async function getGroupMembers(dossierId: string): Promise<GroupMember[]> {
+  const userId = await requireAuth();
+  const dossier = await db.dossier.findFirst({
+    where: { id: dossierId, userId },
+    select: { groupId: true },
+  });
+  if (!dossier?.groupId) return [];
+
+  return db.dossier.findMany({
+    where: { groupId: dossier.groupId, userId, id: { not: dossierId } },
+    select: { id: true, moduleType: true, status: true },
+  });
 }
 
 function revalidateModulePaths(): void {
@@ -119,6 +135,18 @@ export async function getDossiers(
   });
 }
 
+/** Lightweight lookup used to decide which period picker (trimestre/mois) to show when sending an email for this dossier. */
+export async function getDossierSendingFrequency(
+  id: string
+): Promise<SendingFrequency | null> {
+  const userId = await requireAuth();
+  const dossier = await db.dossier.findFirst({
+    where: { id, userId },
+    select: { sendingFrequency: true },
+  });
+  return dossier?.sendingFrequency ?? null;
+}
+
 export async function getDossier(
   id: string
 ): Promise<DossierWithDocuments | null> {
@@ -161,86 +189,54 @@ export async function createDossier(
     const userId = await requireAuth();
     const validated = dossierSchema.parse(data);
 
-    const { addToOtherModule, ...dossierData } = validated;
+    const { additionalModules, ...dossierData } = validated;
 
-    // Auto-assign the global default quarterly template if user didn't choose one
-    const primaryTemplateId = dossierData.defaultTemplateId
-      ?? await getDefaultGlobalTemplateId(moduleType);
-    const otherModuleType = getOtherModuleType(moduleType);
-    const otherTemplateId = await getDefaultGlobalTemplateId(otherModuleType);
+    // De-duplicate in case the primary module was somehow included twice.
+    const targetModules = [
+      moduleType,
+      ...additionalModules.filter((m) => m !== moduleType),
+    ];
+    const groupId = targetModules.length > 1 ? randomUUID() : null;
 
-    if (addToOtherModule) {
-      // Create both dossiers in a transaction, linking them together
-      const otherModule = getOtherModuleType(moduleType);
-
-      const result = await db.$transaction(async (tx) => {
-        // Create the primary dossier
-        const primaryDossier = await tx.dossier.create({
-          data: {
-            fullName: dossierData.fullName,
-            priority: dossierData.priority,
-            status: dossierData.status,
-            notes: dossierData.notes ?? null,
-            primaryEmail: dossierData.primaryEmail || null,
-            ccEmails: dossierData.ccEmails,
-            bccEmails: dossierData.bccEmails,
-            moduleType,
-            userId,
-            defaultTemplateId: primaryTemplateId,
-            sendingFrequency: dossierData.sendingFrequency ?? "QUARTERLY",
-          },
-        });
-
-        // Create the linked dossier in the other module with its own default template
-        const linkedDossier = await tx.dossier.create({
-          data: {
-            fullName: dossierData.fullName,
-            priority: dossierData.priority,
-            status: dossierData.status,
-            notes: dossierData.notes ?? null,
-            primaryEmail: dossierData.primaryEmail || null,
-            ccEmails: dossierData.ccEmails,
-            bccEmails: dossierData.bccEmails,
-            moduleType: otherModule,
-            userId,
-            defaultTemplateId: otherTemplateId,
-            sendingFrequency: dossierData.sendingFrequency ?? "QUARTERLY",
-            linkedDossierId: primaryDossier.id,
-          },
-        });
-
-        // Update the primary dossier to point back to the linked one
-        await tx.dossier.update({
-          where: { id: primaryDossier.id },
-          data: { linkedDossierId: linkedDossier.id },
-        });
-
-        return primaryDossier;
-      });
-
-      revalidateModulePaths();
-      return { success: true, id: result.id };
+    // Resolve each module's default template before creating anything —
+    // the primary module honors the user's explicit choice, the rest fall
+    // back to their own global default.
+    const templateIdByModule = new Map<ModuleType, string | null>();
+    for (const m of targetModules) {
+      templateIdByModule.set(
+        m,
+        m === moduleType
+          ? (dossierData.defaultTemplateId ?? (await getDefaultGlobalTemplateId(m)))
+          : await getDefaultGlobalTemplateId(m)
+      );
     }
 
-    // Single dossier creation (no linking)
-    const dossier = await db.dossier.create({
-      data: {
-        fullName: dossierData.fullName,
-        priority: dossierData.priority,
-        status: dossierData.status,
-        notes: dossierData.notes ?? null,
-        primaryEmail: dossierData.primaryEmail || null,
-        ccEmails: dossierData.ccEmails,
-        bccEmails: dossierData.bccEmails,
-        moduleType,
-        userId,
-        defaultTemplateId: primaryTemplateId,
-        sendingFrequency: dossierData.sendingFrequency ?? "QUARTERLY",
-      },
-    });
+    const created = await db.$transaction((tx) =>
+      Promise.all(
+        targetModules.map((m) =>
+          tx.dossier.create({
+            data: {
+              fullName: dossierData.fullName,
+              priority: dossierData.priority,
+              status: dossierData.status,
+              notes: dossierData.notes ?? null,
+              primaryEmail: dossierData.primaryEmail || null,
+              ccEmails: dossierData.ccEmails,
+              bccEmails: dossierData.bccEmails,
+              moduleType: m,
+              userId,
+              defaultTemplateId: templateIdByModule.get(m) ?? null,
+              sendingFrequency: dossierData.sendingFrequency ?? "QUARTERLY",
+              groupId,
+            },
+          })
+        )
+      )
+    );
 
     revalidateModulePaths();
-    return { success: true, id: dossier.id };
+    const primary = created.find((d) => d.moduleType === moduleType) ?? created[0];
+    return { success: true, id: primary.id };
   } catch (error) {
     console.error("Error creating dossier:", error);
     const message = error instanceof Error ? error.message : "Unknown error";
@@ -269,10 +265,10 @@ export async function updateDossier(
 
     const validated = dossierSchema.partial().parse(data);
 
-    // Strip addToOtherModule from the update payload -- it is only
+    // Strip additionalModules from the update payload -- it is only
     // relevant at creation time.
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { addToOtherModule: _ignored, ...updatePayload } = validated;
+    const { additionalModules: _ignored, ...updatePayload } = validated;
 
     await db.dossier.update({
       where: { id },
@@ -320,7 +316,8 @@ async function getDefaultGlobalTemplateId(
 }
 
 export async function deleteDossier(
-  id: string
+  id: string,
+  scope: "one" | "group" = "one"
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const userId = await requireAuth();
@@ -334,49 +331,19 @@ export async function deleteDossier(
       return { success: false, error: "Dossier non trouve" };
     }
 
-    // If this dossier is linked, unlink the sibling first so the
-    // unique constraint on linkedDossierId is not violated.
-    if (existing.linkedDossierId) {
-      await db.$transaction(async (tx) => {
-        // Remove the back-reference on the sibling
-        await tx.dossier.update({
-          where: { id: existing.linkedDossierId! },
-          data: { linkedDossierId: null },
-        });
+    const idsToDelete =
+      scope === "group" && existing.groupId
+        ? (
+            await db.dossier.findMany({
+              where: { groupId: existing.groupId, userId },
+              select: { id: true },
+            })
+          ).map((d) => d.id)
+        : [id];
 
-        // Remove the forward reference, then delete
-        await tx.dossier.update({
-          where: { id },
-          data: { linkedDossierId: null },
-        });
-
-        await tx.dossier.delete({
-          where: { id },
-        });
-      });
-    } else {
-      // Check if another dossier points to this one (linkedBy side)
-      const sibling = await db.dossier.findFirst({
-        where: { linkedDossierId: id },
-      });
-
-      if (sibling) {
-        await db.$transaction(async (tx) => {
-          await tx.dossier.update({
-            where: { id: sibling.id },
-            data: { linkedDossierId: null },
-          });
-
-          await tx.dossier.delete({
-            where: { id },
-          });
-        });
-      } else {
-        await db.dossier.delete({
-          where: { id },
-        });
-      }
-    }
+    await db.dossier.deleteMany({
+      where: { id: { in: idsToDelete }, userId },
+    });
 
     revalidateModulePaths();
     return { success: true };

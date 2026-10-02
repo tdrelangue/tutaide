@@ -5,6 +5,8 @@ import { AppHeader } from "@/components/app-header";
 import { ImpersonationBanner } from "@/components/impersonation-banner";
 import { UpdaterStartupCheck } from "@/components/updater";
 import { getAllModuleConfigs } from "@/app/(app)/settings/actions";
+import { migrateLegacyLinkedDossiers } from "@/lib/legacy-migrations";
+import { isBlockedByPaywall } from "@/lib/billing";
 
 export default async function AppLayout({
   children,
@@ -17,10 +19,20 @@ export default async function AppLayout({
     redirect("/login");
   }
 
+  // New accounts must finish their first payment. Admins and accounts created
+  // before billing launched are never blocked (see lib/billing.ts).
+  if (await isBlockedByPaywall(session.user.id)) {
+    redirect("/abonnement");
+  }
+
   const [impersonation, moduleConfigs] = await Promise.all([
     getImpersonationState(),
     getAllModuleConfigs(),
   ]);
+
+  // Heal any dossier links written by an older app build still on the
+  // legacy linkedDossierId mechanism into the current groupId model.
+  await migrateLegacyLinkedDossiers(session.user.id);
 
   const activeModuleKeys = (Object.entries(moduleConfigs) as [string, unknown][])
     .filter(([, config]) => config !== null)

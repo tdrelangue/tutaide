@@ -19,6 +19,16 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -26,10 +36,17 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  PeriodePicker,
+  computeDefaultPeriode,
+  formatPeriodeLabel,
+} from "@/components/period-picker";
 import { sendEmailSchema, type SendEmailFormData } from "@/lib/validations";
 import { sendEmailAction, type EmailEvent } from "./actions";
 import { getTemplates, type TemplateData } from "../settings/actions";
 import { getDocuments } from "../dossiers/document-actions";
+import { getDossierSendingFrequency } from "../dossiers/actions";
+import type { SendingFrequency } from "@prisma/client";
 
 interface SendEmailDialogProps {
   open: boolean;
@@ -57,6 +74,10 @@ export function SendEmailDialog({
   const [templates, setTemplates] = useState<TemplateData[]>([]);
   const [documents, setDocuments] = useState<Document[]>([]);
   const [selectedDocIds, setSelectedDocIds] = useState<string[]>([]);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [pendingData, setPendingData] = useState<SendEmailFormData | null>(null);
+  const [sendingFrequency, setSendingFrequency] =
+    useState<SendingFrequency | null>(null);
 
   const {
     register,
@@ -75,21 +96,33 @@ export function SendEmailDialog({
       subject: "",
       body: "",
       attachmentIds: [],
+      ...computeDefaultPeriode(),
     },
   });
 
   const recipientsStr = watch("recipients");
+  const trimestre = watch("trimestre");
+  const mois = watch("mois");
+  const annee = watch("annee");
+
+  // A monthly dossier gets a month picker; a quarterly one gets a trimester
+  // picker. Unknown/no dossier falls back to the original trimester-only
+  // behavior.
+  const showMois = sendingFrequency === "MONTHLY";
+  const showTrimestre = !showMois;
 
   // Load templates and documents
   useEffect(() => {
     async function loadData() {
       try {
-        const [templatesData, docsData] = await Promise.all([
+        const [templatesData, docsData, frequency] = await Promise.all([
           getTemplates(),
           dossierId ? getDocuments(dossierId) : Promise.resolve([]),
+          dossierId ? getDossierSendingFrequency(dossierId) : Promise.resolve(null),
         ]);
         setTemplates(templatesData);
         setDocuments(docsData);
+        setSendingFrequency(frequency);
 
         // Pre-select most recent document
         if (docsData.length > 0) {
@@ -116,6 +149,7 @@ export function SendEmailDialog({
         subject: resendEvent.subject,
         body: resendEvent.body,
         attachmentIds: [],
+        ...computeDefaultPeriode(),
       });
     } else if (!open) {
       reset({
@@ -126,6 +160,7 @@ export function SendEmailDialog({
         subject: "",
         body: "",
         attachmentIds: [],
+        ...computeDefaultPeriode(),
       });
       setSelectedDocIds([]);
     }
@@ -147,11 +182,18 @@ export function SendEmailDialog({
     );
   };
 
-  async function onSubmit(data: SendEmailFormData) {
+  function onSubmit(data: SendEmailFormData) {
+    setPendingData(data);
+    setConfirmOpen(true);
+  }
+
+  async function handleConfirmedSend() {
+    if (!pendingData) return;
+    setConfirmOpen(false);
     setIsLoading(true);
     try {
       const result = await sendEmailAction({
-        ...data,
+        ...pendingData,
         dossierId,
         attachmentIds: selectedDocIds,
       });
@@ -167,6 +209,7 @@ export function SendEmailDialog({
       toast.error("Erreur lors de l'envoi");
     } finally {
       setIsLoading(false);
+      setPendingData(null);
     }
   }
 
@@ -256,6 +299,19 @@ export function SendEmailDialog({
             )}
           </div>
 
+          {/* Report period (trimester/month/year) */}
+          <PeriodePicker
+            showTrimestre={showTrimestre}
+            showMois={showMois}
+            trimestre={trimestre}
+            mois={mois}
+            annee={annee}
+            onTrimestreChange={(value) => setValue("trimestre", value)}
+            onMoisChange={(value) => setValue("mois", value)}
+            onAnneeChange={(value) => setValue("annee", value)}
+            disabled={isLoading}
+          />
+
           {/* Body */}
           <div className="space-y-2">
             <Label htmlFor="body">
@@ -324,6 +380,27 @@ export function SendEmailDialog({
           </DialogFooter>
         </form>
       </DialogContent>
+
+      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmer l&apos;envoi</AlertDialogTitle>
+            <AlertDialogDescription>
+              Vous êtes sur le point d&apos;envoyer ce rapport pour{" "}
+              <strong>
+                {formatPeriodeLabel(showTrimestre, showMois, trimestre, mois, annee)}
+              </strong>
+              . Vérifiez que cette période est correcte avant de confirmer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Annuler</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmedSend}>
+              Confirmer l&apos;envoi
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
   );
 }
