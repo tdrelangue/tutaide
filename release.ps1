@@ -1,6 +1,11 @@
 param(
     [string]$Version = "",
     [string]$Notes   = "",
+    # Base URL written into latest.json for the installer download.
+    # Switch to https://www.origai.fr/releases/tutellia/ once www.origai.fr
+    # serves the site over HTTPS (installs download from whatever URL is here).
+    [string]$BaseUrl = "https://orig-audit.netlify.app/releases/tutellia/",
+    [string]$WebsiteDir = "F:\OrigAI\Orig_website",
     [switch]$Push
 )
 
@@ -9,7 +14,6 @@ $ErrorActionPreference = "Stop"
 $WebDir      = $PSScriptRoot
 $TauriDir    = Join-Path $WebDir "src-tauri"
 $KeyPath     = "C:\Users\tdrelangue\.tauri\tutellia.key"
-$WebsiteDir  = "C:\Users\tdrelangue\OneDrive\programmes\OrigAI\Orig_website"
 $ReleasesDir = Join-Path $WebsiteDir "releases\tutellia"
 $ConfigFile  = Join-Path $WebDir ".release-config.ps1"
 $UTF8NoBOM   = New-Object System.Text.UTF8Encoding $false
@@ -115,7 +119,8 @@ Write-Host "Copied installer to website."
 
 $latestJsonPath = Join-Path $ReleasesDir "latest.json"
 $pubDate        = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
-$downloadUrl    = "https://orig-audit.netlify.app/releases/tutellia/" + $exeName
+if (-not $BaseUrl.EndsWith("/")) { $BaseUrl += "/" }
+$downloadUrl    = $BaseUrl + $exeName
 $releaseNotes   = if ($Notes) { $Notes } else { "Tutellia v" + $currentVersion }
 
 $latestObj = [ordered]@{
@@ -136,6 +141,11 @@ if ($Push) {
     Write-Host ""
     Write-Host "Pushing website..."
     Set-Location $WebsiteDir
+    $branch = (git branch --show-current).Trim()
+    if ($branch -ne "main") {
+        Write-Error ("Website repo is on branch '" + $branch + "', not main: Netlify only deploys main. Run 'git switch main' in " + $WebsiteDir + " and retry.")
+        exit 1
+    }
     git add "releases/tutellia/latest.json"
     git add ("releases/tutellia/" + $exeName)
     git commit -m ("chore(releases): Tutellia v" + $currentVersion)
