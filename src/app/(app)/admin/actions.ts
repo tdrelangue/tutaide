@@ -25,6 +25,7 @@ import {
   listAllNotifications,
   type AdminNotificationItem,
 } from "@/lib/notifications";
+import { inspectUserImap, type ImapInspection } from "@/lib/imap-inspect";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -679,5 +680,18 @@ export async function deleteNotificationAction(id: string): Promise<{ success: b
   } catch (error) {
     console.error("Error deleting notification:", error);
     return { success: false, error: "Erreur lors de la suppression" };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Mailbox folder inspector (support): folder names only, see lib/imap-inspect.ts
+// ---------------------------------------------------------------------------
+
+export async function inspectUserImapAction(userId: string, hostOverride?: string): Promise<ImapInspection> {
+  try {
+    await requireAdmin();
+    return await inspectUserImap(userId, hostOverride);
+  } catch {
+    return { ok: false, host: null, error: "Réservé aux administrateurs." };
   }
 }

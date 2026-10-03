@@ -3,6 +3,7 @@ import path from "path";
 import nodemailer from "nodemailer";
 import { ImapFlow } from "imapflow";
 import MailComposer from "nodemailer/lib/mail-composer";
+import { imapHostFor } from "./imap-host";
 
 interface SmtpSettings {
   host: string;
@@ -64,17 +65,6 @@ function resolvePlaceholders(
     .replace(/\{\{annee\}\}/g, annee)
     .replace(/\{\{trimestre\}\}/g, tri)
     .replace(/\{\{suffix\}\}/g, suffix);
-}
-
-/** Guess IMAP host from email domain. */
-function guessImapHost(email: string): string {
-  const domain = email.split("@").pop()?.toLowerCase() ?? "";
-  if (domain.includes("orange")) return "imap.orange.fr";
-  if (domain.includes("gmail")) return "imap.gmail.com";
-  if (["outlook", "hotmail", "live", "office365"].some((k) => domain.includes(k)))
-    return "outlook.office365.com";
-  if (domain.includes("yahoo")) return "imap.mail.yahoo.com";
-  return `imap.${domain}`;
 }
 
 /** Save raw email to an IMAP folder. */
@@ -175,7 +165,7 @@ export async function sendEmail(
         });
       });
 
-      const imapHost = guessImapHost(payload.smtp.fromEmail);
+      const imapHost = imapHostFor(payload.smtp.host, payload.smtp.fromEmail);
 
       // Save to module folder (configurable, defaults to INBOX/APA or INBOX/ASH)
       if (payload.moduleType) {

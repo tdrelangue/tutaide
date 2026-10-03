@@ -19,6 +19,7 @@ import {
   KeyRound,
   Send,
   Bell,
+  FolderTree,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -49,6 +50,7 @@ import {
 import Link from "next/link";
 import { CreateUserDialog } from "./create-user-dialog";
 import { EditUserDialog } from "./edit-user-dialog";
+import { ImapFoldersDialog } from "./imap-folders-dialog";
 import {
   archiveUser,
   unarchiveUser,
@@ -67,6 +69,7 @@ export function UsersPageClient({ initialUsers }: UsersPageClientProps) {
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "archived">("all");
   const [createOpen, setCreateOpen] = useState(false);
   const [editUser, setEditUser] = useState<AdminUserData | null>(null);
+  const [imapUser, setImapUser] = useState<AdminUserData | null>(null);
 
   const filteredUsers = initialUsers.filter((user) => {
     const matchesSearch =
@@ -207,6 +210,7 @@ export function UsersPageClient({ initialUsers }: UsersPageClientProps) {
                 onArchive={() => handleArchive(user.id)}
                 onUnarchive={() => handleUnarchive(user.id)}
                 onImpersonate={() => handleImpersonate(user.id)}
+                onInspectImap={() => setImapUser(user)}
               />
             ))}
           </div>
@@ -219,6 +223,14 @@ export function UsersPageClient({ initialUsers }: UsersPageClientProps) {
         onOpenChange={setCreateOpen}
         onComplete={() => router.refresh()}
       />
+      {imapUser && (
+        <ImapFoldersDialog
+          userId={imapUser.id}
+          userLabel={imapUser.name || imapUser.email}
+          open={!!imapUser}
+          onOpenChange={(open) => !open && setImapUser(null)}
+        />
+      )}
       {editUser && (
         <EditUserDialog
           open={!!editUser}
@@ -240,12 +252,14 @@ function UserRow({
   onArchive,
   onUnarchive,
   onImpersonate,
+  onInspectImap,
 }: {
   user: AdminUserData;
   onEdit: () => void;
   onArchive: () => void;
   onUnarchive: () => void;
   onImpersonate: () => void;
+  onInspectImap: () => void;
 }) {
   const isArchived = !!user.archivedAt;
 
@@ -324,6 +338,17 @@ function UserRow({
               </Button>
             </TooltipTrigger>
             <TooltipContent>Visualiser le compte</TooltipContent>
+          </Tooltip>
+        )}
+
+        {!isArchived && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="ghost" size="icon" onClick={onInspectImap} aria-label="Dossiers de la messagerie">
+                <FolderTree className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Dossiers de la messagerie (IMAP)</TooltipContent>
           </Tooltip>
         )}
 
