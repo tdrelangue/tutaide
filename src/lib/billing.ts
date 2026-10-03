@@ -25,14 +25,32 @@ export function formatYearlyPrice(amountCents: number): string {
 }
 
 const REQUEST_TIMEOUT_MS = 8000;
-const ACTIVE_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
-const ACCESS_STATUSES = new Set(["active", "trialing", "past_due"]);
+const PAID_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
+const OTHER_CACHE_TTL_MS = 5 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** Days a paying account keeps access after a failed charge, or after its first charge date without a card. */
+export const PAYMENT_GRACE_DAYS = 30;
+
+const PAID_STATUSES = new Set(["active", "trialing"]);
+/** Stripe retrying the card (past_due) or retries exhausted with the invoice open (unpaid). */
+const PAYMENT_ISSUE_STATUSES = new Set(["past_due", "unpaid"]);
 
 export type SubscriptionStatus = {
   /** Stripe subscription status, "none" if never subscribed, "unknown" if unreachable. */
   status: string;
+  /** Last renewal date; for past_due/unpaid, the charge that failed. */
+  currentPeriodStart: string | null;
   currentPeriodEnd: string | null;
   cancelAtPeriodEnd: boolean;
+};
+
+/** Shown in the bell and the bottom-right card while an account is in its 30-day grace. */
+export type PaymentReminder = {
+  reason: "payment_failed" | "no_card";
+  /** ISO date when access stops. */
+  deadline: string;
+  daysLeft: number;
 };
 
 export type BillingState = SubscriptionStatus & {
@@ -46,13 +64,20 @@ export type BillingState = SubscriptionStatus & {
    * in the future: the account keeps full access until then, even without a card.
    */
   graceUntil: string | null;
+  /** Set during the 30-day grace (still has access) and after it (access stopped). */
+  reminder: PaymentReminder | null;
 };
 
-const UNKNOWN: SubscriptionStatus = { status: "unknown", currentPeriodEnd: null, cancelAtPeriodEnd: false };
+const UNKNOWN: SubscriptionStatus = {
+  status: "unknown",
+  currentPeriodStart: null,
+  currentPeriodEnd: null,
+  cancelAtPeriodEnd: false,
+};
 
 // Single-user desktop process: a tiny in-memory cache avoids a network
-// round-trip on every page while a subscription is known to be active.
-const activeCache = new Map<string, { value: SubscriptionStatus; expiresAt: number }>();
+// round-trip on every page.
+const statusCache = new Map<string, { value: SubscriptionStatus; expiresAt: number }>();
 
 function isSubscriptionStatus(value: unknown): value is SubscriptionStatus {
   if (typeof value !== "object" || value === null) return false;
@@ -61,8 +86,13 @@ function isSubscriptionStatus(value: unknown): value is SubscriptionStatus {
     (v.currentPeriodEnd === null || typeof v.currentPeriodEnd === "string");
 }
 
+/** A live subscription: paid, in its deferred-start trial, or with a payment problem. */
 export function grantsAccess(status: string): boolean {
-  return ACCESS_STATUSES.has(status);
+  return PAID_STATUSES.has(status) || PAYMENT_ISSUE_STATUSES.has(status);
+}
+
+export function hasPaymentIssue(status: string): boolean {
+  return PAYMENT_ISSUE_STATUSES.has(status);
 }
 
 async function fetchStatus(userId: string, sessionId?: string): Promise<SubscriptionStatus> {
@@ -76,7 +106,11 @@ async function fetchStatus(userId: string, sessionId?: string): Promise<Subscrip
     if (!res.ok) return UNKNOWN;
     const body: unknown = await res.json();
     if (!isSubscriptionStatus(body)) return UNKNOWN;
-    return { ...body, cancelAtPeriodEnd: Boolean(body.cancelAtPeriodEnd) };
+    return {
+      ...body,
+      currentPeriodStart: typeof body.currentPeriodStart === "string" ? body.currentPeriodStart : null,
+      cancelAtPeriodEnd: Boolean(body.cancelAtPeriodEnd),
+    };
   } catch {
     return UNKNOWN;
   }
@@ -86,54 +120,110 @@ export async function getSubscriptionStatus(
   userId: string,
   options: { sessionId?: string; fresh?: boolean } = {}
 ): Promise<SubscriptionStatus> {
-  const cached = activeCache.get(userId);
+  const cached = statusCache.get(userId);
   if (!options.fresh && !options.sessionId && cached && cached.expiresAt > Date.now()) {
     return cached.value;
   }
   const value = await fetchStatus(userId, options.sessionId);
-  if (grantsAccess(value.status)) {
-    activeCache.set(userId, { value, expiresAt: Date.now() + ACTIVE_CACHE_TTL_MS });
+  if (value.status === "unknown") {
+    statusCache.delete(userId);
   } else {
-    activeCache.delete(userId);
+    const ttl = PAID_STATUSES.has(value.status) ? PAID_CACHE_TTL_MS : OTHER_CACHE_TTL_MS;
+    statusCache.set(userId, { value, expiresAt: Date.now() + ttl });
   }
   return value;
 }
 
+type BillingProfile = {
+  required: boolean;
+  priceLabel: string;
+  /** Admin-set first charge date (existing clients), ISO, past or future. */
+  startsAt: string | null;
+};
+
 /** Paying vs free (and the Entreprise price) are set by the admin in /admin/users or by self-signup. */
-async function getBillingProfile(
-  userId: string
-): Promise<{ required: boolean; priceLabel: string; graceUntil: string | null }> {
+async function getBillingProfile(userId: string): Promise<BillingProfile> {
   const user = await db.user.findUnique({
     where: { id: userId },
     select: { billingRequired: true, billingCustomAmountCents: true, billingStartsAt: true },
   });
   const custom = user?.billingCustomAmountCents ?? null;
-  const startsAt = user?.billingStartsAt ?? null;
   return {
     required: user?.billingRequired === true,
     priceLabel: custom === null ? BILLING_PRICE_LABEL : formatYearlyPrice(custom),
-    graceUntil: startsAt && startsAt.getTime() > Date.now() ? startsAt.toISOString() : null,
+    startsAt: user?.billingStartsAt?.toISOString() ?? null,
+  };
+}
+
+function isBeforeStart(profile: BillingProfile, now: number): boolean {
+  return profile.startsAt !== null && now < new Date(profile.startsAt).getTime();
+}
+
+/**
+ * The single access rule. Paying accounts keep access before their first charge
+ * date, while paid, and for 30 days after a failed charge (counted from the
+ * renewal) or after their first charge date without a card. "unknown" (offline,
+ * Vercel down) never locks anyone out of their dossiers.
+ */
+export function evaluateAccess(
+  profile: BillingProfile,
+  sub: SubscriptionStatus,
+  now: number
+): { hasAccess: boolean; reminder: PaymentReminder | null } {
+  if (!profile.required || isBeforeStart(profile, now)) return { hasAccess: true, reminder: null };
+  if (PAID_STATUSES.has(sub.status) || sub.status === "unknown") return { hasAccess: true, reminder: null };
+
+  let graceStart: number | null = null;
+  let reason: PaymentReminder["reason"] = "no_card";
+  if (PAYMENT_ISSUE_STATUSES.has(sub.status)) {
+    reason = "payment_failed";
+    graceStart = sub.currentPeriodStart ? new Date(sub.currentPeriodStart).getTime() : now;
+  } else if (profile.startsAt) {
+    graceStart = new Date(profile.startsAt).getTime();
+  }
+  if (graceStart === null) return { hasAccess: false, reminder: null };
+
+  const deadline = graceStart + PAYMENT_GRACE_DAYS * DAY_MS;
+  const daysLeft = Math.max(0, Math.ceil((deadline - now) / DAY_MS));
+  return {
+    hasAccess: now < deadline,
+    reminder: { reason, deadline: new Date(deadline).toISOString(), daysLeft },
   };
 }
 
 /** Cheap gate for every app page: free accounts never hit the network. */
 export async function isBlockedByPaywall(userId: string): Promise<boolean> {
   const profile = await getBillingProfile(userId);
-  // Free accounts, and paying accounts before their admin-set first charge date.
-  if (!profile.required || profile.graceUntil) return false;
-  const { status } = await getSubscriptionStatus(userId);
-  return !grantsAccess(status) && status !== "unknown";
+  if (!profile.required || isBeforeStart(profile, Date.now())) return false;
+  const sub = await getSubscriptionStatus(userId);
+  return !evaluateAccess(profile, sub, Date.now()).hasAccess;
+}
+
+/** The reminder to show while the account is in its 30-day grace, else null. */
+export async function getPaymentReminder(userId: string): Promise<PaymentReminder | null> {
+  const profile = await getBillingProfile(userId);
+  if (!profile.required || isBeforeStart(profile, Date.now())) return null;
+  const sub = await getSubscriptionStatus(userId);
+  const { hasAccess, reminder } = evaluateAccess(profile, sub, Date.now());
+  return hasAccess ? reminder : null;
 }
 
 export async function getBillingState(
   userId: string,
   options: { sessionId?: string; fresh?: boolean } = {}
 ): Promise<BillingState> {
-  const { required, priceLabel, graceUntil } = await getBillingProfile(userId);
+  const profile = await getBillingProfile(userId);
   const sub = await getSubscriptionStatus(userId, options);
-  // "unknown" (offline, Vercel down) never locks anyone out of their dossiers.
-  const hasAccess = !required || graceUntil !== null || grantsAccess(sub.status) || sub.status === "unknown";
-  return { ...sub, required, hasAccess, priceLabel, graceUntil };
+  const now = Date.now();
+  const { hasAccess, reminder } = evaluateAccess(profile, sub, now);
+  return {
+    ...sub,
+    required: profile.required,
+    hasAccess,
+    priceLabel: profile.priceLabel,
+    graceUntil: isBeforeStart(profile, now) ? profile.startsAt : null,
+    reminder,
+  };
 }
 
 /** Where Stripe sends the user back: this server (desktop localhost, or the Vercel web app). */

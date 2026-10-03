@@ -14,11 +14,17 @@ const USER_ID_RE = /^[a-z0-9]{20,40}$/;
 // Desktop app's local server (prod 3456, dev 3000) or the Vercel web app.
 const RETURN_URL_RE = /^(http:\/\/(localhost|127\.0\.0\.1):(3000|3456)|https:\/\/tutaide\.vercel\.app)\//;
 
-// Statuses that keep access open. past_due = Stripe is still retrying the card.
+// Live subscriptions. past_due = Stripe is retrying the card; unpaid = retries
+// exhausted, invoice still open. The desktop app grants 30 days of grace from
+// the failed renewal (lib/billing.ts); payment is fixed through the customer
+// portal, never by opening a second subscription.
 const ACCESS_STATUSES = new Set<string>(["active", "trialing", "past_due"]);
+const LIVE_STATUSES = new Set<string>([...ACCESS_STATUSES, "unpaid"]);
 
 export type BillingStatusPayload = {
   status: string;
+  /** Start of the current period = date of the last renewal (failed one, for past_due/unpaid). */
+  currentPeriodStart: string | null;
   currentPeriodEnd: string | null;
   cancelAtPeriodEnd: boolean;
 };
@@ -41,16 +47,21 @@ export function isValidReturnUrl(value: unknown): value is string {
   return typeof value === "string" && RETURN_URL_RE.test(value);
 }
 
-/** Newer Stripe API versions moved current_period_end onto subscription items. */
-function periodEnd(sub: Stripe.Subscription): string | null {
-  const legacy = (sub as unknown as { current_period_end?: number }).current_period_end; // pre-2025 API shape
-  const seconds = legacy ?? sub.items.data[0]?.current_period_end;
+/** Newer Stripe API versions moved current_period_* onto subscription items. */
+function periodBound(sub: Stripe.Subscription, bound: "current_period_start" | "current_period_end"): string | null {
+  const legacy = (sub as unknown as Record<string, number | undefined>)[bound]; // pre-2025 API shape
+  const seconds = legacy ?? sub.items.data[0]?.[bound];
   return seconds ? new Date(seconds * 1000).toISOString() : null;
 }
 
 export function toBillingStatus(sub: Stripe.Subscription | null): BillingStatusPayload {
-  if (!sub) return { status: "none", currentPeriodEnd: null, cancelAtPeriodEnd: false };
-  return { status: sub.status, currentPeriodEnd: periodEnd(sub), cancelAtPeriodEnd: sub.cancel_at_period_end };
+  if (!sub) return { status: "none", currentPeriodStart: null, currentPeriodEnd: null, cancelAtPeriodEnd: false };
+  return {
+    status: sub.status,
+    currentPeriodStart: periodBound(sub, "current_period_start"),
+    currentPeriodEnd: periodBound(sub, "current_period_end"),
+    cancelAtPeriodEnd: sub.cancel_at_period_end,
+  };
 }
 
 /** The user's most relevant subscription: one granting access first, else the latest. */
@@ -60,7 +71,7 @@ export async function findSubscription(stripe: Stripe, userId: string): Promise<
     limit: 10,
   });
   const subs = [...result.data].sort((a, b) => b.created - a.created);
-  return subs.find((s) => ACCESS_STATUSES.has(s.status)) ?? subs[0] ?? null;
+  return subs.find((s) => LIVE_STATUSES.has(s.status)) ?? subs[0] ?? null;
 }
 
 /** Confirms a just-finished checkout without waiting for Stripe's search index (~1 min lag). */
@@ -135,7 +146,7 @@ export async function createCheckoutSession(
 
   // Never let a double click or a stale page charge someone twice.
   const existing = await findSubscription(stripe, userId);
-  if (existing && ACCESS_STATUSES.has(existing.status)) return { error: "already_subscribed" };
+  if (existing && LIVE_STATUSES.has(existing.status)) return { error: "already_subscribed" };
 
   // Reuse the Stripe customer if this email paid before (re-subscription).
   const customers = await stripe.customers.list({ email: user.email, limit: 1 });

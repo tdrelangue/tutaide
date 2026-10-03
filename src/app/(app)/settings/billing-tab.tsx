@@ -5,6 +5,7 @@ import {
   BILLING_PORTAL_URL,
   getBillingState,
   grantsAccess,
+  hasPaymentIssue,
   type BillingState,
 } from "@/lib/billing";
 import { buttonVariants } from "@/components/ui/button";
@@ -26,10 +27,10 @@ function describeStatus(billing: BillingState): { title: string; detail: string 
       detail: "Le service de paiement ne répond pas. Vérifiez votre connexion internet, puis rouvrez cet onglet.",
     };
   }
-  if (billing.status === "past_due") {
+  if (hasPaymentIssue(billing.status)) {
     return {
-      title: "Paiement en attente",
-      detail: "Le dernier prélèvement n'a pas abouti. Stripe va réessayer automatiquement ; vous pouvez aussi mettre à jour votre carte ci-dessous.",
+      title: "Votre moyen de paiement n'est plus valable",
+      detail: `Le dernier prélèvement n'a pas abouti (carte expirée ou remplacée ?). Mettez à jour votre carte avec le bouton ci-dessous : le prélèvement sera retenté, et vous pouvez aussi régler la facture en attente depuis la même page.${graceSentence(billing)}`,
     };
   }
   if (billing.status === "trialing") {
@@ -52,7 +53,20 @@ function describeStatus(billing: BillingState): { title: string; detail: string 
       detail: `Votre abonnement en cours reste valable jusqu'au ${until} : rien ne change d'ici là. Il suffit d'enregistrer votre carte, aucun montant n'est débité aujourd'hui (0 €). Le premier prélèvement de ${billing.priceLabel.replace(" / an", "")} aura lieu le ${until}, puis chaque année, avec une facture envoyée par email.`,
     };
   }
+  if (billing.reminder?.reason === "no_card") {
+    return {
+      title: "Aucune carte enregistrée",
+      detail: `Votre abonnement est arrivé à échéance et aucune carte n'est enregistrée. Enregistrez-la pour régler votre abonnement de ${billing.priceLabel.replace(" / an", "")}.${graceSentence(billing)}`,
+    };
+  }
   return { title: "Aucun abonnement actif", detail: "Mettez en place le paiement pour continuer à utiliser Tutellia." };
+}
+
+/** " Il vous reste N jours (jusqu'au …)." while in the 30-day payment grace. */
+function graceSentence(billing: BillingState): string {
+  if (!billing.reminder || !billing.hasAccess) return "";
+  const days = `${billing.reminder.daysLeft} jour${billing.reminder.daysLeft > 1 ? "s" : ""}`;
+  return ` Il vous reste ${days}, jusqu'au ${formatDate(billing.reminder.deadline)}, avant la suspension de l'accès.`;
 }
 
 export async function BillingTab({
@@ -68,7 +82,13 @@ export async function BillingTab({
   const billing = await getBillingState(userId, { sessionId, fresh });
   const { title, detail } = describeStatus(billing);
   const hasSubscription = grantsAccess(billing.status);
+  const paymentIssue = hasPaymentIssue(billing.status);
   const canSubscribe = billing.required && !hasSubscription && billing.status !== "unknown";
+  const checkoutLabel = billing.graceUntil
+    ? "Enregistrer ma carte (0 € aujourd'hui)"
+    : billing.reminder?.reason === "no_card"
+      ? "Enregistrer ma carte et régler l'abonnement"
+      : "Mettre en place le paiement automatique";
 
   return (
     <section aria-labelledby="billing-heading" className="max-w-2xl space-y-6">
@@ -98,16 +118,13 @@ export async function BillingTab({
       </div>
 
       {canSubscribe && (
-        <CheckoutButton
-          from="settings"
-          label={billing.graceUntil ? "Enregistrer ma carte (0 € aujourd'hui)" : "Mettre en place le paiement automatique"}
-        />
+        <CheckoutButton from="settings" label={checkoutLabel} />
       )}
 
       {hasSubscription && BILLING_PORTAL_URL && (
         <div className="space-y-2">
-          <a href={BILLING_PORTAL_URL} className={buttonVariants({ variant: "outline" })}>
-            Gérer mon paiement
+          <a href={BILLING_PORTAL_URL} className={buttonVariants({ variant: paymentIssue ? "default" : "outline" })}>
+            {paymentIssue ? "Mettre à jour ma carte" : "Gérer mon paiement"}
           </a>
           <p className="text-sm text-muted-foreground">
             Changer de carte, télécharger vos factures ou résilier. Stripe vous enverra un code par email

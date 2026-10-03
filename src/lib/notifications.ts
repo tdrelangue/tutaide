@@ -1,4 +1,7 @@
+import { format } from "date-fns";
+import { fr } from "date-fns/locale";
 import { db } from "./db";
+import type { PaymentReminder } from "./billing";
 
 /**
  * In-app messages written by the software admin, shown under the bell in the
@@ -38,8 +41,14 @@ export async function getNotificationsForUser(
 
   const rows = await db.appNotification.findMany({
     where: {
-      createdAt: { gte: user.createdAt },
-      ...(user.billingRequired ? {} : { audience: "ALL" as const }),
+      OR: [
+        { targetUserId: userId },
+        {
+          targetUserId: null,
+          createdAt: { gte: user.createdAt },
+          ...(user.billingRequired ? {} : { audience: "ALL" as const }),
+        },
+      ],
     },
     orderBy: { createdAt: "desc" },
     take: MAX_SHOWN,
@@ -74,6 +83,7 @@ export async function markNotificationsRead(userId: string, ids: string[]): Prom
 
 export async function listAllNotifications(): Promise<AdminNotificationItem[]> {
   const rows = await db.appNotification.findMany({
+    where: { targetUserId: null },
     orderBy: { createdAt: "desc" },
     select: {
       id: true,
@@ -108,4 +118,39 @@ export async function createNotification(data: {
 
 export async function deleteNotification(id: string): Promise<void> {
   await db.appNotification.deleteMany({ where: { id } });
+}
+
+const BILLING_LINK = "/settings?tab=abonnement";
+
+function reminderText(reminder: PaymentReminder): { title: string; body: string } {
+  const deadline = format(new Date(reminder.deadline), "d MMMM yyyy", { locale: fr });
+  const left = `Il vous reste ${reminder.daysLeft} jour${reminder.daysLeft > 1 ? "s" : ""}, jusqu'au ${deadline}.`;
+  const after = "Passé ce délai, l'accès à Tutellia sera suspendu jusqu'au règlement.";
+  if (reminder.reason === "payment_failed") {
+    return {
+      title: "Votre moyen de paiement n'est plus valable",
+      body: `Le dernier prélèvement de votre abonnement n'a pas abouti (carte expirée ou remplacée ?). Mettez à jour votre carte dans Paramètres › Abonnement. ${left} ${after}`,
+    };
+  }
+  return {
+    title: "Enregistrez votre carte bancaire",
+    body: `Votre abonnement est arrivé à échéance et aucune carte n'est enregistrée. Enregistrez-la dans Paramètres › Abonnement. ${left} ${after}`,
+  };
+}
+
+/**
+ * During the 30-day payment grace, adds one personal reminder per day to the
+ * user's bell (at most one per calendar day, however often the app is opened).
+ */
+export async function ensureDailyPaymentReminder(userId: string, reminder: PaymentReminder): Promise<void> {
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  const existing = await db.appNotification.findFirst({
+    where: { targetUserId: userId, createdAt: { gte: startOfToday } },
+    select: { id: true },
+  });
+  if (existing) return;
+  await db.appNotification.create({
+    data: { ...reminderText(reminder), linkPath: BILLING_LINK, audience: "ALL", targetUserId: userId },
+  });
 }

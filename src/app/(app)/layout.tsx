@@ -6,7 +6,9 @@ import { ImpersonationBanner } from "@/components/impersonation-banner";
 import { UpdaterStartupCheck } from "@/components/updater";
 import { getAllModuleConfigs } from "@/app/(app)/settings/actions";
 import { migrateLegacyLinkedDossiers } from "@/lib/legacy-migrations";
-import { isBlockedByPaywall } from "@/lib/billing";
+import { getPaymentReminder, isBlockedByPaywall } from "@/lib/billing";
+import { ensureDailyPaymentReminder } from "@/lib/notifications";
+import { PaymentReminderCard } from "@/components/payment-reminder-card";
 
 export default async function AppLayout({
   children,
@@ -25,6 +27,13 @@ export default async function AppLayout({
     redirect("/abonnement");
   }
 
+  // 30-day payment grace (failed charge, or first charge date passed without a
+  // card): still full access, but a daily bell reminder and a card on screen.
+  const paymentReminder = await getPaymentReminder(session.user.id);
+  if (paymentReminder) {
+    await ensureDailyPaymentReminder(session.user.id, paymentReminder).catch(() => undefined);
+  }
+
   const [impersonation, moduleConfigs] = await Promise.all([
     getImpersonationState(),
     getAllModuleConfigs(),
@@ -41,6 +50,7 @@ export default async function AppLayout({
   return (
     <div className="flex min-h-screen flex-col">
       <UpdaterStartupCheck />
+      {paymentReminder && <PaymentReminderCard reminder={paymentReminder} />}
       {impersonation && (
         <ImpersonationBanner
           targetEmail={impersonation.targetEmail}

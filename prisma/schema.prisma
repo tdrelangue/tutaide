@@ -29,7 +29,8 @@ model User {
   /// (Stripe trial_end). After it without a card: blocked like any paying account.
   billingStartsAt          DateTime?
   notificationReads        NotificationRead[]
-  notificationsCreated     AppNotification[]
+  notificationsCreated     AppNotification[]    @relation("NotificationAuthor")
+  notificationsTargeted    AppNotification[]    @relation("NotificationTarget")
   documents                Document[]
   dossiers                 Dossier[]
   batches                  EmailBatch[]
@@ -229,9 +230,14 @@ model AppNotification {
   audience    NotificationAudience @default(ALL)
   createdAt   DateTime             @default(now())
   createdById String?
-  createdBy   User?                @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdBy   User?                @relation("NotificationAuthor", fields: [createdById], references: [id], onDelete: SetNull)
   reads       NotificationRead[]
 
+  /// Set for messages addressed to one user (automatic payment reminders); null = broadcast.
+  targetUserId String?
+  targetUser   User?   @relation("NotificationTarget", fields: [targetUserId], references: [id], onDelete: Cascade)
+
+  @@index([targetUserId])
   @@index([createdAt])
 }
 
