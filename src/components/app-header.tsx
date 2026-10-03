@@ -12,6 +12,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { NotificationBell } from "@/components/notification-bell";
 
 interface AppHeaderProps {
   user: {
@@ -37,7 +38,8 @@ export function AppHeader({ user }: AppHeaderProps) {
         <h1 className="sr-only">Tut&apos;aide</h1>
       </div>
 
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-2">
+        <NotificationBell />
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button

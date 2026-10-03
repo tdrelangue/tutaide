@@ -18,6 +18,13 @@ import {
   type ManifestCheck,
 } from "@/lib/update-endpoints";
 import { finishPaymentTest, startPaymentTest, type PaymentTestOutcome } from "@/lib/billing";
+import {
+  createNotification,
+  deleteNotification,
+  isValidLinkPath,
+  listAllNotifications,
+  type AdminNotificationItem,
+} from "@/lib/notifications";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -623,5 +630,54 @@ export async function finishPaymentTestAction(sessionId: string): Promise<Paymen
     return await finishPaymentTest(adminId, sessionId);
   } catch {
     return { ok: false, error: "Réservé aux administrateurs." };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Notifications (bell in the app header). Admin writes, everyone reads.
+// ---------------------------------------------------------------------------
+
+const notificationSchema = z.object({
+  title: z.string().trim().min(1, "Le titre est requis").max(120, "Titre trop long (120 caractères max)"),
+  body: z.string().trim().min(1, "Le message est requis").max(2000, "Message trop long (2000 caractères max)"),
+  linkPath: z.string().nullable(),
+  audience: z.enum(["ALL", "PAYING"]),
+});
+
+export async function getAdminNotifications(): Promise<AdminNotificationItem[]> {
+  await requireAdmin();
+  return listAllNotifications();
+}
+
+export async function createNotificationAction(data: {
+  title: string;
+  body: string;
+  linkPath: string | null;
+  audience: "ALL" | "PAYING";
+}): Promise<{ success: boolean; error?: string }> {
+  try {
+    const adminId = await requireAdmin();
+    const parsed = notificationSchema.safeParse(data);
+    if (!parsed.success) return { success: false, error: parsed.error.issues[0]?.message ?? "Données invalides" };
+    const linkPath = parsed.data.linkPath || null;
+    if (linkPath !== null && !isValidLinkPath(linkPath)) return { success: false, error: "Lien invalide" };
+    await createNotification({ ...parsed.data, linkPath, createdById: adminId });
+    revalidatePath("/admin/notifications");
+    return { success: true };
+  } catch (error) {
+    console.error("Error creating notification:", error);
+    return { success: false, error: "Erreur lors de la publication" };
+  }
+}
+
+export async function deleteNotificationAction(id: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    await requireAdmin();
+    await deleteNotification(id);
+    revalidatePath("/admin/notifications");
+    return { success: true };
+  } catch (error) {
+    console.error("Error deleting notification:", error);
+    return { success: false, error: "Erreur lors de la suppression" };
   }
 }

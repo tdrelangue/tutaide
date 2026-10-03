@@ -18,6 +18,7 @@ import {
   FileText,
   KeyRound,
   Send,
+  Bell,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -141,6 +142,12 @@ export function UsersPageClient({ initialUsers }: UsersPageClientProps) {
               <Link href="/admin/system-config">
                 <KeyRound className="h-4 w-4 mr-2" />
                 Configuration système
+              </Link>
+            </Button>
+            <Button variant="outline" asChild>
+              <Link href="/admin/notifications">
+                <Bell className="h-4 w-4 mr-2" />
+                Notifications
               </Link>
             </Button>
             <Button variant="outline" asChild>
