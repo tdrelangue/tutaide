@@ -41,6 +41,11 @@ export type BillingState = SubscriptionStatus & {
   hasAccess: boolean;
   /** Individual price, or the admin-set Entreprise price for this account. */
   priceLabel: string;
+  /**
+   * Admin-set date of the first charge (existing clients), ISO, only while it is
+   * in the future: the account keeps full access until then, even without a card.
+   */
+  graceUntil: string | null;
 };
 
 const UNKNOWN: SubscriptionStatus = { status: "unknown", currentPeriodEnd: null, cancelAtPeriodEnd: false };
@@ -95,21 +100,27 @@ export async function getSubscriptionStatus(
 }
 
 /** Paying vs free (and the Entreprise price) are set by the admin in /admin/users or by self-signup. */
-async function getBillingProfile(userId: string): Promise<{ required: boolean; priceLabel: string }> {
+async function getBillingProfile(
+  userId: string
+): Promise<{ required: boolean; priceLabel: string; graceUntil: string | null }> {
   const user = await db.user.findUnique({
     where: { id: userId },
-    select: { billingRequired: true, billingCustomAmountCents: true },
+    select: { billingRequired: true, billingCustomAmountCents: true, billingStartsAt: true },
   });
   const custom = user?.billingCustomAmountCents ?? null;
+  const startsAt = user?.billingStartsAt ?? null;
   return {
     required: user?.billingRequired === true,
     priceLabel: custom === null ? BILLING_PRICE_LABEL : formatYearlyPrice(custom),
+    graceUntil: startsAt && startsAt.getTime() > Date.now() ? startsAt.toISOString() : null,
   };
 }
 
 /** Cheap gate for every app page: free accounts never hit the network. */
 export async function isBlockedByPaywall(userId: string): Promise<boolean> {
-  if (!(await getBillingProfile(userId)).required) return false;
+  const profile = await getBillingProfile(userId);
+  // Free accounts, and paying accounts before their admin-set first charge date.
+  if (!profile.required || profile.graceUntil) return false;
   const { status } = await getSubscriptionStatus(userId);
   return !grantsAccess(status) && status !== "unknown";
 }
@@ -118,11 +129,11 @@ export async function getBillingState(
   userId: string,
   options: { sessionId?: string; fresh?: boolean } = {}
 ): Promise<BillingState> {
-  const { required, priceLabel } = await getBillingProfile(userId);
+  const { required, priceLabel, graceUntil } = await getBillingProfile(userId);
   const sub = await getSubscriptionStatus(userId, options);
   // "unknown" (offline, Vercel down) never locks anyone out of their dossiers.
-  const hasAccess = !required || grantsAccess(sub.status) || sub.status === "unknown";
-  return { ...sub, required, hasAccess, priceLabel };
+  const hasAccess = !required || graceUntil !== null || grantsAccess(sub.status) || sub.status === "unknown";
+  return { ...sub, required, hasAccess, priceLabel, graceUntil };
 }
 
 /** Where Stripe sends the user back: this server (desktop localhost, or the Vercel web app). */

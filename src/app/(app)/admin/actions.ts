@@ -30,6 +30,7 @@ export type AdminUserData = {
   role: "USER" | "ADMIN";
   billingRequired: boolean;
   billingCustomAmountCents: number | null;
+  billingStartsAt: Date | null;
   archivedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
@@ -82,6 +83,7 @@ export async function getUsers(): Promise<AdminUserData[]> {
       role: true,
       billingRequired: true,
       billingCustomAmountCents: true,
+      billingStartsAt: true,
       archivedAt: true,
       createdAt: true,
       updatedAt: true,
@@ -97,6 +99,26 @@ export async function getUsers(): Promise<AdminUserData[]> {
   return users;
 }
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * "YYYY-MM-DD" from the admin form -> Date (noon UTC). Must fit Stripe's trial
+ * limits: more than 48 h away (3 days keeps a margin for the client to register
+ * their card) and at most 2 years. undefined = unchanged, null/"" = cleared.
+ */
+function parseBillingStart(
+  value: string | null | undefined
+): { date: Date | null | undefined } | { error: string } {
+  if (value === undefined) return { date: undefined };
+  if (value === null || value === "") return { date: null };
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(value) ? new Date(`${value}T12:00:00Z`) : new Date(Number.NaN);
+  const ms = date.getTime() - Date.now();
+  if (Number.isNaN(ms)) return { error: "Date de premier prélèvement invalide." };
+  if (ms < 3 * DAY_MS) return { error: "La date de premier prélèvement doit être au moins 3 jours après aujourd'hui." };
+  if (ms > 730 * DAY_MS) return { error: "La date de premier prélèvement ne peut pas dépasser 2 ans." };
+  return { date };
+}
+
 /** Create a new user (admin only) */
 export async function createUser(data: {
   email: string;
@@ -105,10 +127,13 @@ export async function createUser(data: {
   role?: "USER" | "ADMIN";
   billingRequired?: boolean;
   billingCustomAmountCents?: number | null;
+  billingStartsAt?: string | null;
 }): Promise<{ success: boolean; id?: string; error?: string }> {
   try {
     await requireAdmin();
     const validated = createUserSchema.parse(data);
+    const start = parseBillingStart(data.billingRequired ? data.billingStartsAt : null);
+    if ("error" in start) return { success: false, error: start.error };
 
     const existing = await db.user.findUnique({
       where: { email: validated.email.toLowerCase() },
@@ -127,6 +152,7 @@ export async function createUser(data: {
         role: validated.role ?? "USER",
         billingRequired: validated.billingRequired,
         billingCustomAmountCents: validated.billingCustomAmountCents,
+        billingStartsAt: start.date ?? null,
       },
     });
 
@@ -150,6 +176,7 @@ export async function updateUser(
     role?: "USER" | "ADMIN";
     billingRequired?: boolean;
     billingCustomAmountCents?: number | null;
+    billingStartsAt?: string | null;
   }
 ): Promise<{ success: boolean; error?: string }> {
   try {
@@ -179,6 +206,9 @@ export async function updateUser(
     if (validated.billingCustomAmountCents !== undefined) {
       updateData.billingCustomAmountCents = validated.billingCustomAmountCents;
     }
+    const start = parseBillingStart(data.billingStartsAt);
+    if ("error" in start) return { success: false, error: start.error };
+    if (start.date !== undefined) updateData.billingStartsAt = start.date;
     if (validated.password && validated.password.length > 0) {
       updateData.passwordHash = await hash(validated.password, 12);
     }

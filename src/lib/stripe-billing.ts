@@ -98,6 +98,19 @@ export function withQuery(url: string, query: string): string {
   return `${url}${url.includes("?") ? "&" : "?"}${query}`;
 }
 
+// Stripe refuses a trial_end less than 48 h away; keep a margin.
+const MIN_TRIAL_MS = 49 * 60 * 60 * 1000;
+
+/**
+ * Existing clients: the admin sets the date of their first charge. Until then
+ * the subscription is a Stripe trial (card saved, 0 € today); Stripe charges
+ * automatically on that date. Too close or past: no trial, charge now.
+ */
+function deferredStart(billingStartsAt: Date | null): Stripe.Checkout.SessionCreateParams.SubscriptionData {
+  if (!billingStartsAt || billingStartsAt.getTime() - Date.now() < MIN_TRIAL_MS) return {};
+  return { trial_end: Math.floor(billingStartsAt.getTime() / 1000) };
+}
+
 export type CheckoutResult =
   | { url: string }
   | { error: "not_found" | "not_billable" | "already_subscribed" };
@@ -109,7 +122,13 @@ export async function createCheckoutSession(
 ): Promise<CheckoutResult> {
   const user = await db.user.findUnique({
     where: { id: userId },
-    select: { email: true, archivedAt: true, billingRequired: true, billingCustomAmountCents: true },
+    select: {
+      email: true,
+      archivedAt: true,
+      billingRequired: true,
+      billingCustomAmountCents: true,
+      billingStartsAt: true,
+    },
   });
   if (!user || user.archivedAt !== null) return { error: "not_found" };
   if (!user.billingRequired) return { error: "not_billable" };
@@ -126,7 +145,9 @@ export async function createCheckoutSession(
     mode: "subscription",
     line_items: [lineItem(user.billingCustomAmountCents)],
     client_reference_id: userId,
-    subscription_data: { metadata: { tutelliaUserId: userId } },
+    subscription_data: { metadata: { tutelliaUserId: userId }, ...deferredStart(user.billingStartsAt) },
+    // Always take the card, even when nothing is charged today (deferred start).
+    payment_method_collection: "always",
     ...(customer ? { customer: customer.id } : { customer_email: user.email }),
     locale: "fr",
     allow_promotion_codes: true,

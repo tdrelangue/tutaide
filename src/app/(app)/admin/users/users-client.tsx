@@ -267,6 +267,9 @@ function UserRow({
                 : user.billingCustomAmountCents === null
                   ? "Payant · Individuel"
                   : `Payant · Entreprise ${centsToEuros(user.billingCustomAmountCents)} €/an`}
+              {user.billingRequired && user.billingStartsAt && new Date(user.billingStartsAt) > new Date()
+                ? ` · dès le ${new Date(user.billingStartsAt).toLocaleDateString("fr-FR")}`
+                : ""}
             </Badge>
             {isArchived ? (
               <Badge variant="secondary" className="text-xs bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">

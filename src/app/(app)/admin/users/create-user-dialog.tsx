@@ -35,6 +35,7 @@ const schema = z.object({
   billingRequired: z.boolean(),
   billingPlan: z.enum(["individual", "entreprise"]),
   customAmount: z.string(),
+  billingStartsAt: z.string(),
 }).refine((d) => !d.billingRequired || d.billingPlan === "individual" || eurosToCents(d.customAmount) !== null, {
   message: "Indiquez un prix annuel valide (ex. 1200)",
   path: ["customAmount"],
@@ -72,6 +73,7 @@ export function CreateUserDialog({
       billingRequired: false,
       billingPlan: "individual",
       customAmount: "",
+      billingStartsAt: "",
     },
   });
 
@@ -79,6 +81,7 @@ export function CreateUserDialog({
   const billingRequired = watch("billingRequired");
   const billingPlan = watch("billingPlan");
   const customAmount = watch("customAmount");
+  const billingStartsAt = watch("billingStartsAt");
 
   async function onSubmit(data: FormData) {
     setIsSaving(true);
@@ -90,6 +93,7 @@ export function CreateUserDialog({
         role: data.role,
         billingRequired: data.billingRequired,
         billingCustomAmountCents: data.billingPlan === "entreprise" ? eurosToCents(data.customAmount) : null,
+        billingStartsAt: data.billingRequired && data.billingStartsAt ? data.billingStartsAt : null,
       });
       if (result.success) {
         toast.success("Utilisateur cree");
@@ -183,6 +187,8 @@ export function CreateUserDialog({
             amount={customAmount}
             onAmountChange={(v) => setValue("customAmount", v)}
             amountError={errors.customAmount?.message}
+            startDate={billingStartsAt}
+            onStartDateChange={(v) => setValue("billingStartsAt", v)}
             disabled={isSaving}
             warnOnEnable={false}
             hasExistingPrice={false}

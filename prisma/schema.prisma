@@ -24,6 +24,12 @@ model User {
   /// Entreprise plan: custom yearly price in euro cents, set by the admin.
   /// Null = individual plan (STRIPE_PRICE_INDIVIDUAL).
   billingCustomAmountCents Int?
+  /// Paying accounts only: date of the first 30 € charge, set by the admin for
+  /// existing clients. Before it, full access + card registration at 0 €
+  /// (Stripe trial_end). After it without a card: blocked like any paying account.
+  billingStartsAt          DateTime?
+  notificationReads        NotificationRead[]
+  notificationsCreated     AppNotification[]
   documents                Document[]
   dossiers                 Dossier[]
   batches                  EmailBatch[]
@@ -211,6 +217,37 @@ model PasswordResetToken {
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+}
+
+/// Message written by the software admin, shown under the bell in the app header.
+model AppNotification {
+  id          String               @id @default(cuid())
+  title       String
+  body        String
+  /// Optional in-app path for an "Ouvrir" button, e.g. "/settings?tab=abonnement".
+  linkPath    String?
+  audience    NotificationAudience @default(ALL)
+  createdAt   DateTime             @default(now())
+  createdById String?
+  createdBy   User?                @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  reads       NotificationRead[]
+
+  @@index([createdAt])
+}
+
+model NotificationRead {
+  userId         String
+  notificationId String
+  readAt         DateTime        @default(now())
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  notification   AppNotification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+
+  @@id([userId, notificationId])
+}
+
+enum NotificationAudience {
+  ALL
+  PAYING
 }
 
 /// Key/value settings editable by the software admin (e.g. "updater.endpoint").

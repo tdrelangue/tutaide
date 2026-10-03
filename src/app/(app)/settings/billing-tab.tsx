@@ -32,10 +32,25 @@ function describeStatus(billing: BillingState): { title: string; detail: string 
       detail: "Le dernier prélèvement n'a pas abouti. Stripe va réessayer automatiquement ; vous pouvez aussi mettre à jour votre carte ci-dessous.",
     };
   }
+  if (billing.status === "trialing") {
+    return billing.cancelAtPeriodEnd
+      ? { title: "Abonnement résilié", detail: `Votre accès reste ouvert jusqu'au ${date ?? "terme de la période"}. Aucun prélèvement ne sera effectué.` }
+      : {
+          title: "Carte enregistrée",
+          detail: `Premier prélèvement de ${billing.priceLabel.replace(" / an", "")} le ${date ?? "jour prévu"}, puis chaque année à la même date. Vous recevrez une facture par email à chaque prélèvement.`,
+        };
+  }
   if (grantsAccess(billing.status)) {
     return billing.cancelAtPeriodEnd
       ? { title: "Abonnement résilié", detail: `Votre accès reste ouvert jusqu'au ${date ?? "terme de la période"}. Il ne sera pas renouvelé.` }
       : { title: "Abonnement actif", detail: date ? `Prochain renouvellement automatique le ${date}.` : "Renouvellement automatique chaque année." };
+  }
+  if (billing.graceUntil) {
+    const until = formatDate(billing.graceUntil);
+    return {
+      title: `Enregistrez votre carte avant le ${until}`,
+      detail: `Votre abonnement en cours reste valable jusqu'au ${until} : rien ne change d'ici là. Il suffit d'enregistrer votre carte, aucun montant n'est débité aujourd'hui (0 €). Le premier prélèvement de ${billing.priceLabel.replace(" / an", "")} aura lieu le ${until}, puis chaque année, avec une facture envoyée par email.`,
+    };
   }
   return { title: "Aucun abonnement actif", detail: "Mettez en place le paiement pour continuer à utiliser Tutellia." };
 }
@@ -68,7 +83,7 @@ export async function BillingTab({
 
       {checkout === "success" && hasSubscription && (
         <p role="status" className="rounded-md border bg-muted/40 p-4 text-sm">
-          Merci, votre paiement est bien enregistré.
+          {billing.status === "trialing" ? "Merci, votre carte est bien enregistrée." : "Merci, votre paiement est bien enregistré."}
         </p>
       )}
       {checkout === "cancel" && (
@@ -83,7 +98,10 @@ export async function BillingTab({
       </div>
 
       {canSubscribe && (
-        <CheckoutButton from="settings" label="Mettre en place le paiement automatique" />
+        <CheckoutButton
+          from="settings"
+          label={billing.graceUntil ? "Enregistrer ma carte (0 € aujourd'hui)" : "Mettre en place le paiement automatique"}
+        />
       )}
 
       {hasSubscription && BILLING_PORTAL_URL && (

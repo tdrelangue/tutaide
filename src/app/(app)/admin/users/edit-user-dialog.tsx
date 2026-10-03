@@ -24,7 +24,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { BillingRequiredField, centsToEuros, eurosToCents } from "./billing-required-field";
+import { BillingRequiredField, centsToEuros, eurosToCents, toDateInput } from "./billing-required-field";
 import { updateUser } from "../actions";
 import type { AdminUserData } from "../actions";
 
@@ -40,6 +40,7 @@ const schema = z.object({
   billingRequired: z.boolean(),
   billingPlan: z.enum(["individual", "entreprise"]),
   customAmount: z.string(),
+  billingStartsAt: z.string(),
 }).refine((d) => !d.billingRequired || d.billingPlan === "individual" || eurosToCents(d.customAmount) !== null, {
   message: "Indiquez un prix annuel valide (ex. 1200)",
   path: ["customAmount"],
@@ -78,6 +79,7 @@ export function EditUserDialog({
       billingRequired: user.billingRequired,
       billingPlan: user.billingCustomAmountCents === null ? "individual" : "entreprise",
       customAmount: centsToEuros(user.billingCustomAmountCents),
+      billingStartsAt: toDateInput(user.billingStartsAt),
     },
   });
 
@@ -85,6 +87,7 @@ export function EditUserDialog({
   const billingRequired = watch("billingRequired");
   const billingPlan = watch("billingPlan");
   const customAmount = watch("customAmount");
+  const billingStartsAt = watch("billingStartsAt");
 
   async function onSubmit(data: FormData) {
     setIsSaving(true);
@@ -96,6 +99,7 @@ export function EditUserDialog({
         role?: "USER" | "ADMIN";
         billingRequired?: boolean;
         billingCustomAmountCents?: number | null;
+        billingStartsAt?: string | null;
       } = {};
 
       if (data.email !== user.email) updateData.email = data.email;
@@ -112,6 +116,10 @@ export function EditUserDialog({
       const customCents = data.billingPlan === "entreprise" ? eurosToCents(data.customAmount) : null;
       if (customCents !== user.billingCustomAmountCents) {
         updateData.billingCustomAmountCents = customCents;
+      }
+      const startDate = data.billingRequired ? data.billingStartsAt : "";
+      if (startDate !== toDateInput(user.billingStartsAt)) {
+        updateData.billingStartsAt = startDate || null;
       }
 
       if (Object.keys(updateData).length === 0) {
@@ -214,6 +222,8 @@ export function EditUserDialog({
             amount={customAmount}
             onAmountChange={(v) => setValue("customAmount", v)}
             amountError={errors.customAmount?.message}
+            startDate={billingStartsAt}
+            onStartDateChange={(v) => setValue("billingStartsAt", v)}
             disabled={isSaving}
             warnOnEnable={!user.billingRequired}
             hasExistingPrice={user.billingRequired}

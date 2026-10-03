@@ -16,6 +16,11 @@ export function centsToEuros(cents: number | null): string {
   return cents === null ? "" : String(cents / 100).replace(".", ",");
 }
 
+/** Date -> "YYYY-MM-DD" for <input type="date">, or "" when unset. */
+export function toDateInput(date: Date | string | null): string {
+  return date ? new Date(date).toISOString().slice(0, 10) : "";
+}
+
 /** "Compte payant" switch + plan choice, shared by the create and edit user dialogs. */
 export function BillingRequiredField({
   id,
@@ -26,6 +31,8 @@ export function BillingRequiredField({
   amount,
   onAmountChange,
   amountError,
+  startDate,
+  onStartDateChange,
   disabled,
   warnOnEnable,
   hasExistingPrice,
@@ -38,6 +45,8 @@ export function BillingRequiredField({
   amount: string;
   onAmountChange: (amount: string) => void;
   amountError?: string;
+  startDate: string;
+  onStartDateChange: (date: string) => void;
   disabled: boolean;
   /** Show the consequence when switching an existing free account to paying. */
   warnOnEnable: boolean;
@@ -54,6 +63,10 @@ export function BillingRequiredField({
 
   function handleAmountChange(event: React.ChangeEvent<HTMLInputElement>) {
     onAmountChange(event.target.value);
+  }
+
+  function handleStartDateChange(event: React.ChangeEvent<HTMLInputElement>) {
+    onStartDateChange(event.target.value);
   }
 
   return (
@@ -106,6 +119,22 @@ export function BillingRequiredField({
               )}
             </div>
           )}
+          <div className="space-y-1 pt-2">
+            <Label htmlFor={`${id}-start`}>Premier prélèvement le (facultatif)</Label>
+            <Input
+              id={`${id}-start`}
+              type="date"
+              value={startDate}
+              onChange={handleStartDateChange}
+              aria-describedby={`${id}-start-hint`}
+              className="max-w-48"
+            />
+            <p id={`${id}-start-hint`} className="text-sm text-muted-foreground">
+              Pour un client qui a déjà payé sa période en cours. Jusqu&apos;à cette date, il garde son
+              accès et enregistre simplement sa carte (0 € débité). Stripe prélève automatiquement à
+              cette date, puis chaque année. Laisser vide : paiement immédiat.
+            </p>
+          </div>
           {hasExistingPrice && (
             <p className="text-sm text-muted-foreground">
               Un changement de formule ou de prix s&apos;applique au prochain abonnement souscrit, pas
