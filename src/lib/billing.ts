@@ -155,3 +155,39 @@ export async function createCheckoutUrl(
     return { error: "unavailable" };
   }
 }
+
+// ---------------------------------------------------------------------------
+// Admin payment test (0 € Stripe Checkout, see lib/stripe-payment-test.ts)
+// ---------------------------------------------------------------------------
+
+async function postPaymentTest(payload: Record<string, string>): Promise<Record<string, unknown>> {
+  try {
+    const res = await fetch(`${BILLING_API_URL}/test`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(payload),
+      cache: "no-store",
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS * 2),
+    });
+    const body: unknown = await res.json();
+    return typeof body === "object" && body !== null ? (body as Record<string, unknown>) : {}; // narrowed to object
+  } catch {
+    return { error: "Le serveur de paiement (tutaide.vercel.app) est injoignable." };
+  }
+}
+
+export async function startPaymentTest(userId: string, returnPath: string): Promise<{ url: string } | { error: string }> {
+  const body = await postPaymentTest({ action: "start", userId, returnUrl: `${await localBaseUrl()}${returnPath}` });
+  if (typeof body.url === "string") return { url: body.url };
+  return { error: typeof body.error === "string" ? body.error : "Réponse inattendue du serveur de paiement." };
+}
+
+export type PaymentTestOutcome =
+  | { ok: true; cardLabel: string | null }
+  | { ok: false; error: string };
+
+export async function finishPaymentTest(userId: string, sessionId: string): Promise<PaymentTestOutcome> {
+  const body = await postPaymentTest({ action: "finish", userId, sessionId });
+  if (body.ok === true) return { ok: true, cardLabel: typeof body.cardLabel === "string" ? body.cardLabel : null };
+  return { ok: false, error: typeof body.error === "string" ? body.error : "Réponse inattendue du serveur de paiement." };
+}

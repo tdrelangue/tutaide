@@ -17,6 +17,7 @@ import {
   saveUpdateEndpoint,
   type ManifestCheck,
 } from "@/lib/update-endpoints";
+import { finishPaymentTest, startPaymentTest, type PaymentTestOutcome } from "@/lib/billing";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -567,5 +568,30 @@ export async function saveUpdaterEndpoint(
   } catch (error) {
     console.error("Error saving update endpoint:", error);
     return { success: false, error: "Erreur lors de l'enregistrement" };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Payment test — real Stripe Checkout at 0 €, admin only.
+// ---------------------------------------------------------------------------
+
+/** Returns the Stripe Checkout URL of a 0 € test subscription for the real admin. */
+export async function startPaymentTestAction(): Promise<{ url?: string; error?: string }> {
+  try {
+    const adminId = await requireAdmin();
+    const result = await startPaymentTest(adminId, "/admin/system-config");
+    return "url" in result ? { url: result.url } : { error: result.error };
+  } catch {
+    return { error: "Réservé aux administrateurs." };
+  }
+}
+
+/** Called on return from Stripe: confirms the test and cancels the 0 € subscription. */
+export async function finishPaymentTestAction(sessionId: string): Promise<PaymentTestOutcome> {
+  try {
+    const adminId = await requireAdmin();
+    return await finishPaymentTest(adminId, sessionId);
+  } catch {
+    return { ok: false, error: "Réservé aux administrateurs." };
   }
 }

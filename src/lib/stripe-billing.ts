@@ -94,7 +94,7 @@ function lineItem(customAmountCents: number | null): Stripe.Checkout.SessionCrea
   };
 }
 
-function withQuery(url: string, query: string): string {
+export function withQuery(url: string, query: string): string {
   return `${url}${url.includes("?") ? "&" : "?"}${query}`;
 }
 
