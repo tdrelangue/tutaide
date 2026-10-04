@@ -214,6 +214,10 @@ export function SmtpConfigForm({ initialConfig }: SmtpConfigFormProps) {
               </Label>
               <Input
                 id="username"
+                // Not the Tutellia login: stop browsers/WebView2 from autofilling it
+                autoComplete="off"
+                data-1p-ignore
+                data-lpignore="true"
                 placeholder="votre@email.com"
                 disabled={isLoading}
                 aria-describedby={errors.username ? "username-error" : undefined}
@@ -233,6 +237,9 @@ export function SmtpConfigForm({ initialConfig }: SmtpConfigFormProps) {
               <div className="relative">
                 <Input
                   id="password"
+                  autoComplete="new-password"
+                  data-1p-ignore
+                  data-lpignore="true"
                   type={showPassword ? "text" : "password"}
                   placeholder={initialConfig ? "••••••••" : "Mot de passe"}
                   disabled={isLoading}

@@ -1,4 +1,4 @@
-import { BookOpen, TriangleAlert, Download } from "lucide-react";
+import { BookOpen, TriangleAlert, Download, Rocket, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -10,6 +10,20 @@ import {
 import { GuideViewerDialog } from "./guide-viewer-dialog";
 
 const guides = [
+  {
+    icon: Rocket,
+    title: "Bien démarrer avec Tutellia",
+    description:
+      "Les réglages à faire une fois, dans l'ordre : signature, destinataires APA/ASH/PCH, modèles d'emails et variables, derniers emails, envoi des emails.",
+    file: "guide-demarrage-rapide.pdf",
+  },
+  {
+    icon: Mail,
+    title: "Configurer l'envoi des emails",
+    description:
+      "Pas à pas avec Gmail (mot de passe d'application) et pour les autres messageries, plus les messages d'erreur courants et leur solution.",
+    file: "guide-configuration-email.pdf",
+  },
   {
     icon: BookOpen,
     title: "Guide de mise à jour v2.0.5",

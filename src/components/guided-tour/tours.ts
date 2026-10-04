@@ -146,7 +146,7 @@ export const TOURS: Record<TourId, Tour> = {
         target: "dossier-selection",
         side: "bottom",
         title: "Envoyer à plusieurs dossiers",
-        text: "Le mode sélection permet de cocher plusieurs dossiers, puis de les envoyer en une fois (un email par dossier).",
+        text: "Le mode sélection permet de cocher plusieurs dossiers, puis de les envoyer en une fois : un email par dossier, à l'adresse email renseignée dans la fiche de chaque dossier.",
       },
       {
         path: "/apa/dossiers",

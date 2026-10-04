@@ -13,6 +13,7 @@ import {
   type EmailTemplateFormData,
 } from "@/lib/validations";
 import type { SmtpProvider, TemplateCategory, ModuleType } from "@prisma/client";
+import { fillMissingModuleFolders } from "@/lib/imap-defaults";
 
 // SMTP Config types
 export type SmtpConfigData = {
@@ -76,20 +77,25 @@ export async function getSmtpConfigWithPassword(): Promise<{
   };
 }
 
-/** Convert raw SMTP errors into plain French messages. */
+/**
+ * Convert raw SMTP errors into plain French messages. nodemailer wraps network
+ * errors in its own codes (EDNS, ESOCKET, ECONNECTION, EAUTH…) and keeps the
+ * original one (ENOTFOUND, ECONNREFUSED…) only in the message, so match both.
+ */
 function humanizeSmtpError(error: unknown): string {
   const msg = error instanceof Error ? error.message : String(error);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const code = (error as any)?.code ?? "";
-  if (code === "ECONNREFUSED") return "Connexion refusée — vérifiez l'hôte et le port.";
-  if (code === "ENOTFOUND") return "Serveur introuvable — vérifiez l'adresse SMTP.";
-  if (code === "ETIMEDOUT" || code === "ECONNRESET") return "Délai dépassé — vérifiez le port et votre réseau.";
-  if (msg.includes("535") || msg.toLowerCase().includes("invalid credentials") || msg.toLowerCase().includes("username and password"))
-    return "Identifiants incorrects — vérifiez votre adresse email et mot de passe.";
-  if (msg.includes("534") || msg.toLowerCase().includes("application-specific"))
+  const code = typeof error === "object" && error !== null && "code" in error ? String(error.code) : "";
+  const has = (...needles: string[]) => needles.some((n) => code === n || msg.includes(n));
+  const lower = msg.toLowerCase();
+  if (has("ENOTFOUND", "EAI_AGAIN") || code === "EDNS") return "Serveur introuvable — vérifiez l'adresse SMTP.";
+  if (has("ECONNREFUSED")) return "Connexion refusée — vérifiez l'hôte et le port.";
+  if (has("ETIMEDOUT", "ECONNRESET") || lower.includes("timeout")) return "Délai dépassé — vérifiez le port et votre réseau.";
+  if (msg.includes("534") || lower.includes("application-specific"))
     return "Gmail : utilisez un mot de passe d'application, pas votre mot de passe principal.";
-  if (msg.toLowerCase().includes("certificate") || msg.toLowerCase().includes("self-signed"))
-    return "Erreur de certificat SSL — connexion non sécurisée.";
+  if (code === "EAUTH" || msg.includes("535") || lower.includes("invalid credentials") || lower.includes("username and password"))
+    return "Identifiants incorrects — vérifiez votre adresse email et mot de passe.";
+  if (lower.includes("certificate") || lower.includes("self-signed") || lower.includes("wrong version number"))
+    return "Erreur de connexion sécurisée — vérifiez le port et l'option TLS/SSL.";
   return `Erreur de connexion : ${msg}`;
 }
 
@@ -159,6 +165,10 @@ export async function saveSmtpConfig(
         fromEmail: validated.fromEmail,
       },
     });
+
+    // Fill empty APA/ASH/PCH IMAP folders with this mailbox's real layout
+    // (INBOX.APA vs INBOX/APA). In the background: never delays the save.
+    void fillMissingModuleFolders(userId);
 
     revalidatePath("/settings");
     return { success: true };
@@ -370,6 +380,9 @@ export async function saveModuleConfig(
         imapFolder: imapFolder || null,
       },
     });
+
+    // Folder left empty: use the one that fits this mailbox (bounded, never throws).
+    if (!imapFolder) await fillMissingModuleFolders(userId);
 
     revalidatePath("/settings");
     return { success: true };

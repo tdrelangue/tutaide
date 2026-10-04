@@ -201,7 +201,7 @@ export function ModuleConfigTab({
                 {...register("imapFolder")}
               />
               <p className="text-xs text-muted-foreground mt-1">
-                Dossier IMAP ou copier les emails envoyes (par defaut : INBOX/{moduleType})
+                Dossier de votre messagerie où ranger une copie des emails envoyés. Laissez vide : Tutellia choisit le bon dossier pour votre messagerie (par exemple INBOX.{moduleType} ou INBOX/{moduleType}) dès que l&apos;envoi des emails est configuré.
               </p>
             </div>
             <Button type="submit" disabled={isSaving}>
