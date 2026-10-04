@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { SmtpConfigForm } from "./smtp-config-form";
 import { ModuleConfigTab } from "./module-config-tab";
 import { GeneralSettingsTab } from "./general-settings-tab";
@@ -8,6 +9,19 @@ import { TemplatesManager } from "./templates-manager";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Mail, FileText, Settings, CreditCard } from "lucide-react";
 import type { SmtpConfigData, ModuleConfigData, TemplateData } from "./actions";
+
+const TAB_VALUES = ["general", "smtp", "apa", "ash", "pch", "dernier", "abonnement"];
+
+/** ?tab=… selects the tab (links, notifications, guided tours), also after mount. */
+function useTabFromUrl(initialTab: string | undefined): [string, (tab: string) => void] {
+  const searchParams = useSearchParams();
+  const [tab, setTab] = useState(initialTab && TAB_VALUES.includes(initialTab) ? initialTab : "general");
+  const urlTab = searchParams.get("tab");
+  useEffect(() => {
+    if (urlTab && TAB_VALUES.includes(urlTab)) setTab(urlTab);
+  }, [urlTab]);
+  return [tab, setTab];
+}
 
 interface SettingsPageClientProps {
   initialSmtpConfig: SmtpConfigData;
@@ -47,6 +61,7 @@ export function SettingsPageClient({
   const [pchTemplates, setPchTemplates] = useState(initialPchTemplates);
   const [decesTemplates, setDecesTemplates] = useState(initialDecesTemplates);
   const [dessaisTemplates, setDessaisTemplates] = useState(initialDessaisTemplates);
+  const [tab, setTab] = useTabFromUrl(initialTab);
 
   return (
     <div className="flex flex-col h-full">
@@ -62,8 +77,8 @@ export function SettingsPageClient({
 
       {/* Content with Tabs */}
       <div className="flex-1 overflow-auto p-6">
-        <Tabs defaultValue={initialTab === "abonnement" ? "abonnement" : "general"} className="w-full">
-          <TabsList className="grid w-full max-w-4xl grid-cols-7">
+        <Tabs value={tab} onValueChange={setTab} className="w-full">
+          <TabsList className="grid w-full max-w-4xl grid-cols-7" data-tour="settings-tabs">
             <TabsTrigger value="general" className="flex items-center gap-2">
               <Settings className="h-4 w-4" />
               Général
@@ -145,7 +160,7 @@ export function SettingsPageClient({
           </TabsContent>
 
           <TabsContent value="dernier" className="mt-6">
-            <div className="space-y-6">
+            <div className="space-y-6" data-tour="dernier-templates">
               <TemplatesManager
                 templates={decesTemplates}
                 onTemplatesChange={setDecesTemplates}

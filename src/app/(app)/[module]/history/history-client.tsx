@@ -49,7 +49,7 @@ export function HistoryClient({ events, moduleType }: HistoryClientProps) {
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="border-b px-6 py-4">
+      <div className="border-b px-6 py-4" data-tour="history">
         <h2 className="text-2xl font-semibold tracking-tight">
           Historique {moduleType}
         </h2>

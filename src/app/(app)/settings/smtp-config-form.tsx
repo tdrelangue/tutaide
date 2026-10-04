@@ -143,7 +143,7 @@ export function SmtpConfigForm({ initialConfig }: SmtpConfigFormProps) {
               }
               disabled={isLoading}
             >
-              <SelectTrigger id="provider">
+              <SelectTrigger id="provider" data-tour="smtp-provider">
                 <SelectValue placeholder="Sélectionner un fournisseur" />
               </SelectTrigger>
               <SelectContent>
@@ -207,7 +207,7 @@ export function SmtpConfigForm({ initialConfig }: SmtpConfigFormProps) {
             </Label>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-4 sm:grid-cols-2" data-tour="smtp-credentials">
             <div className="space-y-2">
               <Label htmlFor="username">
                 Nom d&apos;utilisateur <span className="text-destructive">*</span>
@@ -306,7 +306,7 @@ export function SmtpConfigForm({ initialConfig }: SmtpConfigFormProps) {
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3" data-tour="smtp-actions">
             <Button type="submit" disabled={isLoading || isTesting}>
               {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
               Enregistrer

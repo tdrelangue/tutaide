@@ -23,6 +23,7 @@ import { Loader2, Check, AlertCircle } from "lucide-react";
 import { updatePassword, updateSignature } from "./actions";
 import { loadNameSortBasis, saveNameSortBasis } from "@/lib/local-prefs";
 import type { NameSortBasis } from "@/lib/name-sort";
+import { GuidedToursCard } from "@/components/guided-tour/guided-tours-card";
 
 interface GeneralSettingsTabProps {
   initialSignature: string;
@@ -130,6 +131,7 @@ export function GeneralSettingsTab({
 
   return (
     <div className="space-y-6 max-w-2xl">
+      <GuidedToursCard />
       {/* Password Change */}
       <Card>
         <CardHeader>
@@ -226,7 +228,7 @@ export function GeneralSettingsTab({
       </Card>
 
       {/* Email Signature */}
-      <Card>
+      <Card data-tour="signature">
         <CardHeader>
           <CardTitle>Signature email</CardTitle>
           <CardDescription>

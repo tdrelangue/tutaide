@@ -91,6 +91,7 @@ export function AppSidebar({ userRole, activeModules }: AppSidebarProps) {
   return (
     <nav
       aria-label="Navigation principale"
+      data-tour="sidebar"
       className="sticky top-0 h-screen flex w-24 flex-col border-r bg-muted/30"
     >
       {/* Logo at top */}

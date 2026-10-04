@@ -157,7 +157,7 @@ export function ModuleConfigTab({
       </div>
 
       {/* Destination Email & IMAP Folder */}
-      <Card>
+      <Card data-tour="module-config">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
             <Mail className="h-4 w-4" />
@@ -213,7 +213,7 @@ export function ModuleConfigTab({
       </Card>
 
       {/* Templates */}
-      <Card>
+      <Card data-tour="module-templates">
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>

@@ -206,6 +206,7 @@ export function DossiersPageClient({
           <div className="flex items-center gap-2">
             <Button
               variant="outline"
+              data-tour="dossier-send-all"
               onClick={() => setIsSendAllOpen(true)}
               disabled={eligibleDossiers.length === 0}
             >
@@ -214,12 +215,13 @@ export function DossiersPageClient({
             </Button>
             <Button
               variant={selectionMode ? "secondary" : "outline"}
+              data-tour="dossier-selection"
               onClick={toggleSelectionMode}
             >
               <CheckSquare className="mr-2 h-4 w-4" aria-hidden="true" />
               {selectionMode ? "Quitter la selection" : "Mode selection"}
             </Button>
-            <Button onClick={() => setIsCreateOpen(true)}>
+            <Button onClick={() => setIsCreateOpen(true)} data-tour="dossier-new">
               <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
               Nouveau dossier
             </Button>
@@ -263,7 +265,7 @@ export function DossiersPageClient({
       )}
 
       {/* Filters */}
-      <div className="border-b px-6 py-3">
+      <div className="border-b px-6 py-3" data-tour="dossier-filters">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           {/* Search */}
           <div className="relative flex-1 max-w-sm">
@@ -335,7 +337,7 @@ export function DossiersPageClient({
       )}
 
       {/* Content */}
-      <div className="flex-1 overflow-auto p-6">
+      <div className="flex-1 overflow-auto p-6" data-tour="dossier-list">
         {displayedDossiers.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 text-center">
             <p className="text-muted-foreground mb-4">

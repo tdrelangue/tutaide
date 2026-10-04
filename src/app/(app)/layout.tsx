@@ -9,6 +9,7 @@ import { migrateLegacyLinkedDossiers } from "@/lib/legacy-migrations";
 import { getPaymentReminder, isBlockedByPaywall } from "@/lib/billing";
 import { ensureDailyPaymentReminder } from "@/lib/notifications";
 import { PaymentReminderCard } from "@/components/payment-reminder-card";
+import { GuidedTourProvider } from "@/components/guided-tour/tour-provider";
 
 export default async function AppLayout({
   children,
@@ -48,6 +49,7 @@ export default async function AppLayout({
     .map(([key]) => key);
 
   return (
+    <GuidedTourProvider userId={session.user.id}>
     <div className="flex min-h-screen flex-col">
       <UpdaterStartupCheck />
       {paymentReminder && <PaymentReminderCard reminder={paymentReminder} />}
@@ -67,5 +69,6 @@ export default async function AppLayout({
         </div>
       </div>
     </div>
+    </GuidedTourProvider>
   );
 }

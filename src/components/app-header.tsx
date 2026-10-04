@@ -46,6 +46,7 @@ export function AppHeader({ user }: AppHeaderProps) {
               variant="ghost"
               className="relative h-9 w-9 rounded-full"
               aria-label="Menu utilisateur"
+              data-tour="user-menu"
             >
               <Avatar className="h-9 w-9">
                 <AvatarFallback>{initials}</AvatarFallback>
