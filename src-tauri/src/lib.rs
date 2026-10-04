@@ -4,6 +4,60 @@ use std::sync::Mutex;
 
 struct ServerProcess(Mutex<Option<std::process::Child>>);
 
+/// Hides the console window a child process would open on Windows; no-op elsewhere.
+trait NoWindow {
+    fn no_window(&mut self) -> &mut Self;
+}
+
+impl NoWindow for std::process::Command {
+    fn no_window(&mut self) -> &mut Self {
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            const CREATE_NO_WINDOW: u32 = 0x08000000;
+            self.creation_flags(CREATE_NO_WINDOW);
+        }
+        self
+    }
+}
+
+/// PIDs still listening on the server port from a previous run.
+#[cfg(not(debug_assertions))]
+fn leftover_server_pids() -> Vec<u32> {
+    use std::process::Command;
+
+    #[cfg(windows)]
+    let output = Command::new("cmd")
+        .no_window()
+        .args(["/c", "netstat -ano | findstr 127.0.0.1:3456"])
+        .output();
+    #[cfg(not(windows))]
+    let output = Command::new("lsof").args(["-ti", "tcp:3456", "-sTCP:LISTEN"]).output();
+
+    let Ok(out) = output else { return Vec::new() };
+    String::from_utf8_lossy(&out.stdout)
+        .lines()
+        .filter_map(|line| line.split_whitespace().last()?.parse::<u32>().ok())
+        .filter(|pid| *pid > 4)
+        .collect()
+}
+
+#[cfg(not(debug_assertions))]
+fn kill_pid(pid: u32) {
+    use std::process::Command;
+
+    #[cfg(windows)]
+    let mut cmd = Command::new("taskkill");
+    #[cfg(windows)]
+    cmd.no_window().args(["/F", "/PID", &pid.to_string()]);
+    #[cfg(not(windows))]
+    let mut cmd = Command::new("kill");
+    #[cfg(not(windows))]
+    cmd.args(["-9", &pid.to_string()]);
+
+    cmd.spawn().ok();
+}
+
 #[tauri::command]
 fn kill_server(state: tauri::State<ServerProcess>) {
     if let Ok(mut guard) = state.0.lock() {
@@ -83,12 +137,9 @@ pub fn run() {
             #[cfg(not(debug_assertions))]
             {
                 use std::io::Write;
-                use std::os::windows::process::CommandExt;
                 use std::process::Command;
                 use std::thread;
                 use std::time::Duration;
-
-                const CREATE_NO_WINDOW: u32 = 0x08000000;
 
                 let resource_dir = app
                     .path()
@@ -130,26 +181,9 @@ pub fn run() {
                 };
 
                 // Kill any leftover process on port 3456 from a previous run
-                if let Ok(out) = Command::new("cmd")
-                    .creation_flags(CREATE_NO_WINDOW)
-                    .args(["/c", "netstat -ano | findstr 127.0.0.1:3456"])
-                    .output()
-                {
-                    for line in String::from_utf8_lossy(&out.stdout).lines() {
-                        let parts: Vec<&str> = line.split_whitespace().collect();
-                        if let Some(pid_str) = parts.last() {
-                            if let Ok(pid) = pid_str.parse::<u32>() {
-                                if pid > 4 {
-                                    Command::new("taskkill")
-                                        .creation_flags(CREATE_NO_WINDOW)
-                                        .args(["/F", "/PID", &pid.to_string()])
-                                        .spawn()
-                                        .ok();
-                                    writeln!(log, "killed leftover pid {}", pid).ok();
-                                }
-                            }
-                        }
-                    }
+                for pid in leftover_server_pids() {
+                    kill_pid(pid);
+                    writeln!(log, "killed leftover pid {}", pid).ok();
                 }
                 thread::sleep(Duration::from_millis(500));
 
@@ -165,7 +199,7 @@ pub fn run() {
 
                 // Spawn the Next.js server
                 let mut cmd = Command::new(&node_exe);
-                cmd.creation_flags(CREATE_NO_WINDOW)
+                cmd.no_window()
                     .arg(&server_path)
                     .env("PORT", "3456")
                     .env("HOSTNAME", "127.0.0.1")
@@ -188,8 +222,9 @@ pub fn run() {
                 }
 
                 // Ensure WebView2 can reach loopback (needed on some Windows configs)
+                #[cfg(windows)]
                 Command::new("CheckNetIsolation.exe")
-                    .creation_flags(CREATE_NO_WINDOW)
+                    .no_window()
                     .args(["LoopbackExempt", "-a", "-n=Microsoft.Win32WebViewHost_cw5n1h2txyewy"])
                     .spawn()
                     .ok();
