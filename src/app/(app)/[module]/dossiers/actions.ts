@@ -1,6 +1,6 @@
 "use server";
 
-import { existsSync } from "fs";
+import { documentFileExists } from "@/lib/storage/document-files";
 import { randomUUID } from "crypto";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
@@ -126,7 +126,7 @@ export async function getDossiers(
   // Filter out documents whose file no longer exists on this machine
   // (e.g. uploaded from another computer with the same account)
   return dossiers.map((dossier) => {
-    const localDocs = dossier.documents.filter((doc) => existsSync(doc.blobUrl));
+    const localDocs = dossier.documents.filter((doc) => documentFileExists(doc.blobUrl));
     return {
       ...dossier,
       documents: localDocs.map(({ blobUrl: _url, ...doc }) => doc),
@@ -173,7 +173,7 @@ export async function getDossier(
 
   if (!dossier) return null;
 
-  const localDocs = dossier.documents.filter((doc) => existsSync(doc.blobUrl));
+  const localDocs = dossier.documents.filter((doc) => documentFileExists(doc.blobUrl));
   return {
     ...dossier,
     documents: localDocs.map(({ blobUrl: _url, ...doc }) => doc),

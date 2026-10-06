@@ -1,7 +1,7 @@
 "use server";
 
-import fs from "fs/promises";
 import { revalidatePath } from "next/cache";
+import { attachmentPathsFor, removeDocumentFile } from "@/lib/storage/document-files";
 import { db } from "@/lib/db";
 import { requireAuth } from "@/lib/auth";
 import { sendEmail } from "@/lib/mailer-client";
@@ -57,13 +57,9 @@ async function clearDossierDocuments(dossierId: string, userId: string): Promise
     select: { id: true, blobUrl: true },
   });
 
-  // Delete files from disk
+  // Delete files from disk (a file already gone is ignored)
   for (const doc of documents) {
-    try {
-      await fs.unlink(doc.blobUrl);
-    } catch {
-      // File may already be gone
-    }
+    await removeDocumentFile(doc.blobUrl);
   }
 
   // Delete DB records (cascades to EmailSendEventAttachment)
@@ -221,7 +217,7 @@ export async function sendEmailAction(
           userId,
         },
       });
-      attachmentPaths = documents.map((d) => d.blobUrl);
+      attachmentPaths = attachmentPathsFor(documents.map((d) => d.blobUrl));
     }
 
     const event = await db.emailSendEvent.create({
@@ -408,7 +404,7 @@ export async function bulkSendAction(
         bccRecipients: dossier.bccEmails,
         subject: tpl.subject,
         body: tpl.body,
-        attachmentPaths: dossier.documents.map((d) => d.blobUrl),
+        attachmentPaths: attachmentPathsFor(dossier.documents.map((d) => d.blobUrl)),
         signature,
         moduleType: validated.moduleType as "APA" | "ASH",
         dossierName: dossier.fullName,
@@ -602,7 +598,7 @@ export async function sendAllAction(
         bccRecipients: dossier.bccEmails,
         subject: tpl.subject,
         body: tpl.body,
-        attachmentPaths: dossier.documents.map((d) => d.blobUrl),
+        attachmentPaths: attachmentPathsFor(dossier.documents.map((d) => d.blobUrl)),
         signature,
         moduleType: validated.moduleType as "APA" | "ASH",
         dossierName: dossier.fullName,

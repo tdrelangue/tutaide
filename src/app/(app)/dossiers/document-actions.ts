@@ -1,12 +1,14 @@
 "use server";
 
-import fs from "fs/promises";
-import { existsSync } from "fs";
-import path from "path";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { requireAuth } from "@/lib/auth";
-import { getDocumentsBaseDir } from "@/lib/documents-dir";
+import {
+  documentFileExists,
+  removeDocumentFile,
+  resolveDocumentFile,
+  saveDocumentFile,
+} from "@/lib/storage/document-files";
 import { openFileWithMacOs } from "@/lib/open-native";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
@@ -46,20 +48,13 @@ export async function uploadDocuments(formData: FormData): Promise<{
     }
 
     const uploadedDocs: Array<{ id: string; filename: string; mimeType: string; size: number; createdAt: Date }> = [];
-    const dir = path.join(getDocumentsBaseDir(), userId, dossierId);
-    await fs.mkdir(dir, { recursive: true });
-
     for (const file of files) {
       if (!isAllowedFile(file)) {
         continue;
       }
 
-      const timestamp = Date.now();
-      const safeFilename = `${timestamp}-${file.name}`;
-      const filePath = path.join(dir, safeFilename);
-
       const buffer = Buffer.from(await file.arrayBuffer());
-      await fs.writeFile(filePath, buffer);
+      const filePath = await saveDocumentFile(dossier.userId, dossierId, file.name, buffer);
 
       const doc = await db.document.create({
         data: {
@@ -104,11 +99,7 @@ export async function deleteDocument(documentId: string): Promise<{
       return { success: false, error: "Document non trouvé" };
     }
 
-    try {
-      await fs.unlink(document.blobUrl);
-    } catch {
-      console.error("Failed to delete local file:", document.blobUrl);
-    }
+    await removeDocumentFile(document.blobUrl);
 
     await db.document.delete({
       where: { id: documentId },
@@ -148,7 +139,7 @@ export async function getDocuments(dossierId: string): Promise<
 
   // Only return documents whose file actually exists on this machine
   return documents
-    .filter((doc) => existsSync(doc.blobUrl))
+    .filter((doc) => documentFileExists(doc.blobUrl))
     .map(({ blobUrl: _url, ...doc }) => doc);
 }
 
@@ -180,8 +171,9 @@ export async function openDocumentNatively(
       where: { id: documentId, userId },
       select: { blobUrl: true },
     });
-    if (!document || !existsSync(document.blobUrl)) return { opened: false };
-    return { opened: await openFileWithMacOs(document.blobUrl) };
+    const file = document ? resolveDocumentFile(document.blobUrl) : null;
+    if (!file) return { opened: false };
+    return { opened: await openFileWithMacOs(file) };
   } catch {
     return { opened: false };
   }

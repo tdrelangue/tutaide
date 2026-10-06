@@ -24,6 +24,7 @@ import { updatePassword, updateSignature } from "./actions";
 import { loadNameSortBasis, saveNameSortBasis } from "@/lib/local-prefs";
 import type { NameSortBasis } from "@/lib/name-sort";
 import { GuidedToursCard } from "@/components/guided-tour/guided-tours-card";
+import { DocumentsLocationCard } from "./documents-location-card";
 
 interface GeneralSettingsTabProps {
   initialSignature: string;
@@ -226,6 +227,8 @@ export function GeneralSettingsTab({
           </div>
         </CardContent>
       </Card>
+
+      <DocumentsLocationCard />
 
       {/* Email Signature */}
       <Card data-tour="signature">

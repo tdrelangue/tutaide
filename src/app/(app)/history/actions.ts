@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { attachmentPathsFor } from "@/lib/storage/document-files";
 import { db } from "@/lib/db";
 import { requireAuth } from "@/lib/auth";
 import { sendEmail } from "@/lib/mailer-client";
@@ -164,7 +165,7 @@ export async function sendEmailAction(
           userId,
         },
       });
-      attachmentPaths = documents.map((d) => d.blobUrl);
+      attachmentPaths = attachmentPathsFor(documents.map((d) => d.blobUrl));
     }
 
     // Create send event (pending)

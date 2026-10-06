@@ -1,6 +1,6 @@
 "use server";
 
-import { existsSync } from "fs";
+import { documentFileExists } from "@/lib/storage/document-files";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { requireAuth } from "@/lib/auth";
@@ -74,7 +74,7 @@ export async function getDossiers(params?: {
   // Filter out documents whose file no longer exists on this machine
   // (e.g. uploaded from another computer with the same account)
   return dossiers.map((dossier) => {
-    const localDocs = dossier.documents.filter((doc) => existsSync(doc.blobUrl));
+    const localDocs = dossier.documents.filter((doc) => documentFileExists(doc.blobUrl));
     return {
       ...dossier,
       documents: localDocs.map(({ blobUrl: _url, ...doc }) => doc),
@@ -116,7 +116,7 @@ export async function getDossier(id: string): Promise<DossierWithDocuments | nul
 
   if (!dossier) return null;
 
-  const localDocs = dossier.documents.filter((doc) => existsSync(doc.blobUrl));
+  const localDocs = dossier.documents.filter((doc) => documentFileExists(doc.blobUrl));
   return {
     ...dossier,
     documents: localDocs.map(({ blobUrl: _url, ...doc }) => doc),
