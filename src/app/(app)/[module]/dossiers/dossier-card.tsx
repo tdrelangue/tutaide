@@ -15,6 +15,8 @@ interface DossierCardProps {
   selectionMode?: boolean;
   isChecked?: boolean;
   onToggleCheck?: () => void;
+  /** MJPM's name, shown when the list mixes several MJPMs (assistants). */
+  ownerName?: string;
 }
 
 const priorityLabels = {
@@ -36,6 +38,7 @@ export function DossierCard({
   selectionMode = false,
   isChecked = false,
   onToggleCheck,
+  ownerName,
 }: DossierCardProps) {
   const extraDocCount = dossier._count.documents - 3;
 
@@ -80,9 +83,14 @@ export function DossierCard({
       >
         <CardHeader className="pb-2">
           <div className="flex items-start justify-between gap-2">
-            <CardTitle className="text-base font-medium leading-tight">
-              {dossier.fullName}
-            </CardTitle>
+            <div className="min-w-0">
+              <CardTitle className="text-base font-medium leading-tight">
+                {dossier.fullName}
+              </CardTitle>
+              {ownerName && (
+                <p className="mt-0.5 truncate text-xs text-muted-foreground">Mandataire : {ownerName}</p>
+              )}
+            </div>
             <Badge
               variant={priorityVariants[dossier.priority]}
               className={cn(selectionMode && "mr-6")}

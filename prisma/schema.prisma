@@ -8,19 +8,28 @@ datasource db {
 }
 
 model User {
-  id                       String               @id @default(cuid())
-  email                    String               @unique
+  id                       String                @id @default(cuid())
+  email                    String                @unique
   name                     String?
   passwordHash             String
-  role                     UserRole             @default(USER)
+  role                     UserRole              @default(USER)
   archivedAt               DateTime?
-  createdAt                DateTime             @default(now())
-  updatedAt                DateTime             @updatedAt
+  createdAt                DateTime              @default(now())
+  updatedAt                DateTime              @updatedAt
   signature                String?
+  /// Organisation ("structure") the account belongs to. Null = solo account.
   orgId                    String?
+  organization             Organization?         @relation(fields: [orgId], references: [id], onDelete: SetNull)
+  /// Working role inside the organisation. Null = no access to dossiers
+  /// (e.g. an IT administrator who only has the admin right).
+  orgRole                  OrgRole?
+  /// Access to the organisation admin panel (/structure) — nothing else.
+  isOrgAdmin               Boolean               @default(false)
+  assistantAssignments     AssistantAssignment[] @relation("AssignmentAssistant")
+  mandataireAssignments    AssistantAssignment[] @relation("AssignmentMandataire")
   /// Paying account: must hold an active Stripe subscription. False = free
   /// account (admin-created accounts default to free; self-signup sets true).
-  billingRequired          Boolean              @default(false)
+  billingRequired          Boolean               @default(false)
   /// Entreprise plan: custom yearly price in euro cents, set by the admin.
   /// Null = individual plan (STRIPE_PRICE_INDIVIDUAL).
   billingCustomAmountCents Int?
@@ -29,8 +38,8 @@ model User {
   /// (Stripe trial_end). After it without a card: blocked like any paying account.
   billingStartsAt          DateTime?
   notificationReads        NotificationRead[]
-  notificationsCreated     AppNotification[]    @relation("NotificationAuthor")
-  notificationsTargeted    AppNotification[]    @relation("NotificationTarget")
+  notificationsCreated     AppNotification[]     @relation("NotificationAuthor")
+  notificationsTargeted    AppNotification[]     @relation("NotificationTarget")
   documents                Document[]
   dossiers                 Dossier[]
   batches                  EmailBatch[]
@@ -62,6 +71,8 @@ model Dossier {
   // Not used by current app code — safe to drop once that instance is retired.
   linkedDossierId   String?          @unique
   userId            String
+  /// Who created it (an assistant may create a dossier owned by an MJPM).
+  createdById       String?
   defaultTemplateId String?
   sendingFrequency  SendingFrequency @default(QUARTERLY)
   documents         Document[]
@@ -86,7 +97,10 @@ model Document {
   size             Int
   mimeType         String                     @default("application/pdf")
   createdAt        DateTime                   @default(now())
+  /// Owner = the dossier's owner (MJPM), whoever uploaded it.
   userId           String
+  /// Who actually uploaded it (an assistant, or the owner).
+  uploadedById     String?
   dossierId        String
   dossier          Dossier                    @relation(fields: [dossierId], references: [id], onDelete: Cascade)
   user             User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -146,7 +160,10 @@ model EmailSendEvent {
   body          String
   createdAt     DateTime                   @default(now())
   sentAt        DateTime?
+  /// Owner = the dossier's owner (MJPM).
   userId        String
+  /// Who clicked send (an assistant, or the owner).
+  sentById      String?
   dossierId     String?
   batchId       String?
   batch         EmailBatch?                @relation(fields: [batchId], references: [id])
@@ -205,6 +222,85 @@ model ModuleConfig {
 
   @@unique([userId, moduleType])
   @@index([userId])
+}
+
+/// A company/association using Tutellia with several people ("structure").
+model Organization {
+  id               String            @id @default(cuid())
+  name             String
+  /// Shared documents folder every member should choose on their PC
+  /// (e.g. "OneDrive – UDAF/Tutellia"); shown to members, set by the admin.
+  sharedFolderHint String?
+  archivedAt       DateTime?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  members          User[]
+  smtpConfig       OrgSmtpConfig?
+  moduleConfigs    OrgModuleConfig[]
+  auditEvents      OrgAuditEvent[]
+}
+
+/// Journal of every change made in the organisation admin panel (who did
+/// what to whom). Never contains dossier or protected-person data.
+model OrgAuditEvent {
+  id           String       @id @default(cuid())
+  orgId        String
+  /// Who acted (the organisation admin, or OrigAI while logged in as them).
+  actorId      String?
+  /// Set when OrigAI's super-administrator acted while logged in as the admin.
+  realActorId  String?
+  action       String
+  targetId     String?
+  details      String?
+  createdAt    DateTime     @default(now())
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, createdAt])
+}
+
+/// An assistant works on the dossiers of the MJPMs assigned to them
+/// (many-to-many, managed by the organisation admin).
+model AssistantAssignment {
+  assistantId  String
+  mandataireId String
+  createdAt    DateTime @default(now())
+  createdById  String?
+  assistant    User     @relation("AssignmentAssistant", fields: [assistantId], references: [id], onDelete: Cascade)
+  mandataire   User     @relation("AssignmentMandataire", fields: [mandataireId], references: [id], onDelete: Cascade)
+
+  @@id([assistantId, mandataireId])
+  @@index([mandataireId])
+}
+
+/// The organisation's shared mailbox: every member sends through it.
+model OrgSmtpConfig {
+  id                String       @id @default(cuid())
+  provider          SmtpProvider @default(OTHER)
+  smtpHost          String
+  smtpPort          Int          @default(587)
+  secure            Boolean      @default(true)
+  username          String
+  encryptedPassword String
+  fromName          String
+  fromEmail         String
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+  orgId             String       @unique
+  organization      Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+}
+
+/// Organisation-wide module destination (organism email, IMAP folder).
+model OrgModuleConfig {
+  id               String       @id @default(cuid())
+  moduleType       ModuleType
+  destinationEmail String
+  imapFolder       String?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+  orgId            String
+  organization     Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, moduleType])
 }
 
 model PasswordResetToken {
@@ -324,6 +420,11 @@ enum SmtpProvider {
   GMAIL
   OUTLOOK
   OTHER
+}
+
+enum OrgRole {
+  MANDATAIRE
+  ASSISTANT
 }
 
 enum UserRole {

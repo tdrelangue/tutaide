@@ -158,6 +158,12 @@ export function DocumentsLocationCard() {
           Emplacement actuel : <span className="font-medium break-all">{location.current}</span>
           {location.isDefault && <span className="text-muted-foreground"> (par défaut)</span>}
         </p>
+        {location.sharedFolderHint && (
+          <p role="note" className="rounded-md border border-primary/40 bg-primary/5 p-3 text-sm">
+            Votre structure partage ses documents dans : <span className="font-medium">{location.sharedFolderHint}</span>.
+            Choisissez ce dossier ci-dessous pour voir les documents de l&apos;équipe.
+          </p>
+        )}
         <SyncExplanation />
         {location.isLocked ? (
           <p className="text-sm text-muted-foreground">Non modifiable pendant le test de l&apos;application.</p>

@@ -2,9 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
-import { requireAuth } from "@/lib/auth";
+import { requireOwnerScope } from "@/lib/access/context";
+import { getSignatureOf } from "@/lib/access/org-mail";
 import { sendEmail } from "@/lib/mailer-client";
-import { getSmtpConfigWithPassword, getModuleConfig } from "../../settings/actions";
+import { getSendingModuleConfig, getSendingSmtp } from "@/lib/mail-config";
 import type { ModuleType } from "@prisma/client";
 
 interface SendDernierEmailParams {
@@ -26,14 +27,9 @@ export type DernierEmailResult = {
 export async function sendDernierEmail(
   params: SendDernierEmailParams
 ): Promise<DernierEmailResult[]> {
-  const userId = await requireAuth();
-  const user = await db.user.findUnique({
-    where: { id: userId },
-    select: { signature: true },
-  });
-  const signature = user?.signature ?? "";
+  const { actorId, ownerIds } = await requireOwnerScope();
 
-  const smtpConfig = await getSmtpConfigWithPassword();
+  const smtpConfig = await getSendingSmtp(actorId);
   if (!smtpConfig) {
     return params.dossierIds.map((dossierId) => ({
       dossierId,
@@ -45,7 +41,7 @@ export async function sendDernierEmail(
 
   const batch = await db.emailBatch.create({
     data: {
-      userId,
+      userId: actorId,
       description: `Dernier email (${params.reason === "DECES" ? "Deces" : "Dessaisissement"})`,
     },
   });
@@ -55,9 +51,10 @@ export async function sendDernierEmail(
   for (const dossierId of params.dossierIds) {
     try {
       const dossier = await db.dossier.findFirst({
-        where: { id: dossierId, userId },
+        where: { id: dossierId, userId: { in: ownerIds } },
         select: {
           id: true,
+          userId: true,
           fullName: true,
           moduleType: true,
           primaryEmail: true,
@@ -76,7 +73,7 @@ export async function sendDernierEmail(
         continue;
       }
 
-      const moduleConfig = await getModuleConfig(dossier.moduleType);
+      const moduleConfig = await getSendingModuleConfig(actorId, dossier.moduleType);
       if (!moduleConfig?.destinationEmail) {
         results.push({
           dossierId,
@@ -96,7 +93,8 @@ export async function sendDernierEmail(
 
       const event = await db.emailSendEvent.create({
         data: {
-          userId,
+          userId: dossier.userId,
+          sentById: actorId,
           dossierId: dossier.id,
           batchId: batch.id,
           status: "PENDING",
@@ -126,7 +124,7 @@ export async function sendDernierEmail(
         bccRecipients,
         subject: params.subject,
         body: params.body,
-        signature,
+        signature: await getSignatureOf(dossier.userId),
         // SendEmailPayload.moduleType is typed APA|ASH only (unused for branching,
         // only forwarded); PCH dossiers pass through the same way.
         moduleType: dossier.moduleType as "APA" | "ASH",

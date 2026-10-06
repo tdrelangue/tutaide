@@ -4,10 +4,14 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { FolderOpen, History } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { MandataireSelect } from "@/components/mandataire-select";
+import type { MandataireContext } from "@/lib/access/selection-actions";
 
 interface ModuleNavProps {
   module: string;
   moduleLabel: string;
+  /** Assistants only (choices empty otherwise): whose dossiers to show. */
+  mandataires: MandataireContext;
 }
 
 const tabs = [
@@ -39,7 +43,7 @@ const moduleStyles: Record<string, { badge: string; indicator: string }> = {
   },
 };
 
-export function ModuleNav({ module, moduleLabel }: ModuleNavProps) {
+export function ModuleNav({ module, moduleLabel, mandataires }: ModuleNavProps) {
   const pathname = usePathname();
   const styles = moduleStyles[module] || moduleStyles.apa;
 
@@ -103,6 +107,12 @@ export function ModuleNav({ module, moduleLabel }: ModuleNavProps) {
             );
           })}
         </nav>
+
+        {mandataires.choices.length > 0 && (
+          <div className="ml-auto">
+            <MandataireSelect context={mandataires} />
+          </div>
+        )}
       </div>
     </div>
   );

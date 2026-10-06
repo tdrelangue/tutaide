@@ -7,6 +7,7 @@ import { db } from "@/lib/db";
 import { requireAdmin, startImpersonation, stopImpersonation } from "@/lib/auth";
 import { z } from "zod";
 import { seedGlobalTemplates } from "@/lib/default-templates";
+import { refuseMemberChange } from "@/lib/organizations/rules";
 import { encrypt, decrypt } from "@/lib/encryption";
 import { systemConfigSchema, type SystemConfigFormData, broadcastEmailSchema, type BroadcastEmailFormData } from "@/lib/validations";
 import { sendEmail } from "@/lib/mailer-client";
@@ -195,6 +196,11 @@ export async function updateUser(
     if (!existing) {
       return { success: false, error: "Utilisateur introuvable" };
     }
+    // An organisation member never becomes a platform super-admin (their
+    // organisation admin could then manage a super-admin account).
+    if (existing.orgId && validated.role === "ADMIN") {
+      return { success: false, error: "Un membre d'une structure ne peut pas être super-administrateur" };
+    }
 
     // Check email uniqueness if changing
     if (validated.email && validated.email.toLowerCase() !== existing.email) {
@@ -235,6 +241,18 @@ export async function updateUser(
 }
 
 /** Archive a user (admin only) */
+/** Same rules as the organisation panel: last admin, MJPM still owning dossiers. */
+async function refuseOrgArchive(userId: string): Promise<string | null> {
+  const user = await db.user.findUnique({ where: { id: userId }, select: { orgId: true } });
+  if (!user?.orgId) return null;
+  const members = await db.user.findMany({
+    where: { orgId: user.orgId },
+    select: { id: true, orgRole: true, isOrgAdmin: true, archivedAt: true },
+  });
+  const states = members.map((m) => ({ id: m.id, orgRole: m.orgRole, isOrgAdmin: m.isOrgAdmin, archived: m.archivedAt !== null }));
+  return refuseMemberChange(states, userId, { archived: true }, await db.dossier.count({ where: { userId } }));
+}
+
 export async function archiveUser(
   userId: string
 ): Promise<{ success: boolean; error?: string }> {
@@ -244,6 +262,9 @@ export async function archiveUser(
     if (userId === adminId) {
       return { success: false, error: "Vous ne pouvez pas archiver votre propre compte" };
     }
+
+    const refusal = await refuseOrgArchive(userId);
+    if (refusal) return { success: false, error: refusal };
 
     await db.user.update({
       where: { id: userId },

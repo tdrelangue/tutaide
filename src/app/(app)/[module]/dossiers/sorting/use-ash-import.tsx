@@ -5,6 +5,20 @@ import { useRouter } from "next/navigation";
 import { findOrCreateAshDossier, parseAshPdf, uploadDocuments } from "../document-actions";
 import { SortingDialog } from "./sorting-dialog";
 import { sortableFiles } from "./use-sorting-launcher";
+import { useAshOwnerPrompt } from "./ash-owner-prompt";
+import { useMandataireContext } from "@/components/use-mandataire-context";
+
+/** Asks which MJPM a new dossier is for; null = do not create. */
+type AskOwner = (protegeName: string) => Promise<string | null>;
+
+/** Finds the dossier, or creates it (asking an assistant for the MJPM when needed). */
+async function findOrCreateWithOwner(protegeName: string, askOwner: AskOwner) {
+  const first = await findOrCreateAshDossier(protegeName);
+  if (!first.needsOwner) return first;
+  const ownerId = await askOwner(protegeName);
+  if (!ownerId) return { success: false, error: "Mandataire non choisi : à ranger à la main" };
+  return findOrCreateAshDossier(protegeName, ownerId);
+}
 
 export interface AshImportResult {
   filename: string;
@@ -19,7 +33,7 @@ export interface AshImportResult {
  * ASH automatic import of one PDF: reads the protégé's name, finds the dossier
  * (or creates it, by design), then files the PDF under its period label.
  */
-async function importAshPdf(file: File): Promise<AshImportResult> {
+async function importAshPdf(file: File, askOwner: AskOwner): Promise<AshImportResult> {
   const parseForm = new FormData();
   parseForm.append("file", file);
   const parsed = await parseAshPdf(parseForm);
@@ -28,7 +42,7 @@ async function importAshPdf(file: File): Promise<AshImportResult> {
   }
 
   const protegeName = parsed.protegeName;
-  const dossier = await findOrCreateAshDossier(protegeName);
+  const dossier = await findOrCreateWithOwner(protegeName, askOwner);
   if (!dossier.success || !dossier.dossierId) {
     return { filename: file.name, status: "error", protegeName, error: dossier.error ?? "Erreur dossier" };
   }
@@ -41,7 +55,7 @@ async function importAshPdf(file: File): Promise<AshImportResult> {
   if (!uploaded.success) {
     return { filename: file.name, status: "error", protegeName, error: uploaded.error ?? "Erreur upload" };
   }
-  return { filename: file.name, status: "ok", protegeName, periodLabel: parsed.periodLabel, created: dossier.created };
+  return { filename: file.name, status: "ok", protegeName, periodLabel: parsed.periodLabel, created: "created" in dossier ? dossier.created : false };
 }
 
 /** Runs the ASH import on dropped files; what it cannot place goes to manual sorting. */
@@ -54,6 +68,7 @@ export function useAshImport() {
   // Set synchronously, unlike isProcessing: a double-click or a second drop
   // before the next render must not import the same files twice.
   const runningRef = useRef(false);
+  const ownerPrompt = useAshOwnerPrompt(useMandataireContext().choices);
 
   async function start(files: File[]) {
     if (runningRef.current) return;
@@ -63,6 +78,7 @@ export function useAshImport() {
     const images = accepted.filter((f) => f.type !== "application/pdf");
     if (accepted.length === 0) return;
     runningRef.current = true;
+    ownerPrompt.resetForNewDrop();
     setIsProcessing(true);
     setResults(null);
     const output: AshImportResult[] = images.map((f) => ({
@@ -73,7 +89,7 @@ export function useAshImport() {
     const failed: File[] = [...images];
     try {
       for (const file of pdfs) {
-        const result = await importAshPdf(file).catch(
+        const result = await importAshPdf(file, ownerPrompt.ask).catch(
           (): AshImportResult => ({ filename: file.name, status: "error", error: "Erreur inattendue" })
         );
         output.push(result);
@@ -94,10 +110,14 @@ export function useAshImport() {
     router.refresh();
   }
 
-  const dialog =
-    sortingBatch !== null ? (
-      <SortingDialog key={sortingBatch} open files={unsorted} moduleType="ASH" onClose={handleSortingClose} />
-    ) : null;
+  const dialog = (
+    <>
+      {ownerPrompt.dialog}
+      {sortingBatch !== null && (
+        <SortingDialog key={sortingBatch} open files={unsorted} moduleType="ASH" onClose={handleSortingClose} />
+      )}
+    </>
+  );
 
   return { start, isProcessing, results, unsorted, openSorting: () => setSortingBatch(Date.now()), dialog };
 }

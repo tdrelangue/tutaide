@@ -73,8 +73,16 @@ export async function getEffectiveUserId(): Promise<string | null> {
   const session = await auth();
   if (!session?.user?.id) return null;
 
+  // The login token lives for weeks: an account archived since (e.g. by its
+  // organisation admin) must lose access now, and a revoked admin role too.
+  const current = await db.user.findUnique({
+    where: { id: session.user.id },
+    select: { archivedAt: true, role: true },
+  });
+  if (!current || current.archivedAt !== null) return null;
+
   // Only admins can impersonate
-  if (session.user.role === "ADMIN") {
+  if (current.role === "ADMIN") {
     const cookieStore = await cookies();
     const impersonatedId = cookieStore.get(IMPERSONATION_COOKIE)?.value;
     if (impersonatedId) {

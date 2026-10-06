@@ -3,9 +3,9 @@
 import { revalidatePath } from "next/cache";
 import { attachmentPathsFor } from "@/lib/storage/document-files";
 import { db } from "@/lib/db";
-import { requireAuth } from "@/lib/auth";
+import { requireSoloUserId } from "@/lib/access/context";
 import { sendEmail } from "@/lib/mailer-client";
-import { getSmtpConfigWithPassword } from "../settings/actions";
+import { getSendingSmtp } from "@/lib/mail-config";
 import { sendEmailSchema, type SendEmailFormData } from "@/lib/validations";
 import type { EmailSendStatus } from "@prisma/client";
 
@@ -41,7 +41,7 @@ export type EmailBatchGroup = {
 
 // Get email history grouped by batch
 export async function getEmailHistory(): Promise<EmailBatchGroup[]> {
-  const userId = await requireAuth();
+  const userId = await requireSoloUserId();
 
   const events = await db.emailSendEvent.findMany({
     where: { userId },
@@ -94,7 +94,7 @@ export async function getEmailHistory(): Promise<EmailBatchGroup[]> {
 
 // Get emails for a specific dossier
 export async function getDossierEmails(dossierId: string): Promise<EmailEvent[]> {
-  const userId = await requireAuth();
+  const userId = await requireSoloUserId();
 
   const events = await db.emailSendEvent.findMany({
     where: { userId, dossierId },
@@ -128,12 +128,12 @@ export async function sendEmailAction(
   data: SendEmailFormData
 ): Promise<{ success: boolean; eventId?: string; error?: string }> {
   try {
-    const userId = await requireAuth();
+    const userId = await requireSoloUserId();
     const validated = sendEmailSchema.parse(data);
     const signature = await getUserSignature(userId);
 
     // Get SMTP config
-    const smtpConfig = await getSmtpConfigWithPassword();
+    const smtpConfig = await getSendingSmtp(userId);
     if (!smtpConfig) {
       return { success: false, error: "Configuration SMTP non définie" };
     }
@@ -240,7 +240,7 @@ export async function sendEmailAction(
 export async function resendEmail(
   eventId: string
 ): Promise<{ success: boolean; newEventId?: string; error?: string }> {
-  const userId = await requireAuth();
+  const userId = await requireSoloUserId();
 
   // Get original event
   const originalEvent = await db.emailSendEvent.findFirst({

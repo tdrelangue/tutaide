@@ -3,9 +3,10 @@
 import { revalidatePath } from "next/cache";
 import { attachmentPathsFor, removeDocumentFile } from "@/lib/storage/document-files";
 import { db } from "@/lib/db";
-import { requireAuth } from "@/lib/auth";
+import { requireOwnerScope } from "@/lib/access/context";
+import { getSignatureOf } from "@/lib/access/org-mail";
 import { sendEmail } from "@/lib/mailer-client";
-import { getSmtpConfigWithPassword, getModuleConfig } from "../../settings/actions";
+import { getSendingModuleConfig, getSendingSmtp } from "@/lib/mail-config";
 import {
   sendEmailSchema,
   bulkSendSchema,
@@ -14,14 +15,15 @@ import {
   type BulkSendFormData,
   type SendAllFormData,
 } from "@/lib/validations";
-import type { EmailSendStatus, EmailType, EmailReason, ModuleType } from "@prisma/client";
+import type { EmailSendStatus, EmailType, EmailReason, ModuleType, Prisma } from "@prisma/client";
 
 /** Resolve the subject/body template for a dossier, with module-default fallback. */
 async function resolveTemplateForDossier(
-  userId: string,
+  ownerId: string,
   dossierId: string,
   moduleType: ModuleType
 ): Promise<{ subject: string; body: string } | null> {
+  const userId = ownerId;
   const dossier = await db.dossier.findFirst({
     where: { id: dossierId, userId },
     select: {
@@ -42,12 +44,16 @@ async function resolveTemplateForDossier(
   return fallback ?? null;
 }
 
-async function getUserSignature(userId: string): Promise<string> {
-  const user = await db.user.findUnique({
-    where: { id: userId },
-    select: { signature: true },
-  });
-  return user?.signature ?? "";
+/** One signature lookup per MJPM during a bulk send. */
+function signatureCache(): (ownerId: string) => Promise<string> {
+  const cache = new Map<string, Promise<string>>();
+  return (ownerId) => {
+    const cached = cache.get(ownerId);
+    if (cached) return cached;
+    const next = getSignatureOf(ownerId);
+    cache.set(ownerId, next);
+    return next;
+  };
 }
 
 /** Delete all documents from a dossier (DB records + files on disk). */
@@ -85,7 +91,50 @@ export type EmailEvent = {
   dossierId: string | null;
   dossierName: string | null;
   batchId: string | null;
+  /** Who clicked send, when it was not the dossier's MJPM (an assistant). */
+  sentByName: string | null;
 };
+
+type LoadedEvent = Awaited<ReturnType<typeof loadEvents>>[number];
+
+function loadEvents(where: Prisma.EmailSendEventWhereInput) {
+  return db.emailSendEvent.findMany({
+    where,
+    orderBy: { createdAt: "desc" },
+    include: { dossier: { select: { fullName: true } } },
+  });
+}
+
+/** Names of the people who sent on behalf of someone else. */
+async function senderNames(events: LoadedEvent[]): Promise<Map<string, string>> {
+  const ids = [...new Set(events.filter((e) => e.sentById && e.sentById !== e.userId).map((e) => e.sentById as string))];
+  if (ids.length === 0) return new Map();
+  const users = await db.user.findMany({ where: { id: { in: ids } }, select: { id: true, name: true, email: true } });
+  return new Map(users.map((u) => [u.id, u.name || u.email]));
+}
+
+async function toEmailEvents(events: LoadedEvent[]): Promise<EmailEvent[]> {
+  const names = await senderNames(events);
+  return events.map((event) => ({
+    id: event.id,
+    status: event.status as EmailEvent["status"],
+    errorMessage: event.errorMessage,
+    moduleType: (event.moduleType as EmailEvent["moduleType"]) ?? null,
+    emailType: (event.emailType as EmailEvent["emailType"]) ?? "STANDARD",
+    emailReason: (event.emailReason as EmailEvent["emailReason"]) ?? null,
+    recipients: event.recipients,
+    ccRecipients: event.ccRecipients,
+    bccRecipients: event.bccRecipients,
+    subject: event.subject,
+    body: event.body,
+    createdAt: event.createdAt,
+    sentAt: event.sentAt,
+    dossierId: event.dossierId,
+    dossierName: event.dossier?.fullName || null,
+    batchId: event.batchId,
+    sentByName: event.sentById ? names.get(event.sentById) ?? null : null,
+  }));
+}
 
 export type BulkSendResult = {
   dossierId: string;
@@ -97,36 +146,8 @@ export type BulkSendResult = {
 // Fetch email history for a specific dossier
 // ---------------------------------------------------------------------------
 export async function getDossierEmails(dossierId: string): Promise<EmailEvent[]> {
-  const userId = await requireAuth();
-
-  const events = await db.emailSendEvent.findMany({
-    where: { userId, dossierId },
-    orderBy: { createdAt: "desc" },
-    include: {
-      dossier: {
-        select: { fullName: true },
-      },
-    },
-  });
-
-  return events.map((event) => ({
-    id: event.id,
-    status: event.status as EmailEvent["status"],
-    errorMessage: event.errorMessage,
-    moduleType: (event.moduleType as EmailEvent["moduleType"]) ?? null,
-    emailType: (event.emailType as EmailEvent["emailType"]) ?? "STANDARD",
-    emailReason: (event.emailReason as EmailEvent["emailReason"]) ?? null,
-    recipients: event.recipients,
-    ccRecipients: event.ccRecipients,
-    bccRecipients: event.bccRecipients,
-    subject: event.subject,
-    body: event.body,
-    createdAt: event.createdAt,
-    sentAt: event.sentAt,
-    dossierId: event.dossierId,
-    dossierName: event.dossier?.fullName || null,
-    batchId: event.batchId,
-  }));
+  const { ownerIds } = await requireOwnerScope();
+  return toEmailEvents(await loadEvents({ userId: { in: ownerIds }, dossierId }));
 }
 
 // ---------------------------------------------------------------------------
@@ -135,36 +156,8 @@ export async function getDossierEmails(dossierId: string): Promise<EmailEvent[]>
 export async function getModuleEmailHistory(
   moduleType: "APA" | "ASH"
 ): Promise<EmailEvent[]> {
-  const userId = await requireAuth();
-
-  const events = await db.emailSendEvent.findMany({
-    where: { userId, moduleType },
-    orderBy: { createdAt: "desc" },
-    include: {
-      dossier: {
-        select: { fullName: true },
-      },
-    },
-  });
-
-  return events.map((event) => ({
-    id: event.id,
-    status: event.status as EmailEvent["status"],
-    errorMessage: event.errorMessage,
-    moduleType: (event.moduleType as EmailEvent["moduleType"]) ?? null,
-    emailType: (event.emailType as EmailEvent["emailType"]) ?? "STANDARD",
-    emailReason: (event.emailReason as EmailEvent["emailReason"]) ?? null,
-    recipients: event.recipients,
-    ccRecipients: event.ccRecipients,
-    bccRecipients: event.bccRecipients,
-    subject: event.subject,
-    body: event.body,
-    createdAt: event.createdAt,
-    sentAt: event.sentAt,
-    dossierId: event.dossierId,
-    dossierName: event.dossier?.fullName || null,
-    batchId: event.batchId,
-  }));
+  const { ownerIds } = await requireOwnerScope({ narrowed: true });
+  return toEmailEvents(await loadEvents({ userId: { in: ownerIds }, moduleType }));
 }
 
 // ---------------------------------------------------------------------------
@@ -174,55 +167,62 @@ export async function sendEmailAction(
   data: SendEmailFormData
 ): Promise<{ success: boolean; eventId?: string; error?: string }> {
   try {
-    const userId = await requireAuth();
+    const { actorId, ownerIds } = await requireOwnerScope();
+    if (ownerIds.length === 0) return { success: false, error: "Ce compte n'a pas acces aux dossiers" };
     const validated = sendEmailSchema.parse(data);
-    const signature = await getUserSignature(userId);
 
-    const smtpConfig = await getSmtpConfigWithPassword();
+    const smtpConfig = await getSendingSmtp(actorId);
     if (!smtpConfig) {
       return { success: false, error: "Configuration SMTP non definie" };
     }
 
+    // Dossier name for placeholders; its MJPM owns the email record and signs.
+    let dossierName: string | undefined;
+    let ownerId = actorId;
+    if (validated.dossierId) {
+      const dossier = await db.dossier.findFirst({
+        where: { id: validated.dossierId, userId: { in: ownerIds } },
+        select: { fullName: true, userId: true },
+      });
+      if (!dossier) return { success: false, error: "Dossier non trouve" };
+      dossierName = dossier.fullName;
+      ownerId = dossier.userId;
+    }
+    const signature = await getSignatureOf(ownerId);
+
     const batch = await db.emailBatch.create({
       data: {
-        userId,
+        userId: actorId,
         moduleType: validated.moduleType ?? null,
         description: `Email a ${validated.recipients.join(", ")}`,
       },
     });
 
-    // Fetch dossier name for placeholder resolution
-    let dossierName: string | undefined;
-    if (validated.dossierId) {
-      const dossier = await db.dossier.findFirst({
-        where: { id: validated.dossierId, userId },
-        select: { fullName: true },
-      });
-      dossierName = dossier?.fullName ?? undefined;
-    }
-
     // Fetch module config for IMAP folder
     let imapFolder: string | undefined;
     if (validated.moduleType) {
-      const moduleConfig = await getModuleConfig(validated.moduleType as ModuleType);
+      const moduleConfig = await getSendingModuleConfig(actorId, validated.moduleType as ModuleType);
       imapFolder = moduleConfig?.imapFolder ?? undefined;
     }
 
     // Resolve attachment URLs if provided
     let attachmentPaths: string[] = [];
+    let allowedAttachmentIds: string[] = [];
     if (validated.attachmentIds.length > 0) {
       const documents = await db.document.findMany({
         where: {
           id: { in: validated.attachmentIds },
-          userId,
+          userId: { in: ownerIds },
         },
       });
       attachmentPaths = attachmentPathsFor(documents.map((d) => d.blobUrl));
+      allowedAttachmentIds = documents.map((d) => d.id);
     }
 
     const event = await db.emailSendEvent.create({
       data: {
-        userId,
+        userId: ownerId,
+        sentById: actorId,
         dossierId: validated.dossierId || null,
         batchId: batch.id,
         status: "PENDING",
@@ -235,7 +235,7 @@ export async function sendEmailAction(
         subject: validated.subject,
         body: validated.body,
         attachments: {
-          create: validated.attachmentIds.map((docId) => ({
+          create: allowedAttachmentIds.map((docId) => ({
             documentId: docId,
           })),
         },
@@ -297,12 +297,12 @@ export async function sendEmailAction(
 export async function bulkSendAction(
   data: BulkSendFormData
 ): Promise<BulkSendResult[]> {
-  const userId = await requireAuth();
+  const { actorId, ownerIds } = await requireOwnerScope();
   // BulkSendFormData no longer carries subject/body — resolved per-dossier below
   const validated = bulkSendSchema.parse(data);
-  const signature = await getUserSignature(userId);
+  const signatureOf = signatureCache();
 
-  const smtpConfig = await getSmtpConfigWithPassword();
+  const smtpConfig = await getSendingSmtp(actorId);
   if (!smtpConfig) {
     return validated.dossierIds.map((dossierId) => ({
       dossierId,
@@ -312,7 +312,7 @@ export async function bulkSendAction(
   }
 
   // Get the module destination email (government organism)
-  const moduleConfig = await getModuleConfig(validated.moduleType as ModuleType);
+  const moduleConfig = await getSendingModuleConfig(actorId, validated.moduleType as ModuleType);
   if (!moduleConfig?.destinationEmail) {
     return validated.dossierIds.map((dossierId) => ({
       dossierId,
@@ -324,7 +324,7 @@ export async function bulkSendAction(
   // Create a single batch for the entire bulk send
   const batch = await db.emailBatch.create({
     data: {
-      userId,
+      userId: actorId,
       moduleType: validated.moduleType,
       description: `Envoi groupe ${validated.moduleType} - ${validated.dossierIds.length} dossiers`,
     },
@@ -335,9 +335,10 @@ export async function bulkSendAction(
   for (const dossierId of validated.dossierIds) {
     try {
       const dossier = await db.dossier.findFirst({
-        where: { id: dossierId, userId },
+        where: { id: dossierId, userId: { in: ownerIds } },
         select: {
           id: true,
+          userId: true,
           fullName: true,
           primaryEmail: true,
           ccEmails: true,
@@ -356,7 +357,7 @@ export async function bulkSendAction(
       }
 
       // Resolve template for this specific dossier
-      const tpl = await resolveTemplateForDossier(userId, dossierId, validated.moduleType as ModuleType);
+      const tpl = await resolveTemplateForDossier(dossier.userId, dossierId, validated.moduleType as ModuleType);
       if (!tpl) {
         results.push({
           dossierId,
@@ -375,7 +376,8 @@ export async function bulkSendAction(
 
       const event = await db.emailSendEvent.create({
         data: {
-          userId,
+          userId: dossier.userId,
+          sentById: actorId,
           dossierId: dossier.id,
           batchId: batch.id,
           status: "PENDING",
@@ -405,7 +407,7 @@ export async function bulkSendAction(
         subject: tpl.subject,
         body: tpl.body,
         attachmentPaths: attachmentPathsFor(dossier.documents.map((d) => d.blobUrl)),
-        signature,
+        signature: await signatureOf(dossier.userId),
         moduleType: validated.moduleType as "APA" | "ASH",
         dossierName: dossier.fullName,
         imapFolder: moduleConfig.imapFolder ?? undefined,
@@ -424,7 +426,7 @@ export async function bulkSendAction(
 
       // Clear documents from dossier after successful send
       if (sendResult.success) {
-        await clearDossierDocuments(dossierId, userId);
+        await clearDossierDocuments(dossierId, dossier.userId);
       }
 
       results.push({
@@ -457,10 +459,10 @@ export async function bulkSendAction(
 export async function resendEmail(
   eventId: string
 ): Promise<{ success: boolean; newEventId?: string; error?: string }> {
-  const userId = await requireAuth();
+  const { ownerIds } = await requireOwnerScope();
 
   const originalEvent = await db.emailSendEvent.findFirst({
-    where: { id: eventId, userId },
+    where: { id: eventId, userId: { in: ownerIds } },
     include: {
       attachments: {
         include: { document: true },
@@ -498,16 +500,16 @@ export async function resendEmail(
 export async function sendAllAction(
   data: SendAllFormData
 ): Promise<BulkSendResult[]> {
-  const userId = await requireAuth();
+  const { actorId, ownerIds } = await requireOwnerScope({ narrowed: true });
   const validated = sendAllSchema.parse(data);
-  const signature = await getUserSignature(userId);
+  const signatureOf = signatureCache();
 
-  const smtpConfig = await getSmtpConfigWithPassword();
+  const smtpConfig = await getSendingSmtp(actorId);
   if (!smtpConfig) {
     return [{ dossierId: "", success: false, error: "Configuration SMTP non definie" }];
   }
 
-  const moduleConfig = await getModuleConfig(validated.moduleType as ModuleType);
+  const moduleConfig = await getSendingModuleConfig(actorId, validated.moduleType as ModuleType);
   if (!moduleConfig?.destinationEmail) {
     return [{ dossierId: "", success: false, error: "Email de destination non configure dans les parametres" }];
   }
@@ -515,13 +517,14 @@ export async function sendAllAction(
   // Fetch all active dossiers with at least one document
   const dossiers = await db.dossier.findMany({
     where: {
-      userId,
+      userId: { in: ownerIds },
       moduleType: validated.moduleType,
       status: "ACTIVE",
       documents: { some: {} },
     },
     select: {
       id: true,
+      userId: true,
       fullName: true,
       primaryEmail: true,
       ccEmails: true,
@@ -536,7 +539,7 @@ export async function sendAllAction(
 
   const batch = await db.emailBatch.create({
     data: {
-      userId,
+      userId: actorId,
       moduleType: validated.moduleType,
       description: `Envoi total ${validated.moduleType} - ${dossiers.length} dossiers`,
     },
@@ -546,7 +549,7 @@ export async function sendAllAction(
 
   for (const dossier of dossiers) {
     try {
-      const tpl = await resolveTemplateForDossier(userId, dossier.id, validated.moduleType as ModuleType);
+      const tpl = await resolveTemplateForDossier(dossier.userId, dossier.id, validated.moduleType as ModuleType);
       if (!tpl) {
         results.push({
           dossierId: dossier.id,
@@ -564,7 +567,8 @@ export async function sendAllAction(
 
       const event = await db.emailSendEvent.create({
         data: {
-          userId,
+          userId: dossier.userId,
+          sentById: actorId,
           dossierId: dossier.id,
           batchId: batch.id,
           status: "PENDING",
@@ -599,7 +603,7 @@ export async function sendAllAction(
         subject: tpl.subject,
         body: tpl.body,
         attachmentPaths: attachmentPathsFor(dossier.documents.map((d) => d.blobUrl)),
-        signature,
+        signature: await signatureOf(dossier.userId),
         moduleType: validated.moduleType as "APA" | "ASH",
         dossierName: dossier.fullName,
         imapFolder: moduleConfig.imapFolder ?? undefined,
@@ -618,7 +622,7 @@ export async function sendAllAction(
 
       // Clear documents from dossier after successful send
       if (sendResult.success) {
-        await clearDossierDocuments(dossier.id, userId);
+        await clearDossierDocuments(dossier.id, dossier.userId);
       }
 
       results.push({

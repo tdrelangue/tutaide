@@ -5,7 +5,8 @@ import { hash, compare } from "bcryptjs";
 import nodemailer from "nodemailer";
 import { db } from "@/lib/db";
 import { requireAuth } from "@/lib/auth";
-import { encrypt, decrypt } from "@/lib/encryption";
+import { getOrgModuleDestinationsFor } from "@/lib/access/org-mail";
+import { encrypt } from "@/lib/encryption";
 import {
   smtpConfigSchema,
   emailTemplateSchema,
@@ -49,34 +50,9 @@ export async function getSmtpConfig(): Promise<SmtpConfigData> {
   return config;
 }
 
-// Get full SMTP config with decrypted password (server-side only)
-export async function getSmtpConfigWithPassword(): Promise<{
-  host: string;
-  port: number;
-  secure: boolean;
-  username: string;
-  password: string;
-  fromName: string;
-  fromEmail: string;
-} | null> {
-  const userId = await requireAuth();
-
-  const config = await db.smtpConfig.findUnique({
-    where: { userId },
-  });
-
-  if (!config) return null;
-
-  return {
-    host: config.smtpHost,
-    port: config.smtpPort,
-    secure: config.secure,
-    username: config.username,
-    password: decrypt(config.encryptedPassword),
-    fromName: config.fromName,
-    fromEmail: config.fromEmail,
-  };
-}
+// The SMTP config WITH its decrypted password is deliberately not available
+// here: exports of a "use server" file are callable from the browser.
+// Sending reads it through lib/mail-config.ts (server-internal).
 
 /**
  * Convert raw SMTP errors into plain French messages. nodemailer wraps network
@@ -316,6 +292,9 @@ export async function getModuleConfig(
 ): Promise<ModuleConfigData> {
   const userId = await requireAuth();
 
+  const orgConfig = (await getOrgModuleDestinationsFor(userId)).find((c) => c.moduleType === moduleType);
+  if (orgConfig) return orgConfig;
+
   const config = await db.moduleConfig.findUnique({
     where: {
       userId_moduleType: {
@@ -342,15 +321,20 @@ export async function getAllModuleConfigs(): Promise<{
 }> {
   const userId = await requireAuth();
 
-  const configs = await db.moduleConfig.findMany({
-    where: { userId },
-    select: {
-      id: true,
-      moduleType: true,
-      destinationEmail: true,
-      imapFolder: true,
-    },
-  });
+  const [own, org] = await Promise.all([
+    db.moduleConfig.findMany({
+      where: { userId },
+      select: {
+        id: true,
+        moduleType: true,
+        destinationEmail: true,
+        imapFolder: true,
+      },
+    }),
+    getOrgModuleDestinationsFor(userId),
+  ]);
+  // The organisation's destinations take precedence over personal ones.
+  const configs = [...org, ...own.filter((c) => !org.some((o) => o.moduleType === c.moduleType))];
 
   return {
     apa: configs.find((c) => c.moduleType === "APA") || null,
@@ -405,8 +389,9 @@ export async function duplicateTemplate(
   try {
     const userId = await requireAuth();
 
+    // Only a global template or one of the user's own (never another account's).
     const source = await db.emailTemplate.findFirst({
-      where: { id },
+      where: { id, OR: [{ isGlobal: true }, { userId }] },
       select: { name: true, subject: true, body: true, category: true },
     });
 

@@ -38,6 +38,8 @@ interface SettingsPageClientProps {
   initialSignature: string;
   initialTab?: string;
   billingTab: React.ReactNode;
+  /** Set when the user's organisation sends through its shared mailbox. */
+  orgMailboxAddress?: string | null;
 }
 
 export function SettingsPageClient({
@@ -51,6 +53,7 @@ export function SettingsPageClient({
   initialSignature,
   initialTab,
   billingTab,
+  orgMailboxAddress = null,
 }: SettingsPageClientProps) {
   const [smtpConfig] = useState(initialSmtpConfig);
   const [apaConfig] = useState(initialModuleConfigs.apa);
@@ -121,6 +124,12 @@ export function SettingsPageClient({
                   Configurez votre serveur email pour l&apos;envoi des emails
                 </p>
               </div>
+              {orgMailboxAddress && (
+                <p role="status" className="mb-4 rounded-md border border-primary/40 bg-primary/5 p-3 text-sm">
+                  Vos emails partent par la messagerie de votre structure ({orgMailboxAddress}), réglée
+                  par son administrateur. La configuration ci-dessous n&apos;est utilisée que si elle est retirée.
+                </p>
+              )}
               <SmtpConfigForm initialConfig={smtpConfig} />
             </div>
           </TabsContent>

@@ -30,6 +30,10 @@ import { saveSmtpConfig, testSmtpConnection, type SmtpConfigData } from "./actio
 
 interface SmtpConfigFormProps {
   initialConfig: SmtpConfigData;
+  /** Where to save (default: the user's own mailbox). The organisation admin
+   *  panel passes the organisation's shared mailbox instead. */
+  saveAction?: (data: SmtpConfigFormData) => Promise<{ success: boolean; error?: string }>;
+  title?: string;
 }
 
 const presets = {
@@ -40,7 +44,7 @@ const presets = {
   OTHER:   { smtpHost: "",                    smtpPort: 587, secure: true },
 };
 
-export function SmtpConfigForm({ initialConfig }: SmtpConfigFormProps) {
+export function SmtpConfigForm({ initialConfig, saveAction = saveSmtpConfig, title = "Configuration SMTP" }: SmtpConfigFormProps) {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
   const [isTesting, setIsTesting] = useState(false);
@@ -105,7 +109,7 @@ export function SmtpConfigForm({ initialConfig }: SmtpConfigFormProps) {
   async function onSubmit(data: SmtpConfigFormData) {
     setIsLoading(true);
     try {
-      const result = await saveSmtpConfig(normalizeProvider(data));
+      const result = await saveAction(normalizeProvider(data));
       if (result.success) {
         toast.success("Configuration SMTP enregistrée");
         router.refresh();
@@ -122,7 +126,7 @@ export function SmtpConfigForm({ initialConfig }: SmtpConfigFormProps) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Configuration SMTP</CardTitle>
+        <CardTitle>{title}</CardTitle>
         <CardDescription>
           Configurez votre serveur SMTP pour l&apos;envoi d&apos;emails.
           {initialConfig && (

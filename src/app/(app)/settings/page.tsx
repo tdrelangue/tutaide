@@ -7,11 +7,15 @@ import {
 } from "./actions";
 import { SettingsPageClient } from "./settings-client";
 import { BillingTab } from "./billing-tab";
+import { getEffectiveUserId } from "@/lib/auth";
+import { getOrgSmtpFor } from "@/lib/access/org-mail";
 
 type SearchParams = Promise<{ tab?: string; checkout?: string; session_id?: string }>;
 
 export default async function SettingsPage({ searchParams }: { searchParams: SearchParams }) {
   const { tab, checkout, session_id: sessionId } = await searchParams;
+  const userId = await getEffectiveUserId();
+  const orgMailbox = userId ? await getOrgSmtpFor(userId) : null;
   const [smtpConfig, moduleConfigs, apaTemplates, ashTemplates, pchTemplates, decesTemplates, dessaisTemplates, signature] =
     await Promise.all([
       getSmtpConfig(),
@@ -36,6 +40,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Sea
         initialDessaisTemplates={dessaisTemplates}
         initialSignature={signature}
         initialTab={tab}
+        orgMailboxAddress={orgMailbox?.fromEmail ?? null}
         billingTab={
           <Suspense fallback={<p role="status" className="text-sm text-muted-foreground">Chargement de l&apos;abonnement…</p>}>
             <BillingTab checkout={checkout} sessionId={sessionId} fresh={tab === "abonnement"} />

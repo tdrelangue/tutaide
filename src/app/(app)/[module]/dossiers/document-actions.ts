@@ -7,7 +7,11 @@
 
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
-import { requireAuth } from "@/lib/auth";
+import {
+  findAccessibleDossierOwner,
+  readMandataireSelection,
+  requireOwnerScope,
+} from "@/lib/access/context";
 import {
   documentFileExists,
   removeDocumentFile,
@@ -41,7 +45,6 @@ export async function uploadDocuments(formData: FormData): Promise<{
   error?: string;
 }> {
   try {
-    const userId = await requireAuth();
     const dossierId = formData.get("dossierId") as string;
     const files = formData.getAll("files") as File[];
 
@@ -49,11 +52,8 @@ export async function uploadDocuments(formData: FormData): Promise<{
       return { success: false, error: "Donnees manquantes" };
     }
 
-    const dossier = await db.dossier.findFirst({
-      where: { id: dossierId, userId },
-    });
-
-    if (!dossier) {
+    const access = await findAccessibleDossierOwner(dossierId);
+    if (!access) {
       return { success: false, error: "Dossier non trouve" };
     }
 
@@ -65,7 +65,7 @@ export async function uploadDocuments(formData: FormData): Promise<{
       }
 
       const buffer = Buffer.from(await file.arrayBuffer());
-      const filePath = await saveDocumentFile(dossier.userId, dossierId, file.name, buffer);
+      const filePath = await saveDocumentFile(access.ownerId, dossierId, file.name, buffer);
 
       const doc = await db.document.create({
         data: {
@@ -73,7 +73,8 @@ export async function uploadDocuments(formData: FormData): Promise<{
           blobUrl: filePath,
           size: file.size,
           mimeType: file.type,
-          userId,
+          userId: access.ownerId,
+          uploadedById: access.actorId,
           dossierId,
         },
       });
@@ -101,10 +102,10 @@ export async function deleteDocument(documentId: string): Promise<{
   error?: string;
 }> {
   try {
-    const userId = await requireAuth();
+    const { ownerIds } = await requireOwnerScope();
 
     const document = await db.document.findFirst({
-      where: { id: documentId, userId },
+      where: { id: documentId, userId: { in: ownerIds } },
     });
 
     if (!document) {
@@ -134,10 +135,10 @@ export async function getDocuments(dossierId: string): Promise<
     createdAt: Date;
   }>
 > {
-  const userId = await requireAuth();
+  const { ownerIds } = await requireOwnerScope();
 
   const documents = await db.document.findMany({
-    where: { dossierId, userId },
+    where: { dossierId, userId: { in: ownerIds } },
     orderBy: { createdAt: "desc" },
     select: {
       id: true,
@@ -158,10 +159,10 @@ export async function getDocuments(dossierId: string): Promise<
 export async function getDocumentUrl(
   documentId: string
 ): Promise<string | null> {
-  const userId = await requireAuth();
+  const { ownerIds } = await requireOwnerScope();
 
   const document = await db.document.findFirst({
-    where: { id: documentId, userId },
+    where: { id: documentId, userId: { in: ownerIds } },
   });
 
   if (!document) {
@@ -180,9 +181,9 @@ export async function openDocumentNatively(
   documentId: string
 ): Promise<{ opened: boolean }> {
   try {
-    const userId = await requireAuth();
+    const { ownerIds } = await requireOwnerScope();
     const document = await db.document.findFirst({
-      where: { id: documentId, userId },
+      where: { id: documentId, userId: { in: ownerIds } },
       select: { blobUrl: true },
     });
     const file = document ? resolveDocumentFile(document.blobUrl) : null;
@@ -309,19 +310,37 @@ export async function parseAshPdf(formData: FormData): Promise<{
 }
 
 /**
- * Find a dossier by fullName (case-insensitive) for the ASH module,
- * or create a minimal one if none exists.
+ * The MJPM an auto-created ASH dossier belongs to: the actor (solo, MJPM),
+ * else the MJPM given by the caller, else the one selected in the header.
+ * Null = an assistant viewing "all" must say which MJPM first.
+ */
+async function ashOwnerFor(
+  scope: Awaited<ReturnType<typeof requireOwnerScope>>,
+  requested?: string
+): Promise<string | null> {
+  if (scope.actor.orgRole !== "ASSISTANT") return scope.ownerIds[0] ?? null;
+  const selection = await readMandataireSelection();
+  const candidate = requested ?? (selection !== "all" ? selection : undefined);
+  return candidate && scope.ownerIds.includes(candidate) ? candidate : null;
+}
+
+/**
+ * Find a dossier by fullName (case-insensitive) for the ASH module among the
+ * dossiers on screen, or create a minimal one if none exists.
+ * `needsOwner: true` = an assistant viewing all their MJPMs must choose which
+ * MJPM the new dossier is for (then call again with `ownerId`).
  */
 export async function findOrCreateAshDossier(
-  protegeName: string
-): Promise<{ success: boolean; dossierId?: string; created?: boolean; error?: string }> {
+  protegeName: string,
+  ownerId?: string
+): Promise<{ success: boolean; dossierId?: string; created?: boolean; needsOwner?: boolean; error?: string }> {
   try {
-    const userId = await requireAuth();
+    const scope = await requireOwnerScope({ narrowed: true });
     const normalized = protegeName.trim();
 
     const existing = await db.dossier.findFirst({
       where: {
-        userId,
+        userId: { in: scope.ownerIds },
         moduleType: "ASH",
         fullName: { equals: normalized, mode: "insensitive" },
       },
@@ -330,6 +349,13 @@ export async function findOrCreateAshDossier(
 
     if (existing) {
       return { success: true, dossierId: existing.id, created: false };
+    }
+
+    const userId = await ashOwnerFor(scope, ownerId);
+    if (!userId) {
+      return scope.ownerIds.length > 0
+        ? { success: false, needsOwner: true }
+        : { success: false, error: "Ce compte n'a pas acces aux dossiers" };
     }
 
     // Auto-assign global ASH quarterly default template
@@ -345,6 +371,7 @@ export async function findOrCreateAshDossier(
         priority: "NORMAL",
         status: "ACTIVE",
         userId,
+        createdById: scope.actorId,
         defaultTemplateId: defaultTemplate?.id ?? null,
       },
       select: { id: true },
@@ -364,15 +391,27 @@ export async function findOrCreateAshDossier(
 
 const SORTABLE_MODULES = new Set(["APA", "ASH", "PCH"]);
 
-export type SortingTarget = { id: string; fullName: string; status: "ACTIVE" | "CLOSED" };
+export type SortingTarget = {
+  id: string;
+  fullName: string;
+  status: "ACTIVE" | "CLOSED";
+  /** The MJPM owning the dossier (assistants handle several). */
+  ownerId: string;
+  ownerName: string;
+};
 
-/** Every dossier of the module, active and closed, for the manual sorting screen. */
+/**
+ * Every dossier of the module the user may file into, active and closed, for
+ * the manual sorting screen. Assistants get all their MJPMs' dossiers; the
+ * screen narrows by MJPM itself.
+ */
 export async function listSortingTargets(moduleType: string): Promise<SortingTarget[]> {
-  const userId = await requireAuth();
+  const { ownerIds } = await requireOwnerScope();
   if (!SORTABLE_MODULES.has(moduleType)) return [];
 
-  return db.dossier.findMany({
-    where: { userId, moduleType: moduleType as "APA" | "ASH" | "PCH" }, // checked against SORTABLE_MODULES above
-    select: { id: true, fullName: true, status: true },
+  const dossiers = await db.dossier.findMany({
+    where: { userId: { in: ownerIds }, moduleType: moduleType as "APA" | "ASH" | "PCH" }, // checked against SORTABLE_MODULES above
+    select: { id: true, fullName: true, status: true, user: { select: { id: true, name: true, email: true } } },
   });
+  return dossiers.map(({ user, ...d }) => ({ ...d, ownerId: user.id, ownerName: user.name || user.email }));
 }

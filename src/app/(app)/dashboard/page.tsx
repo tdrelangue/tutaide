@@ -1,5 +1,7 @@
 import { getAllModuleConfigs } from "@/app/(app)/settings/actions";
 import { isCurrentUserAdmin } from "@/lib/auth";
+import { redirect } from "next/navigation";
+import { currentUserWorksOnDossiers } from "@/lib/access/context";
 import { FolderOpen, Bell, BookOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -35,6 +37,9 @@ const MODULE_META: Record<
 };
 
 export default async function DashboardPage() {
+  // Organisation admin without a working role (e.g. IT): only the admin panel.
+  if (!(await currentUserWorksOnDossiers())) redirect("/structure");
+
   const moduleConfigs = await getAllModuleConfigs();
   const isAdmin = await isCurrentUserAdmin();
 

@@ -3,7 +3,7 @@
 import { documentFileExists } from "@/lib/storage/document-files";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
-import { requireAuth } from "@/lib/auth";
+import { requireSoloUserId } from "@/lib/access/context";
 import { dossierSchema, type DossierFormData } from "@/lib/validations";
 import type { DossierPriority, DossierStatus, SendingFrequency } from "@prisma/client";
 
@@ -35,7 +35,7 @@ export async function getDossiers(params?: {
   sortBy?: "updatedAt" | "fullName" | "priority";
   sortOrder?: "asc" | "desc";
 }): Promise<DossierWithDocuments[]> {
-  const userId = await requireAuth();
+  const userId = await requireSoloUserId();
 
   const { search, priority, sortBy = "updatedAt", sortOrder = "desc" } = params || {};
 
@@ -87,7 +87,7 @@ export async function getDossiers(params?: {
 export async function getDossierSendingFrequency(
   id: string
 ): Promise<SendingFrequency | null> {
-  const userId = await requireAuth();
+  const userId = await requireSoloUserId();
   const dossier = await db.dossier.findFirst({
     where: { id, userId },
     select: { sendingFrequency: true },
@@ -96,7 +96,7 @@ export async function getDossierSendingFrequency(
 }
 
 export async function getDossier(id: string): Promise<DossierWithDocuments | null> {
-  const userId = await requireAuth();
+  const userId = await requireSoloUserId();
 
   const dossier = await db.dossier.findFirst({
     where: { id, userId },
@@ -126,7 +126,7 @@ export async function getDossier(id: string): Promise<DossierWithDocuments | nul
 
 export async function createDossier(data: DossierFormData): Promise<{ success: boolean; id?: string; error?: string }> {
   try {
-    const userId = await requireAuth();
+    const userId = await requireSoloUserId();
     const validated = dossierSchema.parse(data);
 
     // Strip additionalModules — not a DB field, only used at creation time in the module version
@@ -154,7 +154,7 @@ export async function updateDossier(
   data: Partial<DossierFormData>
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const userId = await requireAuth();
+    const userId = await requireSoloUserId();
 
     // Check ownership
     const existing = await db.dossier.findFirst({
@@ -189,7 +189,7 @@ export async function updateDossier(
 
 export async function deleteDossier(id: string): Promise<{ success: boolean; error?: string }> {
   try {
-    const userId = await requireAuth();
+    const userId = await requireSoloUserId();
 
     // Check ownership
     const existing = await db.dossier.findFirst({

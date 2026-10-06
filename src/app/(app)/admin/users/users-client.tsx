@@ -19,8 +19,7 @@ import {
   KeyRound,
   Send,
   Bell,
-  FolderTree,
-} from "lucide-react";
+  FolderTree, Building2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -135,6 +134,12 @@ export function UsersPageClient({ initialUsers }: UsersPageClientProps) {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <Button variant="outline" asChild>
+              <Link href="/admin/organisations">
+                <Building2 className="h-4 w-4 mr-2" />
+                Structures
+              </Link>
+            </Button>
             <Button variant="outline" asChild>
               <Link href="/admin/templates">
                 <FileText className="h-4 w-4 mr-2" />

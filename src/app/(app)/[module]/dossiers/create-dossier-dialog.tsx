@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/select";
 import { dossierSchema, type DossierFormData } from "@/lib/validations";
 import { createDossier, getTemplatesForModule } from "./actions";
+import { useMandataireContext } from "@/components/use-mandataire-context";
 
 type FullModuleType = "APA" | "ASH" | "PCH";
 
@@ -40,8 +41,18 @@ interface CreateDossierDialogProps {
   /** Pre-fills "Nom complet" each time the dialog opens. */
   initialName?: string;
   /** Called with the new dossier, e.g. so the sorting screen can file into it. */
-  onCreated?: (dossier: { id: string; fullName: string; status: "ACTIVE" | "CLOSED" }) => void;
+  onCreated?: (dossier: CreatedDossier) => void;
+  /** Assistants: MJPM preselected (e.g. the one chosen in the sorting screen). */
+  defaultOwnerId?: string;
 }
+
+export type CreatedDossier = {
+  id: string;
+  fullName: string;
+  status: "ACTIVE" | "CLOSED";
+  ownerId: string;
+  ownerName: string;
+};
 
 export function CreateDossierDialog({
   open,
@@ -49,9 +60,19 @@ export function CreateDossierDialog({
   moduleType,
   initialName,
   onCreated,
+  defaultOwnerId,
 }: CreateDossierDialogProps) {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
+  // Assistants choose which MJPM the dossier belongs to.
+  const mandataires = useMandataireContext(open);
+  const [ownerId, setOwnerId] = useState("");
+  const needsOwner = mandataires.choices.length > 0;
+  useEffect(() => {
+    if (!open) return;
+    const preferred = defaultOwnerId ?? (mandataires.selection !== "all" ? mandataires.selection : "");
+    setOwnerId(mandataires.choices.some((c) => c.id === preferred) ? preferred : "");
+  }, [open, defaultOwnerId, mandataires]);
   const [templates, setTemplates] = useState<{ id: string; name: string; isDefault: boolean }[]>([]);
 
   const otherModules = ALL_MODULES.filter((m) => m !== moduleType);
@@ -101,12 +122,24 @@ export function CreateDossierDialog({
   };
 
   async function onSubmit(data: DossierFormData) {
+    if (needsOwner && !ownerId) {
+      toast.error("Choisissez le mandataire du dossier");
+      return;
+    }
     setIsLoading(true);
     try {
-      const result = await createDossier(moduleType, data);
+      const result = await createDossier(moduleType, data, needsOwner ? ownerId : undefined);
       if (result.success) {
         toast.success("Dossier cree avec succes");
-        if (result.id) onCreated?.({ id: result.id, fullName: data.fullName, status: data.status });
+        if (result.id && result.owner) {
+          onCreated?.({
+            id: result.id,
+            fullName: data.fullName,
+            status: data.status,
+            ownerId: result.owner.id,
+            ownerName: result.owner.name,
+          });
+        }
         reset();
         onOpenChange(false);
         router.refresh();
@@ -136,6 +169,26 @@ export function CreateDossierDialog({
         </DialogHeader>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          {needsOwner && (
+            <div className="space-y-2">
+              <Label htmlFor="dossierOwner">
+                Mandataire <span className="text-destructive">*</span>
+              </Label>
+              <Select value={ownerId} onValueChange={setOwnerId} disabled={isLoading}>
+                <SelectTrigger id="dossierOwner" aria-required="true">
+                  <SelectValue placeholder="Choisir le mandataire" />
+                </SelectTrigger>
+                <SelectContent>
+                  {mandataires.choices.map((choice) => (
+                    <SelectItem key={choice.id} value={choice.id}>
+                      {choice.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
           <div className="space-y-2">
             <Label htmlFor="fullName">
               Nom complet <span className="text-destructive">*</span>

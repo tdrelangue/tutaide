@@ -164,6 +164,9 @@ export function DossiersPageClient({
     setSelectedIds(new Set());
   };
 
+  // An assistant viewing several MJPMs sees whose dossier each card is.
+  const hasSeveralOwners = new Set(initialDossiers.map((d) => d.owner.id)).size > 1;
+
   const selectedDossiers = initialDossiers
     .filter((d) => selectedIds.has(d.id))
     .map((d) => ({
@@ -345,6 +348,7 @@ export function DossiersPageClient({
               <DossierCard
                 key={dossier.id}
                 dossier={dossier}
+                ownerName={hasSeveralOwners ? dossier.owner.name : undefined}
                 onSelect={() => handleSelectDossier(dossier)}
                 isSelected={selectedDossier?.id === dossier.id}
                 selectionMode={selectionMode}

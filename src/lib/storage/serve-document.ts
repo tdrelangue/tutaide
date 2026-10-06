@@ -1,25 +1,27 @@
 import { NextResponse } from "next/server";
-import { getEffectiveUserId } from "@/lib/auth";
+import { getActorContext } from "@/lib/access/context";
+import { resolveOwnerIds } from "@/lib/access/scope";
 import { db } from "@/lib/db";
 import { readDocumentFile } from "./document-files";
 
 /**
  * Shared body of /api/documents/[id]/preview (inline: the webview renders it)
  * and /download (attachment: saved by the browser).
- * Uses the effective user, so an admin impersonating a user sees that user's
- * documents like every other screen does.
+ * Same access rule as every screen: the effective user's own documents, or
+ * their MJPMs' for an assistant (an impersonating admin acts as that user).
  */
 export async function serveDocument(
   id: string,
   disposition: "inline" | "attachment"
 ): Promise<NextResponse> {
   try {
-    const userId = await getEffectiveUserId();
-    if (!userId) {
+    const context = await getActorContext();
+    if (!context) {
       return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
     }
+    const ownerIds = resolveOwnerIds(context.actor, context.assigned);
 
-    const document = await db.document.findFirst({ where: { id, userId } });
+    const document = await db.document.findFirst({ where: { id, userId: { in: ownerIds } } });
     if (!document) {
       return NextResponse.json({ error: "Document non trouvé" }, { status: 404 });
     }

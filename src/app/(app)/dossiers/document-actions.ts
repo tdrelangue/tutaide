@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
-import { requireAuth } from "@/lib/auth";
+import { requireSoloUserId } from "@/lib/access/context";
 import {
   documentFileExists,
   removeDocumentFile,
@@ -31,7 +31,7 @@ export async function uploadDocuments(formData: FormData): Promise<{
   error?: string;
 }> {
   try {
-    const userId = await requireAuth();
+    const userId = await requireSoloUserId();
     const dossierId = formData.get("dossierId") as string;
     const files = formData.getAll("files") as File[];
 
@@ -89,7 +89,7 @@ export async function deleteDocument(documentId: string): Promise<{
   error?: string;
 }> {
   try {
-    const userId = await requireAuth();
+    const userId = await requireSoloUserId();
 
     const document = await db.document.findFirst({
       where: { id: documentId, userId },
@@ -123,7 +123,7 @@ export async function getDocuments(dossierId: string): Promise<
     createdAt: Date;
   }>
 > {
-  const userId = await requireAuth();
+  const userId = await requireSoloUserId();
 
   const documents = await db.document.findMany({
     where: { dossierId, userId },
@@ -144,7 +144,7 @@ export async function getDocuments(dossierId: string): Promise<
 }
 
 export async function getDocumentUrl(documentId: string): Promise<string | null> {
-  const userId = await requireAuth();
+  const userId = await requireSoloUserId();
 
   const document = await db.document.findFirst({
     where: { id: documentId, userId },
@@ -166,7 +166,7 @@ export async function openDocumentNatively(
   documentId: string
 ): Promise<{ opened: boolean }> {
   try {
-    const userId = await requireAuth();
+    const userId = await requireSoloUserId();
     const document = await db.document.findFirst({
       where: { id: documentId, userId },
       select: { blobUrl: true },

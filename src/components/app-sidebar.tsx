@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
-import { FolderOpen, Settings, ShieldCheck, LayoutDashboard } from "lucide-react";
+import { Building2, FolderOpen, Settings, ShieldCheck, LayoutDashboard } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface NavItem {
@@ -67,6 +67,15 @@ const adminItem: NavItem = {
   accentClass: "bg-red-600",
 };
 
+const structureItem: NavItem = {
+  href: "/structure",
+  icon: Building2,
+  label: "Administration de la structure",
+  shortLabel: "Structure",
+  description: "Membres et répartition",
+  activePrefix: "/structure",
+};
+
 const settingsItem: NavItem = {
   href: "/settings",
   icon: Settings,
@@ -79,14 +88,17 @@ const settingsItem: NavItem = {
 interface AppSidebarProps {
   userRole: "USER" | "ADMIN";
   activeModules: string[];
+  /** False for an organisation admin without a working role (e.g. IT). */
+  worksOnDossiers: boolean;
+  isOrgAdmin: boolean;
 }
 
-export function AppSidebar({ userRole, activeModules }: AppSidebarProps) {
+export function AppSidebar({ userRole, activeModules, worksOnDossiers, isOrgAdmin }: AppSidebarProps) {
   const pathname = usePathname();
 
-  const visibleModules = moduleItems.filter((item) =>
-    activeModules.includes(item.activePrefix.replace("/", ""))
-  );
+  const visibleModules = worksOnDossiers
+    ? moduleItems.filter((item) => activeModules.includes(item.activePrefix.replace("/", "")))
+    : [];
 
   return (
     <nav
@@ -116,10 +128,15 @@ export function AppSidebar({ userRole, activeModules }: AppSidebarProps) {
       {/* Dashboard */}
       <div className="pt-4 pb-1">
         <ul className="flex flex-col items-center gap-1 list-none p-0 m-0" role="list">
-          <SidebarItem
-            item={dashboardItem}
-            isActive={pathname.startsWith(dashboardItem.activePrefix)}
-          />
+          {worksOnDossiers && (
+            <SidebarItem
+              item={dashboardItem}
+              isActive={pathname.startsWith(dashboardItem.activePrefix)}
+            />
+          )}
+          {isOrgAdmin && (
+            <SidebarItem item={structureItem} isActive={pathname.startsWith("/structure")} />
+          )}
         </ul>
       </div>
 

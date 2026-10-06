@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { auth, getImpersonationState } from "@/lib/auth";
+import { auth, getEffectiveUserId, getImpersonationState } from "@/lib/auth";
 import { AppSidebar } from "@/components/app-sidebar";
 import { AppHeader } from "@/components/app-header";
 import { ImpersonationBanner } from "@/components/impersonation-banner";
@@ -12,6 +12,8 @@ import { PaymentReminderCard } from "@/components/payment-reminder-card";
 import { GuidedTourProvider } from "@/components/guided-tour/tour-provider";
 import { DemoBanner } from "@/components/demo-banner";
 import { isDemoActive, isDemoEmail } from "@/lib/demo/state";
+import { getActorContext } from "@/lib/access/context";
+import { canWorkOnDossiers } from "@/lib/access/scope";
 
 export default async function AppLayout({
   children,
@@ -22,6 +24,11 @@ export default async function AppLayout({
 
   if (!session?.user) {
     redirect("/login");
+  }
+
+  // Archived since login (the login token lives for weeks): no access.
+  if (!(await getEffectiveUserId())) {
+    redirect("/compte-desactive");
   }
 
   // A demo session outliving its demo (app closed during a demo): the demo
@@ -44,10 +51,13 @@ export default async function AppLayout({
     await ensureDailyPaymentReminder(session.user.id, paymentReminder).catch(() => undefined);
   }
 
-  const [impersonation, moduleConfigs] = await Promise.all([
+  const [impersonation, moduleConfigs, actorContext] = await Promise.all([
     getImpersonationState(),
     getAllModuleConfigs(),
+    getActorContext(),
   ]);
+  const worksOnDossiers = actorContext ? canWorkOnDossiers(actorContext.actor) : false;
+  const isOrgAdmin = actorContext?.actor.isOrgAdmin ?? false;
 
   // Heal any dossier links written by an older app build still on the
   // legacy linkedDossierId mechanism into the current groupId model.
@@ -70,7 +80,12 @@ export default async function AppLayout({
         />
       )}
       <div className="flex flex-1">
-        <AppSidebar userRole={session.user.role} activeModules={activeModuleKeys} />
+        <AppSidebar
+          userRole={session.user.role}
+          activeModules={activeModuleKeys}
+          worksOnDossiers={worksOnDossiers}
+          isOrgAdmin={isOrgAdmin}
+        />
         <div className="flex flex-1 flex-col">
           <AppHeader user={session.user} />
           <main id="main-content" className="flex-1 overflow-auto">

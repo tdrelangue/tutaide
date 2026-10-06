@@ -3,6 +3,7 @@
 import path from "path";
 import { revalidatePath } from "next/cache";
 import { requireAuth } from "@/lib/auth";
+import { db } from "@/lib/db";
 import { isDemoActive } from "@/lib/demo/state";
 import { getDefaultDocumentsDir, getDocumentsBaseDir } from "@/lib/documents-dir";
 import {
@@ -24,10 +25,16 @@ export type DocumentsLocation = {
   isDefault: boolean;
   /** Demo mode: documents live in a temp folder that cannot be changed. */
   isLocked: boolean;
+  /** Organisation members: the shared folder their admin asks everyone to choose. */
+  sharedFolderHint: string | null;
 };
 
 export async function getDocumentsLocation(): Promise<DocumentsLocation> {
-  await requireAuth();
+  const userId = await requireAuth();
+  const user = await db.user.findUnique({
+    where: { id: userId },
+    select: { organization: { select: { sharedFolderHint: true } } },
+  });
   const current = getDocumentsBaseDir();
   const defaultDir = getDefaultDocumentsDir();
   return {
@@ -35,6 +42,7 @@ export async function getDocumentsLocation(): Promise<DocumentsLocation> {
     defaultDir,
     isDefault: path.resolve(current) === path.resolve(defaultDir),
     isLocked: isDemoActive(),
+    sharedFolderHint: user?.organization?.sharedFolderHint ?? null,
   };
 }
 
