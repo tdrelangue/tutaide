@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -67,6 +67,8 @@ export function CreateDossierDialog({
   // Assistants choose which MJPM the dossier belongs to.
   const mandataires = useMandataireContext(open);
   const [ownerId, setOwnerId] = useState("");
+  const [ownerError, setOwnerError] = useState<string | null>(null);
+  const ownerTriggerRef = useRef<HTMLButtonElement>(null);
   const needsOwner = mandataires.choices.length > 0;
   useEffect(() => {
     if (!open) return;
@@ -123,9 +125,11 @@ export function CreateDossierDialog({
 
   async function onSubmit(data: DossierFormData) {
     if (needsOwner && !ownerId) {
-      toast.error("Choisissez le mandataire du dossier");
+      setOwnerError("Choisissez le mandataire du dossier");
+      ownerTriggerRef.current?.focus();
       return;
     }
+    setOwnerError(null);
     setIsLoading(true);
     try {
       const result = await createDossier(moduleType, data, needsOwner ? ownerId : undefined);
@@ -174,8 +178,14 @@ export function CreateDossierDialog({
               <Label htmlFor="dossierOwner">
                 Mandataire <span className="text-destructive">*</span>
               </Label>
-              <Select value={ownerId} onValueChange={setOwnerId} disabled={isLoading}>
-                <SelectTrigger id="dossierOwner" aria-required="true">
+              <Select value={ownerId} onValueChange={(v) => { setOwnerId(v); setOwnerError(null); }} disabled={isLoading}>
+                <SelectTrigger
+                  id="dossierOwner"
+                  ref={ownerTriggerRef}
+                  aria-required="true"
+                  aria-invalid={ownerError ? "true" : "false"}
+                  aria-describedby={ownerError ? "dossierOwner-error" : undefined}
+                >
                   <SelectValue placeholder="Choisir le mandataire" />
                 </SelectTrigger>
                 <SelectContent>
@@ -186,6 +196,9 @@ export function CreateDossierDialog({
                   ))}
                 </SelectContent>
               </Select>
+              {ownerError && (
+                <p id="dossierOwner-error" role="alert" className="text-sm text-destructive">{ownerError}</p>
+              )}
             </div>
           )}
 

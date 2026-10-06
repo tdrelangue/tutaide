@@ -1,27 +1,22 @@
 "use client";
 
-import { useEffect } from "react";
 import { signOut } from "next-auth/react";
-import { Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 /**
  * Reached with a session whose account was archived since login (e.g. by the
- * organisation admin): explains, signs out and returns to the login page.
+ * organisation admin). Access is already refused everywhere; the person signs
+ * out when they have read the message (no timer).
  */
 export default function AccountDisabledPage() {
-  useEffect(() => {
-    const timer = setTimeout(() => void signOut({ callbackUrl: "/login" }), 4000);
-    return () => clearTimeout(timer);
-  }, []);
-
   return (
     <main className="flex min-h-screen flex-col items-center justify-center gap-3 px-6 text-center">
-      <p className="font-medium">Ce compte a été désactivé.</p>
+      <h1 className="text-lg font-semibold">Ce compte a été désactivé</h1>
       <p className="max-w-md text-sm text-muted-foreground">
-        Votre accès a été retiré par l&apos;administrateur de votre structure. Contactez-le si
-        vous pensez qu&apos;il s&apos;agit d&apos;une erreur.
+        Votre accès a été retiré par l&apos;administrateur de votre structure. Contactez-le si vous
+        pensez qu&apos;il s&apos;agit d&apos;une erreur.
       </p>
-      <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" aria-label="Déconnexion en cours" />
+      <Button onClick={() => void signOut({ callbackUrl: "/login" })}>Retourner à la connexion</Button>
     </main>
   );
 }

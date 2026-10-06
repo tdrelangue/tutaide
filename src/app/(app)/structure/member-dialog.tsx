@@ -18,7 +18,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import type { MemberRow } from "@/lib/organizations/overview";
 import { addMember, editMember } from "./actions";
 import { fromRoleChoice, ROLE_LABELS, ROLE_NONE, toRoleChoice, type RoleChoice } from "./labels";
-import { useStructureAction } from "./use-structure-action";
+import { InlineError, useStructureAction } from "./use-structure-action";
 
 type FormState = { name: string; email: string; password: string; role: RoleChoice; isOrgAdmin: boolean };
 
@@ -31,10 +31,15 @@ function initialState(member: MemberRow | null): FormState {
 
 /** Create a member (member = null) or edit one. */
 export function MemberDialog({ open, member, isSelf = false, onClose }: { open: boolean; member: MemberRow | null; isSelf?: boolean; onClose: () => void }) {
-  const { run, isBusy } = useStructureAction();
+  const { run, isBusy, error, clearError } = useStructureAction();
   const [form, setForm] = useState<FormState>(EMPTY);
   useEffect(() => {
-    if (open) setForm(initialState(member));
+    if (open) {
+      setForm(initialState(member));
+      clearError();
+    }
+    // clearError is a fresh function each render; only reopening matters here
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, member]);
 
   const update = (patch: Partial<FormState>) => setForm((prev) => ({ ...prev, ...patch }));
@@ -60,11 +65,12 @@ export function MemberDialog({ open, member, isSelf = false, onClose }: { open: 
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
-          <MemberFields form={form} isNew={!member} isSelf={isSelf} isBusy={isBusy} onChange={update} />
+          <MemberFields form={form} isNew={!member} isSelf={isSelf} isBusy={isBusy} memberName={member?.name ?? ""} onChange={update} />
+          <InlineError message={error} />
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose} disabled={isBusy}>Annuler</Button>
             <Button type="submit" disabled={isBusy}>
-              {isBusy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {isBusy && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
               {member ? "Enregistrer" : "Créer le compte"}
             </Button>
           </DialogFooter>
@@ -74,9 +80,16 @@ export function MemberDialog({ open, member, isSelf = false, onClose }: { open: 
   );
 }
 
-type FieldsProps = { form: FormState; isNew: boolean; isSelf: boolean; isBusy: boolean; onChange: (patch: Partial<FormState>) => void };
+type FieldsProps = {
+  form: FormState;
+  isNew: boolean;
+  isSelf: boolean;
+  isBusy: boolean;
+  memberName: string;
+  onChange: (patch: Partial<FormState>) => void;
+};
 
-function MemberFields({ form, isNew, isSelf, isBusy, onChange }: FieldsProps) {
+function MemberFields({ form, isNew, isSelf, isBusy, memberName, onChange }: FieldsProps) {
   return (
     <>
       <div className="space-y-2">
@@ -90,19 +103,29 @@ function MemberFields({ form, isNew, isSelf, isBusy, onChange }: FieldsProps) {
         </div>
       )}
       <div className="space-y-2">
-        <Label htmlFor="member-password">{isNew ? "Mot de passe" : "Nouveau mot de passe (laisser vide pour ne pas changer)"}</Label>
+        <Label htmlFor="member-password">{isNew ? "Mot de passe provisoire" : "Nouveau mot de passe (laisser vide pour ne pas changer)"}</Label>
         <Input
           id="member-password"
           type="password"
+          // Never let the browser fill in the admin's own saved password here.
+          autoComplete="new-password"
           minLength={8}
           required={isNew}
+          aria-describedby="member-password-hint"
           value={form.password}
           disabled={isBusy}
           onChange={(e) => onChange({ password: e.target.value })}
         />
+        <p id="member-password-hint" className="text-xs text-muted-foreground">8 caractères minimum.</p>
+        {!isNew && form.password && (
+          <p role="status" className="rounded-md border border-amber-500/50 bg-amber-500/10 p-2 text-sm">
+            Le mot de passe de {memberName} sera remplacé : communiquez-lui le nouveau.
+          </p>
+        )}
       </div>
       <div className="space-y-2">
         <Label htmlFor="member-role">Rôle</Label>
+        {/* Radix gives the string value of one of the SelectItems below, all RoleChoice values. */}
         <Select value={form.role} onValueChange={(value) => onChange({ role: value as RoleChoice })} disabled={isBusy || isSelf}>
           <SelectTrigger id="member-role"><SelectValue /></SelectTrigger>
           <SelectContent>

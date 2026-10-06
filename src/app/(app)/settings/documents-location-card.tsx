@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AlertCircle, Check, FolderOpen, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -71,8 +71,17 @@ type ConfirmPanelProps = {
 };
 
 function ConfirmPanel({ pending, isSaving, onConfirm, onCancel }: ConfirmPanelProps) {
+  // The chooser was replaced by this panel: move focus here, not to <body>.
+  const panelRef = useRef<HTMLDivElement>(null);
+  useEffect(() => panelRef.current?.focus(), []);
   return (
-    <div className="space-y-3 rounded-md border border-primary/40 bg-primary/5 p-4" role="group" aria-label="Confirmer le nouvel emplacement">
+    <div
+      ref={panelRef}
+      tabIndex={-1}
+      className="space-y-3 rounded-md border border-primary/40 bg-primary/5 p-4 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      role="group"
+      aria-label="Confirmer le nouvel emplacement"
+    >
       <p className="text-sm">
         Nouvel emplacement : <span className="font-medium break-all">{pending.label}</span>
       </p>
@@ -82,7 +91,7 @@ function ConfirmPanel({ pending, isSaving, onConfirm, onCancel }: ConfirmPanelPr
       </p>
       <div className="flex flex-wrap gap-2">
         <Button type="button" onClick={() => onConfirm(true)} disabled={isSaving}>
-          {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
           Copier mes documents et utiliser ce dossier
         </Button>
         <Button type="button" variant="outline" onClick={() => onConfirm(false)} disabled={isSaving}>
@@ -99,8 +108,8 @@ function ConfirmPanel({ pending, isSaving, onConfirm, onCancel }: ConfirmPanelPr
 function StatusMessage({ message }: { message: Message }) {
   const isSuccess = message.type === "success";
   return (
-    <div role="status" className={`flex items-center gap-2 text-sm ${isSuccess ? "text-green-600" : "text-destructive"}`}>
-      {isSuccess ? <Check className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
+    <div role={isSuccess ? "status" : "alert"} className={`flex items-center gap-2 text-sm ${isSuccess ? "text-green-700" : "text-destructive"}`}>
+      {isSuccess ? <Check className="h-4 w-4" aria-hidden="true" /> : <AlertCircle className="h-4 w-4" aria-hidden="true" />}
       {message.text}
     </div>
   );
@@ -123,7 +132,13 @@ function SyncExplanation() {
 export function DocumentsLocationCard() {
   const { location, isSaving, message, apply } = useDocumentsLocation();
   const [pending, setPending] = useState<Pending | null>(null);
+  const [hasClosedPanel, setHasClosedPanel] = useState(false);
   const [typedPath, setTypedPath] = useState("");
+
+  function closePanel() {
+    setPending(null);
+    setHasClosedPanel(true);
+  }
 
   async function handleChoose() {
     const picked = await pickFolder();
@@ -138,7 +153,7 @@ export function DocumentsLocationCard() {
   async function handleConfirm(copy: boolean) {
     if (!pending) return;
     if (await apply(pending.dir, copy)) {
-      setPending(null);
+      closePanel();
       setTypedPath("");
     }
   }
@@ -168,9 +183,10 @@ export function DocumentsLocationCard() {
         {location.isLocked ? (
           <p className="text-sm text-muted-foreground">Non modifiable pendant le test de l&apos;application.</p>
         ) : pending ? (
-          <ConfirmPanel pending={pending} isSaving={isSaving} onConfirm={handleConfirm} onCancel={() => setPending(null)} />
+          <ConfirmPanel pending={pending} isSaving={isSaving} onConfirm={handleConfirm} onCancel={closePanel} />
         ) : (
           <LocationChooser
+            shouldFocus={hasClosedPanel}
             isDefault={location.isDefault}
             defaultDir={location.defaultDir}
             typedPath={typedPath}
@@ -187,6 +203,8 @@ export function DocumentsLocationCard() {
 }
 
 type LocationChooserProps = {
+  /** True after the confirmation panel closed (focus comes back here). */
+  shouldFocus: boolean;
   isDefault: boolean;
   defaultDir: string;
   typedPath: string;
@@ -197,10 +215,15 @@ type LocationChooserProps = {
 };
 
 function LocationChooser(props: LocationChooserProps) {
+  // Back from the confirmation panel: focus returns to the main button.
+  const chooseRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (props.shouldFocus) chooseRef.current?.focus();
+  }, [props.shouldFocus]);
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap gap-2">
-        <Button type="button" onClick={props.onChoose}>
+        <Button type="button" ref={chooseRef} onClick={props.onChoose}>
           <FolderOpen className="mr-2 h-4 w-4" />
           Choisir un dossier…
         </Button>

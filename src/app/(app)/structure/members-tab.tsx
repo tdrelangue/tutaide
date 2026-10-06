@@ -27,6 +27,7 @@ export function MembersTab({ members, currentUserId }: { members: MemberRow[]; c
   const { run, isBusy } = useStructureAction();
 
   async function handleArchiveToggle(member: MemberRow) {
+    if (isBusy) return;
     await run(() => archiveMember(member.id, !member.archived), member.archived ? "Compte réactivé" : "Compte archivé");
     setArchiving(null);
   }
@@ -66,7 +67,7 @@ type ItemProps = { member: MemberRow; isSelf: boolean; isBusy: boolean; onEdit: 
 
 function MemberItem({ member, isSelf, isBusy, onEdit, onArchiveToggle }: ItemProps) {
   return (
-    <li className={`flex flex-wrap items-center justify-between gap-3 px-4 py-3 ${member.archived ? "opacity-60" : ""}`}>
+    <li className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
       <div className="min-w-0">
         <p className="font-medium">
           {member.name} {isSelf && <span className="text-sm font-normal text-muted-foreground">(vous)</span>}
@@ -76,7 +77,7 @@ function MemberItem({ member, isSelf, isBusy, onEdit, onArchiveToggle }: ItemPro
           <Badge variant="secondary">{ROLE_LABELS[toRoleChoice(member.orgRole)]}</Badge>
           {member.isOrgAdmin && <Badge variant="outline">Administrateur</Badge>}
           {member.orgRole === "MANDATAIRE" && <Badge variant="outline">{member.dossierCount} dossier(s)</Badge>}
-          {member.archived && <Badge variant="destructive">Archivé</Badge>}
+          {member.archived && <Badge variant="outline">Archivé (ne peut plus se connecter)</Badge>}
         </div>
       </div>
       <div className="flex gap-2">
@@ -84,7 +85,13 @@ function MemberItem({ member, isSelf, isBusy, onEdit, onArchiveToggle }: ItemPro
           <Pencil className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" /> Modifier
         </Button>
         {!isSelf && (
-          <Button variant="ghost" size="sm" onClick={onArchiveToggle} disabled={isBusy}>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onArchiveToggle}
+            aria-disabled={isBusy}
+            aria-label={`${member.archived ? "Réactiver" : "Archiver"} ${member.name}`}
+          >
             {member.archived ? "Réactiver" : "Archiver"}
           </Button>
         )}
@@ -102,7 +109,10 @@ function ArchiveConfirm({ member, isBusy, onConfirm, onCancel }: ArchiveProps) {
         <AlertDialogHeader>
           <AlertDialogTitle>Archiver {member?.name} ?</AlertDialogTitle>
           <AlertDialogDescription>
-            Ce compte ne pourra plus se connecter. Rien n&apos;est supprimé : vous pourrez le réactiver à tout moment.
+            Ce compte ne pourra plus se connecter, y compris s&apos;il est connecté en ce moment.
+            Rien n&apos;est supprimé : vous pourrez le réactiver à tout moment.
+            {member?.orgRole === "MANDATAIRE" && member.dossierCount > 0 &&
+              ` Ses ${member.dossierCount} dossier(s) doivent d'abord être transférés (onglet Répartition).`}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>

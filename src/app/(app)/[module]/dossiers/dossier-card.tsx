@@ -78,7 +78,7 @@ export function DossierCard({
         aria-label={
           selectionMode
             ? `${isChecked ? "Deselectionner" : "Selectionner"} le dossier de ${dossier.fullName}`
-            : `Ouvrir le dossier de ${dossier.fullName}`
+            : `Ouvrir le dossier de ${dossier.fullName}${ownerName ? `, mandataire ${ownerName}` : ""}`
         }
       >
         <CardHeader className="pb-2">

@@ -180,51 +180,63 @@ export async function setMandataireAssistants(
   return { success: true };
 }
 
+/** Exactly what a bulk change did, so it can be undone precisely (journal). */
+export type UndoData =
+  | { kind: "move-assistant"; from: string; to: string; mandataireIds: string[]; addedForTo: string[] }
+  | { kind: "transfer-dossiers"; from: string; to: string; dossierIds: string[] };
+
 /**
  * An assistant leaves or changes job: every MJPM they handled goes to another
- * assistant (who keeps their own MJPMs too). Reversible by moving back.
+ * assistant (who keeps their own MJPMs too). Undoable from the journal: the
+ * exact previous assignments are recorded.
  */
 export async function moveAssistantMandataires(
   orgId: string,
   fromAssistantId: string,
   toAssistantId: string,
   actorId: string
-): Promise<Result & { moved?: number }> {
+): Promise<Result & { moved?: number; undo?: UndoData }> {
   if (fromAssistantId === toAssistantId) return { success: false, error: "Choisissez un(e) autre assistant(e)" };
   const selfGrant = toAssistantId === actorId ? refuseSelfGrant(actorId, toAssistantId) : null;
   if (selfGrant) return { success: false, error: selfGrant };
   const members = await memberStates(orgId);
   const byId = new Map(members.map((m) => [m.id, m]));
   if (!byId.has(fromAssistantId)) return { success: false, error: "Assistant(e) invalide" };
-  const current = await db.assistantAssignment.findMany({ where: { assistantId: fromAssistantId }, select: { mandataireId: true } });
+  const [current, targetHas] = await Promise.all([
+    db.assistantAssignment.findMany({ where: { assistantId: fromAssistantId }, select: { mandataireId: true } }),
+    db.assistantAssignment.findMany({ where: { assistantId: toAssistantId }, select: { mandataireId: true } }),
+  ]);
   for (const { mandataireId } of current) {
     const refusal = refuseAssignment(byId.get(toAssistantId), byId.get(mandataireId));
     if (refusal) return { success: false, error: refusal };
   }
+  const mandataireIds = current.map((a) => a.mandataireId);
+  const addedForTo = mandataireIds.filter((id) => !targetHas.some((t) => t.mandataireId === id));
   await db.$transaction([
-    ...current.map(({ mandataireId }) =>
-      db.assistantAssignment.upsert({
-        where: { assistantId_mandataireId: { assistantId: toAssistantId, mandataireId } },
-        create: { assistantId: toAssistantId, mandataireId, createdById: actorId },
-        update: {},
-      })
+    ...addedForTo.map((mandataireId) =>
+      db.assistantAssignment.create({ data: { assistantId: toAssistantId, mandataireId, createdById: actorId } })
     ),
     db.assistantAssignment.deleteMany({ where: { assistantId: fromAssistantId } }),
   ]);
-  return { success: true, moved: current.length };
+  return {
+    success: true,
+    moved: mandataireIds.length,
+    undo: { kind: "move-assistant", from: fromAssistantId, to: toAssistantId, mandataireIds, addedForTo },
+  };
 }
 
 /**
  * An MJPM leaves: all their dossiers (and those dossiers' email history and
- * documents) now belong to another MJPM of the organisation. Files stay
- * where they are on disk; only the owner changes. Reversible by transferring back.
+ * documents) now belong to another MJPM of the organisation. Files stay where
+ * they are on disk; only the owner changes. Undoable from the journal: the
+ * exact dossiers moved are recorded (the target's own dossiers never move back).
  */
 export async function transferMandataireDossiers(
   orgId: string,
   fromMandataireId: string,
   toMandataireId: string,
   actorId: string
-): Promise<Result & { moved?: number }> {
+): Promise<Result & { moved?: number; undo?: UndoData }> {
   if (fromMandataireId === toMandataireId) return { success: false, error: "Choisissez un autre mandataire" };
   const selfGrant = toMandataireId === actorId ? refuseSelfGrant(actorId, toMandataireId) : null;
   if (selfGrant) return { success: false, error: selfGrant };
@@ -234,14 +246,61 @@ export async function transferMandataireDossiers(
   if (!from || from.orgRole !== "MANDATAIRE") return { success: false, error: "Mandataire d'origine invalide" };
   if (!to || to.orgRole !== "MANDATAIRE" || to.archived) return { success: false, error: "Mandataire de destination invalide" };
 
-  const moved = await db.$transaction(async (tx) => {
-    const dossierIds = (await tx.dossier.findMany({ where: { userId: fromMandataireId }, select: { id: true } })).map((d) => d.id);
-    await tx.dossier.updateMany({ where: { id: { in: dossierIds } }, data: { userId: toMandataireId } });
-    await tx.document.updateMany({ where: { dossierId: { in: dossierIds } }, data: { userId: toMandataireId } });
-    await tx.emailSendEvent.updateMany({ where: { dossierId: { in: dossierIds } }, data: { userId: toMandataireId } });
-    return dossierIds.length;
+  const dossierIds = await db.$transaction(async (tx) => {
+    const ids = (await tx.dossier.findMany({ where: { userId: fromMandataireId }, select: { id: true } })).map((d) => d.id);
+    await moveDossiers(tx, ids, toMandataireId);
+    return ids;
   });
-  return { success: true, moved };
+  return {
+    success: true,
+    moved: dossierIds.length,
+    undo: { kind: "transfer-dossiers", from: fromMandataireId, to: toMandataireId, dossierIds },
+  };
+}
+
+type Tx = Parameters<Parameters<typeof db.$transaction>[0]>[0];
+
+async function moveDossiers(tx: Tx, dossierIds: string[], ownerId: string): Promise<void> {
+  await tx.dossier.updateMany({ where: { id: { in: dossierIds } }, data: { userId: ownerId } });
+  await tx.document.updateMany({ where: { dossierId: { in: dossierIds } }, data: { userId: ownerId } });
+  await tx.emailSendEvent.updateMany({ where: { dossierId: { in: dossierIds } }, data: { userId: ownerId } });
+}
+
+/**
+ * Reverses one recorded bulk change, exactly: only what that change moved,
+ * and only what is still where it put it (later changes are not overwritten).
+ */
+export async function undoBulkChange(orgId: string, undo: UndoData, actorId: string): Promise<Result & { restored?: number }> {
+  const members = await memberStates(orgId);
+  const byId = new Map(members.map((m) => [m.id, m]));
+  if (!byId.has(undo.from) || !byId.has(undo.to)) return { success: false, error: "Un des comptes n'appartient plus à la structure" };
+  const selfGrant = undo.from === actorId ? refuseSelfGrant(actorId, actorId) : null;
+  if (selfGrant) return { success: false, error: selfGrant };
+
+  if (undo.kind === "transfer-dossiers") {
+    const restored = await db.$transaction(async (tx) => {
+      const stillThere = (await tx.dossier.findMany({
+        where: { id: { in: undo.dossierIds }, userId: undo.to },
+        select: { id: true },
+      })).map((d) => d.id);
+      await moveDossiers(tx, stillThere, undo.from);
+      return stillThere.length;
+    });
+    return { success: true, restored };
+  }
+
+  const valid = undo.mandataireIds.filter((id) => refuseAssignment(byId.get(undo.from), byId.get(id)) === null);
+  await db.$transaction([
+    db.assistantAssignment.deleteMany({ where: { assistantId: undo.to, mandataireId: { in: undo.addedForTo } } }),
+    ...valid.map((mandataireId) =>
+      db.assistantAssignment.upsert({
+        where: { assistantId_mandataireId: { assistantId: undo.from, mandataireId } },
+        create: { assistantId: undo.from, mandataireId, createdById: actorId },
+        update: {},
+      })
+    ),
+  ]);
+  return { success: true, restored: valid.length };
 }
 
 /** Is this user a member of this organisation? (Guards every write by id.) */

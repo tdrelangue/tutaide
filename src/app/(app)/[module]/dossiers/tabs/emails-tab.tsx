@@ -114,6 +114,7 @@ export function EmailsTab({ dossierId, moduleType }: EmailsTabProps) {
                 <div className="flex items-center justify-between mt-2">
                   <span className="text-xs text-muted-foreground" suppressHydrationWarning>
                     {formatRelativeTime(new Date(email.createdAt))}
+                    {email.sentByName && <> · envoyé par {email.sentByName}</>}
                   </span>
                   <Button
                     variant="ghost"

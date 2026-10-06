@@ -19,7 +19,7 @@ export function StructureClient({ overview, journal, currentUserId }: Props) {
         <div className="flex items-center gap-3">
           <Building2 className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
           <div>
-            <h2 className="text-xl font-semibold tracking-tight">{overview.name}</h2>
+            <h1 className="text-xl font-semibold tracking-tight">{overview.name}</h1>
             <p className="text-sm text-muted-foreground">
               Administration de la structure : comptes, répartition des mandataires, messagerie et stockage.
               Les dossiers des protégés ne sont pas visibles ici.
@@ -30,7 +30,7 @@ export function StructureClient({ overview, journal, currentUserId }: Props) {
 
       <div className="flex-1 overflow-auto p-6">
         <Tabs defaultValue="members" className="w-full">
-          <TabsList className="grid w-full max-w-3xl grid-cols-5">
+          <TabsList className="grid h-auto w-full max-w-3xl grid-cols-2 sm:grid-cols-5">
             <TabsTrigger value="members" className="flex items-center gap-2">
               <Users className="h-4 w-4" aria-hidden="true" /> Membres
             </TabsTrigger>

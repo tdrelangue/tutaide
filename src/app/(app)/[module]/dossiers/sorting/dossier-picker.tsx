@@ -138,10 +138,10 @@ function OwnerToggle({ owners, value, onChange }: { owners: Owner[]; value: Owne
 function StatusToggle({ value, onChange }: { value: StatusFilter; onChange: (v: StatusFilter) => void }) {
   return (
     <div className="flex gap-2" role="group" aria-label="Dossiers affichés">
-      <Button size="sm" variant={value === "ACTIVE" ? "secondary" : "ghost"} aria-pressed={value === "ACTIVE"} onClick={() => onChange("ACTIVE")}>
+      <Button size="sm" variant={value === "ACTIVE" ? "default" : "outline"} aria-pressed={value === "ACTIVE"} onClick={() => onChange("ACTIVE")}>
         Actifs
       </Button>
-      <Button size="sm" variant={value === "ALL" ? "secondary" : "ghost"} aria-pressed={value === "ALL"} onClick={() => onChange("ALL")}>
+      <Button size="sm" variant={value === "ALL" ? "default" : "outline"} aria-pressed={value === "ALL"} onClick={() => onChange("ALL")}>
         Tous (y compris clôturés)
       </Button>
     </div>
@@ -183,7 +183,12 @@ function ConfirmBox(props: {
   onCancel: () => void;
 }) {
   return (
-    <div className="flex flex-col gap-4 rounded-lg border bg-muted/40 p-4" role="alertdialog" aria-labelledby="sorting-confirm-title">
+    <div
+      className="flex flex-col gap-4 rounded-lg border bg-muted/40 p-4"
+      role="group"
+      aria-labelledby="sorting-confirm-title"
+      onKeyDown={(e) => e.key === "Escape" && !props.isBusy && props.onCancel()}
+    >
       <FolderInput className="h-6 w-6 text-primary" aria-hidden="true" />
       <p id="sorting-confirm-title" className="text-sm">
         Ranger <span className="font-medium break-all">« {props.filename} »</span> dans le dossier{" "}

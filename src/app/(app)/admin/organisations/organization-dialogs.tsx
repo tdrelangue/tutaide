@@ -15,7 +15,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useStructureAction } from "../../structure/use-structure-action";
+import { InlineError, useStructureAction } from "../../structure/use-structure-action";
 import { fromRoleChoice, ROLE_LABELS, ROLE_NONE, type RoleChoice } from "../../structure/labels";
 import { attachExistingUser, createOrganization, renameOrganization, type OrgListItem } from "./actions";
 
@@ -23,6 +23,7 @@ const ROLES: RoleChoice[] = ["MANDATAIRE", "ASSISTANT", ROLE_NONE];
 
 function RoleSelect({ id, value, onChange }: { id: string; value: RoleChoice; onChange: (v: RoleChoice) => void }) {
   return (
+    // Radix returns the value of one of the SelectItems below, all RoleChoice values.
     <Select value={value} onValueChange={(v) => onChange(v as RoleChoice)}>
       <SelectTrigger id={id}><SelectValue /></SelectTrigger>
       <SelectContent>
@@ -47,6 +48,7 @@ function FormDialog(props: {
   description: string;
   submitLabel: string;
   isBusy: boolean;
+  error: string | null;
   onSubmit: () => void;
   onClose: () => void;
   children: React.ReactNode;
@@ -60,10 +62,11 @@ function FormDialog(props: {
         </DialogHeader>
         <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); props.onSubmit(); }}>
           {props.children}
+          <InlineError message={props.error} />
           <DialogFooter>
             <Button type="button" variant="outline" onClick={props.onClose} disabled={props.isBusy}>Annuler</Button>
             <Button type="submit" disabled={props.isBusy}>
-              {props.isBusy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {props.isBusy && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
               {props.submitLabel}
             </Button>
           </DialogFooter>
@@ -76,7 +79,7 @@ function FormDialog(props: {
 const EMPTY_CREATE = { orgName: "", name: "", email: "", password: "", role: ROLE_NONE as RoleChoice };
 
 export function CreateOrganizationDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const { run, isBusy } = useStructureAction();
+  const { run, isBusy, error } = useStructureAction();
   const [form, setForm] = useState(EMPTY_CREATE);
   useEffect(() => { if (open) setForm(EMPTY_CREATE); }, [open]);
   const set = (patch: Partial<typeof EMPTY_CREATE>) => setForm((prev) => ({ ...prev, ...patch }));
@@ -87,7 +90,7 @@ export function CreateOrganizationDialog({ open, onClose }: { open: boolean; onC
   }
 
   return (
-    <FormDialog open={open} title="Nouvelle structure" submitLabel="Créer la structure" isBusy={isBusy} onSubmit={handleSubmit} onClose={onClose}
+    <FormDialog open={open} title="Nouvelle structure" submitLabel="Créer la structure" isBusy={isBusy} error={error} onSubmit={handleSubmit} onClose={onClose}
       description="La structure est créée avec son premier administrateur, qui ajoutera ensuite les autres comptes.">
       <Field id="org-name" label="Nom de la structure">
         <Input id="org-name" required value={form.orgName} onChange={(e) => set({ orgName: e.target.value })} />
@@ -100,7 +103,9 @@ export function CreateOrganizationDialog({ open, onClose }: { open: boolean; onC
         <Input id="admin-email" type="email" required value={form.email} onChange={(e) => set({ email: e.target.value })} />
       </Field>
       <Field id="admin-password" label="Mot de passe provisoire">
-        <Input id="admin-password" type="password" minLength={8} required value={form.password} onChange={(e) => set({ password: e.target.value })} />
+        <Input id="admin-password" type="password" autoComplete="new-password" minLength={8} required aria-describedby="admin-password-hint"
+          value={form.password} onChange={(e) => set({ password: e.target.value })} />
+        <p id="admin-password-hint" className="text-xs text-muted-foreground">8 caractères minimum. À communiquer à l&apos;administrateur.</p>
       </Field>
       <Field id="admin-role" label="Rôle dans la structure (en plus de l'administration)">
         <RoleSelect id="admin-role" value={form.role} onChange={(role) => set({ role })} />
@@ -110,7 +115,7 @@ export function CreateOrganizationDialog({ open, onClose }: { open: boolean; onC
 }
 
 export function RenameDialog({ org, onClose }: { org: OrgListItem | null; onClose: () => void }) {
-  const { run, isBusy } = useStructureAction();
+  const { run, isBusy, error } = useStructureAction();
   const [name, setName] = useState("");
   useEffect(() => { if (org) setName(org.name); }, [org]);
 
@@ -120,7 +125,7 @@ export function RenameDialog({ org, onClose }: { org: OrgListItem | null; onClos
 
   return (
     <FormDialog open={org !== null} title="Renommer la structure" description="Le nouveau nom est visible par tous ses membres."
-      submitLabel="Renommer" isBusy={isBusy} onSubmit={handleSubmit} onClose={onClose}>
+      submitLabel="Renommer" isBusy={isBusy} error={error} onSubmit={handleSubmit} onClose={onClose}>
       <Field id="rename-org" label="Nom">
         <Input id="rename-org" required value={name} onChange={(e) => setName(e.target.value)} />
       </Field>
@@ -129,7 +134,7 @@ export function RenameDialog({ org, onClose }: { org: OrgListItem | null; onClos
 }
 
 export function AttachUserDialog({ org, onClose }: { org: OrgListItem | null; onClose: () => void }) {
-  const { run, isBusy } = useStructureAction();
+  const { run, isBusy, error } = useStructureAction();
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<RoleChoice>("MANDATAIRE");
   const [isOrgAdmin, setIsOrgAdmin] = useState(false);
@@ -142,7 +147,7 @@ export function AttachUserDialog({ org, onClose }: { org: OrgListItem | null; on
   }
 
   return (
-    <FormDialog open={org !== null} title={`Rattacher un compte à ${org?.name ?? ""}`} submitLabel="Rattacher" isBusy={isBusy}
+    <FormDialog open={org !== null} title={`Rattacher un compte à ${org?.name ?? ""}`} submitLabel="Rattacher" isBusy={isBusy} error={error}
       onSubmit={handleSubmit} onClose={onClose}
       description="Un compte individuel existant rejoint la structure avec ses dossiers (un compte qui a des dossiers est rattaché comme mandataire).">
       <Field id="attach-email" label="Email du compte">

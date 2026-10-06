@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import type { MemberRow } from "@/lib/organizations/overview";
 import { assignAssistants, moveAssistantWork, transferDossiers } from "./actions";
-import { useStructureAction } from "./use-structure-action";
+import { InlineError, useStructureAction } from "./use-structure-action";
 
 type Assignment = { assistantId: string; mandataireId: string };
 type Props = { members: MemberRow[]; assignments: Assignment[] };
@@ -60,6 +60,7 @@ function MandataireRow({ mandataire, assistants, assignments }: { mandataire: Me
   const current = assignments.filter((a) => a.mandataireId === mandataire.id).map((a) => a.assistantId);
 
   function toggle(assistantId: string) {
+    if (isBusy) return;
     const next = current.includes(assistantId) ? current.filter((id) => id !== assistantId) : [...current, assistantId];
     void run(() => assignAssistants(mandataire.id, next), "Répartition enregistrée");
   }
@@ -73,7 +74,8 @@ function MandataireRow({ mandataire, assistants, assignments }: { mandataire: Me
         {assistants.map((assistant) => {
           const isOn = current.includes(assistant.id);
           return (
-            <Button key={assistant.id} size="sm" variant={isOn ? "default" : "outline"} aria-pressed={isOn} disabled={isBusy} onClick={() => toggle(assistant.id)}>
+            // aria-disabled (not disabled): keyboard focus stays on the toggle while saving.
+            <Button key={assistant.id} size="sm" variant={isOn ? "default" : "outline"} aria-pressed={isOn} aria-disabled={isBusy} onClick={() => toggle(assistant.id)}>
               {assistant.name}
             </Button>
           );
@@ -116,8 +118,9 @@ function MoveAssistantCard({ members, assistants, assignments }: MoveProps) {
       from={<PersonSelect id="move-from" label="Assistant(e) qui part" people={sources} value={from} onChange={setFrom} />}
       to={<PersonSelect id="move-to" label="Reprend ses mandataires" people={assistants.filter((a) => a.id !== from)} value={to} onChange={setTo} />}
       isReady={Boolean(from && to) && count > 0}
-      buttonLabel={`Réattribuer ${count} mandataire(s)`}
-      confirmText={`Les ${count} mandataire(s) de ${name(from)} seront gérés par ${name(to)}. Vous pourrez revenir en arrière en refaisant l'opération dans l'autre sens ou depuis la liste ci-dessus.`}
+      buttonLabel={from && to ? `Réattribuer les ${count} mandataire(s) de ${name(from)} à ${name(to)}` : "Réattribuer"}
+      confirmLabel={`Réattribuer ${count} mandataire(s)`}
+      confirmText={`Mandataires concernés : ${assignments.filter((a) => a.assistantId === from).map((a) => name(a.mandataireId)).join(", ")}. Ils seront gérés par ${name(to)}, qui garde aussi les siens, et plus par ${name(from)}. Pour revenir en arrière : Journal → Annuler (rétablit exactement la répartition d'avant).`}
       onConfirm={() => moveAssistantWork(from, to)}
       onDone={() => { setFrom(""); setTo(""); }}
     />
@@ -138,8 +141,9 @@ function TransferDossiersCard({ members, mandataires }: { members: MemberRow[]; 
       from={<PersonSelect id="transfer-from" label="Mandataire qui part" people={sources} value={from} onChange={setFrom} />}
       to={<PersonSelect id="transfer-to" label="Reprend ses dossiers" people={mandataires.filter((m) => m.id !== from)} value={to} onChange={setTo} />}
       isReady={Boolean(source && target)}
-      buttonLabel={`Transférer ${source?.dossierCount ?? 0} dossier(s)`}
-      confirmText={`Les ${source?.dossierCount ?? 0} dossier(s) de ${source?.name ?? ""} appartiendront à ${target?.name ?? ""}. Vous pourrez les retransférer dans l'autre sens si besoin.`}
+      buttonLabel={source && target ? `Transférer les ${source.dossierCount} dossier(s) de ${source.name} à ${target.name}` : "Transférer"}
+      confirmLabel={`Transférer ${source?.dossierCount ?? 0} dossier(s)`}
+      confirmText={`Les ${source?.dossierCount ?? 0} dossier(s) de ${source?.name ?? ""} (avec leurs documents et leur historique) appartiendront à ${target?.name ?? ""}. Pour revenir en arrière : Journal → Annuler (seuls ces dossiers-là reviennent ; ceux de ${target?.name ?? ""} ne bougent pas).`}
       onConfirm={() => transferDossiers(from, to)}
       onDone={() => { setFrom(""); setTo(""); }}
     />
@@ -153,18 +157,27 @@ type TransferCardProps = {
   to: React.ReactNode;
   isReady: boolean;
   buttonLabel: string;
+  confirmLabel: string;
   confirmText: string;
   onConfirm: () => Promise<import("./actions").ActionResult>;
   onDone: () => void;
 };
 
 function TransferCard(props: TransferCardProps) {
-  const { run, isBusy } = useStructureAction();
+  const { run, isBusy, error, clearError } = useStructureAction();
   const [isConfirming, setIsConfirming] = useState(false);
 
-  async function handleConfirm() {
-    if (await run(props.onConfirm)) props.onDone();
-    setIsConfirming(false);
+  async function handleConfirm(e: React.MouseEvent) {
+    e.preventDefault(); // keep the dialog open on failure, to show why
+    if (await run(props.onConfirm)) {
+      props.onDone();
+      setIsConfirming(false);
+    }
+  }
+
+  function openConfirm() {
+    clearError();
+    setIsConfirming(true);
   }
 
   return (
@@ -179,7 +192,7 @@ function TransferCard(props: TransferCardProps) {
           <ArrowRight className="mb-2.5 h-4 w-4 text-muted-foreground" aria-hidden="true" />
           {props.to}
         </div>
-        <Button variant="outline" disabled={!props.isReady || isBusy} onClick={() => setIsConfirming(true)}>
+        <Button variant="outline" disabled={!props.isReady || isBusy} onClick={openConfirm}>
           {props.buttonLabel}
         </Button>
       </CardContent>
@@ -189,9 +202,10 @@ function TransferCard(props: TransferCardProps) {
             <AlertDialogTitle>{props.title} : confirmer</AlertDialogTitle>
             <AlertDialogDescription>{props.confirmText}</AlertDialogDescription>
           </AlertDialogHeader>
+          <InlineError message={error} />
           <AlertDialogFooter>
             <AlertDialogCancel disabled={isBusy}>Annuler</AlertDialogCancel>
-            <AlertDialogAction disabled={isBusy} onClick={handleConfirm}>Confirmer</AlertDialogAction>
+            <AlertDialogAction disabled={isBusy} onClick={handleConfirm}>{props.confirmLabel}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

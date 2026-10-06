@@ -8,7 +8,17 @@ import { Label } from "@/components/ui/label";
 import type { OrgOverview } from "@/lib/organizations/overview";
 import { SmtpConfigForm } from "../settings/smtp-config-form";
 import { removeStructureSmtp, saveStructureDestination, saveStructureSmtp } from "./actions";
-import { useStructureAction } from "./use-structure-action";
+import { InlineError, useStructureAction } from "./use-structure-action";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 type ModuleKey = "APA" | "ASH" | "PCH";
 const MODULES: ModuleKey[] = ["APA", "ASH", "PCH"];
@@ -16,7 +26,6 @@ const MODULES: ModuleKey[] = ["APA", "ASH", "PCH"];
 type Props = { smtp: OrgOverview["smtp"]; destinations: OrgOverview["destinations"] };
 
 export function MailTab({ smtp, destinations }: Props) {
-  const { run, isBusy } = useStructureAction();
   return (
     <div className="max-w-2xl space-y-6">
       <p className="text-sm text-muted-foreground">
@@ -24,11 +33,7 @@ export function MailTab({ smtp, destinations }: Props) {
         la signature du mandataire du dossier. Sans elle, chacun utilise sa propre messagerie.
       </p>
       <SmtpConfigForm initialConfig={smtp} saveAction={saveStructureSmtp} title="Messagerie de la structure" />
-      {smtp && (
-        <Button variant="outline" disabled={isBusy} onClick={() => run(removeStructureSmtp)}>
-          Ne plus utiliser la messagerie de la structure
-        </Button>
-      )}
+      {smtp && <RemoveMailboxButton address={smtp.fromEmail} />}
       <Card>
         <CardHeader>
           <CardTitle>Destinataires par module</CardTitle>
@@ -44,6 +49,42 @@ export function MailTab({ smtp, destinations }: Props) {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+/** Removing the shared mailbox changes how every member sends: confirm first. */
+function RemoveMailboxButton({ address }: { address: string }) {
+  const { run, isBusy, error, clearError } = useStructureAction();
+  const [isOpen, setIsOpen] = useState(false);
+
+  async function handleConfirm(e: React.MouseEvent) {
+    e.preventDefault();
+    if (await run(removeStructureSmtp)) setIsOpen(false);
+  }
+
+  return (
+    <>
+      <Button variant="outline" onClick={() => { clearError(); setIsOpen(true); }}>
+        Ne plus utiliser la messagerie de la structure
+      </Button>
+      <AlertDialog open={isOpen} onOpenChange={setIsOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Ne plus envoyer par {address} ?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Chaque membre enverra de nouveau avec sa propre messagerie (Paramètres → SMTP). Ceux
+              qui n&apos;en ont pas configuré ne pourront plus envoyer d&apos;emails. Pour revenir en
+              arrière, il faudra ressaisir les réglages, mot de passe compris.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <InlineError message={error} />
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isBusy}>Garder la messagerie de la structure</AlertDialogCancel>
+            <AlertDialogAction disabled={isBusy} onClick={handleConfirm}>Retirer</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }
 
@@ -69,7 +110,7 @@ function DestinationRow({ moduleType, current }: RowProps) {
       </div>
       <div className="space-y-1">
         <Label htmlFor={`folder-${moduleType}`}>Dossier IMAP</Label>
-        <Input id={`folder-${moduleType}`} value={folder} placeholder="INBOX/APA" onChange={(e) => setFolder(e.target.value)} />
+        <Input id={`folder-${moduleType}`} value={folder} placeholder={`INBOX/${moduleType}`} onChange={(e) => setFolder(e.target.value)} />
       </div>
       <Button type="submit" variant="outline" disabled={isBusy}>Enregistrer</Button>
     </form>

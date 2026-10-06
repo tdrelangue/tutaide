@@ -4,13 +4,14 @@ import { revalidatePath } from "next/cache";
 import { ZodError } from "zod";
 import { Prisma } from "@prisma/client";
 import { requireOrgAdmin } from "@/lib/access/context";
-import { recordOrgAudit, type AuditEntry } from "@/lib/organizations/audit";
+import { findUndoableEntry, markEntryUndone, recordOrgAudit, type AuditEntry } from "@/lib/organizations/audit";
 import {
   createOrgMember,
   moveAssistantMandataires,
   setMandataireAssistants,
   setOrgMemberArchived,
   transferMandataireDossiers,
+  undoBulkChange,
   updateOrgMember,
   type MemberUpdate,
   type NewMember,
@@ -111,7 +112,8 @@ export async function moveAssistantWork(fromId: string, toId: string): Promise<A
   return run(async (orgId, actorId) => {
     const result = await moveAssistantMandataires(orgId, fromId, toId, actorId);
     const moved = result.success ? result.moved ?? 0 : 0;
-    return logged(result, { action: "Mandataires réattribués", targetId: fromId, details: `${moved} mandataire(s) vers un(e) autre assistant(e)` }, `${moved} mandataire(s) réattribué(s)`);
+    const audit = { action: "Mandataires réattribués", targetId: fromId, details: `${moved} mandataire(s) vers un(e) autre assistant(e)`, undo: result.success ? result.undo : undefined };
+    return logged(result, audit, `${moved} mandataire(s) réattribué(s) — annulable depuis le Journal`);
   });
 }
 
@@ -119,7 +121,21 @@ export async function transferDossiers(fromId: string, toId: string): Promise<Ac
   return run(async (orgId, actorId) => {
     const result = await transferMandataireDossiers(orgId, fromId, toId, actorId);
     const moved = result.success ? result.moved ?? 0 : 0;
-    return logged(result, { action: "Dossiers transférés", targetId: fromId, details: `${moved} dossier(s) vers un autre mandataire` }, `${moved} dossier(s) transféré(s)`);
+    const audit = { action: "Dossiers transférés", targetId: fromId, details: `${moved} dossier(s) vers un autre mandataire`, undo: result.success ? result.undo : undefined };
+    return logged(result, audit, `${moved} dossier(s) transféré(s) — annulable depuis le Journal`);
+  });
+}
+
+/** Reverses one bulk change recorded in the journal, exactly. */
+export async function undoJournalEntry(eventId: string): Promise<ActionResult> {
+  return run(async (orgId, actorId) => {
+    const entry = await findUndoableEntry(orgId, eventId);
+    if (!entry) return { result: { success: false, error: "Cette modification ne peut plus être annulée" } };
+    const result = await undoBulkChange(orgId, entry.undo, actorId);
+    if (!result.success) return { result };
+    await markEntryUndone(eventId);
+    const restored = result.restored ?? 0;
+    return logged(result, { action: `Annulation : ${entry.action}`, targetId: entry.undo.from, details: `${restored} élément(s) rétabli(s)` }, `Annulé : ${restored} élément(s) rétabli(s)`);
   });
 }
 

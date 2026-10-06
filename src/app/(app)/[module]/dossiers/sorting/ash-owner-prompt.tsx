@@ -45,7 +45,8 @@ export function useAshOwnerPrompt(choices: MandataireChoice[]) {
           <DialogTitle>Pour quel mandataire ?</DialogTitle>
           <DialogDescription>
             Aucun dossier ASH ne correspond à « {pending?.protegeName} ». Choisissez le mandataire
-            pour qui créer les nouveaux dossiers de cet import.
+            pour qui créer les nouveaux dossiers de cet import (le choix vaut pour tout ce dépôt de
+            fichiers ; le mandataire de chaque dossier créé est affiché sur sa carte).
           </DialogDescription>
         </DialogHeader>
         <div className="flex flex-col gap-2" role="group" aria-label="Mandataires">
@@ -56,7 +57,7 @@ export function useAshOwnerPrompt(choices: MandataireChoice[]) {
           ))}
         </div>
         <DialogFooter>
-          <Button variant="ghost" onClick={() => answer(null)}>
+          <Button variant="outline" onClick={() => answer(null)}>
             Ne pas créer : ranger ces fichiers à la main
           </Button>
         </DialogFooter>

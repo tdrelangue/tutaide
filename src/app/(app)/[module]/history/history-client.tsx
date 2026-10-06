@@ -135,6 +135,7 @@ function EventRow({ event }: { event: EmailEvent }) {
             <Clock className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
             <span className="truncate">
               {formatRelativeTime(new Date(event.createdAt))}
+              {event.sentByName && <> · envoyé par {event.sentByName}</>}
             </span>
           </div>
 
