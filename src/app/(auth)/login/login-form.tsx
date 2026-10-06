@@ -54,7 +54,7 @@ export function LoginForm() {
         return;
       }
 
-      router.push("/dossiers");
+      router.push("/dashboard");
       router.refresh();
     } catch {
       toast.error("Une erreur est survenue");

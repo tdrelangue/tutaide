@@ -7,6 +7,7 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { requireAuth } from "@/lib/auth";
 import { getDocumentsBaseDir } from "@/lib/documents-dir";
+import { openFileWithMacOs } from "@/lib/open-native";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 
@@ -163,4 +164,25 @@ export async function getDocumentUrl(documentId: string): Promise<string | null>
   }
 
   return `/api/documents/${documentId}/download`;
+}
+
+/**
+ * Opens the document in its default app on the desktop app for macOS, where
+ * the webview cannot open it itself. `opened: false` means the caller should
+ * fall back to the browser download.
+ */
+export async function openDocumentNatively(
+  documentId: string
+): Promise<{ opened: boolean }> {
+  try {
+    const userId = await requireAuth();
+    const document = await db.document.findFirst({
+      where: { id: documentId, userId },
+      select: { blobUrl: true },
+    });
+    if (!document || !existsSync(document.blobUrl)) return { opened: false };
+    return { opened: await openFileWithMacOs(document.blobUrl) };
+  } catch {
+    return { opened: false };
+  }
 }

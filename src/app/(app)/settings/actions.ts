@@ -14,6 +14,7 @@ import {
 } from "@/lib/validations";
 import type { SmtpProvider, TemplateCategory, ModuleType } from "@prisma/client";
 import { fillMissingModuleFolders } from "@/lib/imap-defaults";
+import { isDemoActive } from "@/lib/demo/state";
 
 // SMTP Config types
 export type SmtpConfigData = {
@@ -106,6 +107,11 @@ export async function testSmtpConnection(
   try {
     await requireAuth();
     const validated = smtpConfigSchema.parse(data);
+
+    // Demo: no connection attempt, the fictional mailbox is shown as working.
+    if (isDemoActive()) {
+      return { success: true, message: "Connexion réussie (démonstration : aucun serveur n'est contacté)." };
+    }
 
     const transporter = nodemailer.createTransport({
       host: validated.smtpHost,

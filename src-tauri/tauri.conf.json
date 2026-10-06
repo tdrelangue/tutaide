@@ -1,6 +1,6 @@
 {
   "productName": "Tutellia",
-  "version": "2.0.7",
+  "version": "2.0.8",
   "identifier": "com.tutellia.app",
   "build": {
     "devUrl": "http://localhost:3000",

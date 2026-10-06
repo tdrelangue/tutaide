@@ -24,7 +24,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { formatRelativeTime, formatFileSize } from "@/lib/utils";
-import { uploadDocuments, deleteDocument } from "../document-actions";
+import { uploadDocuments, deleteDocument, openDocumentNatively } from "../document-actions";
 import type { DossierWithDocuments } from "../actions";
 import { PdfPreview } from "@/components/pdf-preview";
 
@@ -156,8 +156,21 @@ export function DocumentsTab({ dossier }: DocumentsTabProps) {
     }
   };
 
-  const handleDownload = (documentId: string) => {
-    window.open(`/api/documents/${documentId}/download`, "_blank");
+  // macOS: WKWebView ignores window.open, so the desktop server opens the
+  // file in its default app (Aperçu…). Other platforms keep the synchronous
+  // window.open — after an await it could be popup-blocked.
+  const handleDownload = async (documentId: string) => {
+    const url = `/api/documents/${documentId}/download`;
+    if (!navigator.userAgent.includes("Mac OS X")) {
+      window.open(url, "_blank");
+      return;
+    }
+    try {
+      const { opened } = await openDocumentNatively(documentId);
+      if (!opened) window.location.href = url;
+    } catch {
+      toast.error("Impossible d'ouvrir le document");
+    }
   };
 
   return (

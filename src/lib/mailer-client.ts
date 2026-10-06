@@ -4,6 +4,7 @@ import nodemailer from "nodemailer";
 import { ImapFlow } from "imapflow";
 import MailComposer from "nodemailer/lib/mail-composer";
 import { imapHostFor } from "./imap-host";
+import { isDemoActive } from "./demo/state";
 
 interface SmtpSettings {
   host: string;
@@ -102,6 +103,10 @@ async function saveToImap(
 export async function sendEmail(
   payload: SendEmailPayload
 ): Promise<SendEmailResponse> {
+  // Demo ("Tester l'application"): nothing ever leaves the machine. The send is
+  // reported as successful so the history and confirmations look real.
+  if (isDemoActive()) return { success: true, messageId: `demo-${Date.now()}` };
+
   try {
     const transporter = nodemailer.createTransport({
       host: payload.smtp.host,

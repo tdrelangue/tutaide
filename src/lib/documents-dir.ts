@@ -1,5 +1,6 @@
 import path from "path";
 import os from "os";
+import { getDemoDocumentsDir, isDemoActive } from "./demo/state";
 
 /**
  * Returns the base directory for storing documents locally.
@@ -8,6 +9,9 @@ import os from "os";
  * On Linux: ~/.config/tutaide/documents
  */
 export function getDocumentsBaseDir(): string {
+  // Demo documents never mix with real ones: temp folder, wiped after the demo.
+  if (isDemoActive()) return getDemoDocumentsDir();
+
   const appData =
     process.env.APPDATA ||
     (process.platform === "darwin"

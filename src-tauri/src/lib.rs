@@ -204,6 +204,9 @@ pub fn run() {
                     .env("PORT", "3456")
                     .env("HOSTNAME", "127.0.0.1")
                     .env("NEXTAUTH_URL", "http://localhost:3456")
+                    // Lets this local server offer "Tester l'application" (lib/demo):
+                    // a demo switches the whole server, so never on the shared web app.
+                    .env("TUTELLIA_DESKTOP", "1")
                     .current_dir(&server_dir);
 
                 match (log_out, log_err) {

@@ -2,6 +2,7 @@ import { ImapFlow } from "imapflow";
 import { db } from "./db";
 import { decrypt } from "./encryption";
 import { imapHostFor } from "./imap-host";
+import { isDemoActive } from "./demo/state";
 
 /**
  * Fills the APA/ASH/PCH "Dossier IMAP" with the right path for the user's
@@ -60,6 +61,7 @@ export async function detectFolderLayout(userId: string): Promise<FolderLayout |
 
 /** Sets the detected folder on every module config whose IMAP folder is empty. Never throws. */
 export async function fillMissingModuleFolders(userId: string): Promise<number> {
+  if (isDemoActive()) return 0; // the demo mailbox is fictional: nothing to connect to
   try {
     const empty = await db.moduleConfig.findMany({
       where: { userId, OR: [{ imapFolder: null }, { imapFolder: "" }] },

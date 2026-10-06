@@ -10,6 +10,8 @@ import { getPaymentReminder, isBlockedByPaywall } from "@/lib/billing";
 import { ensureDailyPaymentReminder } from "@/lib/notifications";
 import { PaymentReminderCard } from "@/components/payment-reminder-card";
 import { GuidedTourProvider } from "@/components/guided-tour/tour-provider";
+import { DemoBanner } from "@/components/demo-banner";
+import { isDemoActive, isDemoEmail } from "@/lib/demo/state";
 
 export default async function AppLayout({
   children,
@@ -20,6 +22,13 @@ export default async function AppLayout({
 
   if (!session?.user) {
     redirect("/login");
+  }
+
+  // A demo session outliving its demo (app closed during a demo): the demo
+  // account no longer exists anywhere, so sign out.
+  const isDemoSession = isDemoEmail(session.user.email);
+  if (isDemoSession && !isDemoActive()) {
+    redirect("/demo-fin");
   }
 
   // New accounts must finish their first payment. Admins and accounts created
@@ -51,6 +60,7 @@ export default async function AppLayout({
   return (
     <GuidedTourProvider userId={session.user.id}>
     <div className="flex min-h-screen flex-col">
+      {isDemoSession && <DemoBanner />}
       <UpdaterStartupCheck />
       {paymentReminder && <PaymentReminderCard reminder={paymentReminder} />}
       {impersonation && (

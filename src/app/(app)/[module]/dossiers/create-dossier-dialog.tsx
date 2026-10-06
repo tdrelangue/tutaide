@@ -37,12 +37,18 @@ interface CreateDossierDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   moduleType: FullModuleType;
+  /** Pre-fills "Nom complet" each time the dialog opens. */
+  initialName?: string;
+  /** Called with the new dossier, e.g. so the sorting screen can file into it. */
+  onCreated?: (dossier: { id: string; fullName: string; status: "ACTIVE" | "CLOSED" }) => void;
 }
 
 export function CreateDossierDialog({
   open,
   onOpenChange,
   moduleType,
+  initialName,
+  onCreated,
 }: CreateDossierDialogProps) {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
@@ -76,6 +82,10 @@ export function CreateDossierDialog({
     },
   });
 
+  useEffect(() => {
+    if (open && initialName) setValue("fullName", initialName);
+  }, [open, initialName, setValue]);
+
   const priority = watch("priority");
   const status = watch("status");
   const additionalModules = watch("additionalModules") ?? [];
@@ -96,6 +106,7 @@ export function CreateDossierDialog({
       const result = await createDossier(moduleType, data);
       if (result.success) {
         toast.success("Dossier cree avec succes");
+        if (result.id) onCreated?.({ id: result.id, fullName: data.fullName, status: data.status });
         reset();
         onOpenChange(false);
         router.refresh();

@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { getDossiers } from "./actions";
 import { DossiersPageClient } from "./dossiers-client";
+import { isDemoActive } from "@/lib/demo/state";
 
 interface DossiersPageProps {
   params: Promise<{ module: string }>;
@@ -42,6 +43,7 @@ export default async function DossiersPage({
         initialSearch={sp.search || ""}
         initialStatus={status}
         initialSort={`${sortBy}-${sortOrder}`}
+        isDemo={isDemoActive()}
       />
     </Suspense>
   );

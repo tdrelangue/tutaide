@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { LoginForm } from "./login-form";
+import { DemoEntry } from "./demo-entry";
+import { isDemoAllowed } from "@/lib/demo/state";
 
 export default async function LoginPage() {
   const session = await auth();
@@ -18,6 +20,7 @@ export default async function LoginPage() {
         </p>
       </div>
       <LoginForm />
+      {isDemoAllowed() && <DemoEntry />}
     </div>
   );
 }

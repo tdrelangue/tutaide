@@ -50,7 +50,7 @@ export default async function AbonnementPage({ searchParams }: { searchParams: S
   const userId = await requireAuth();
   const billing = await getBillingState(userId, { sessionId, fresh: true });
 
-  if (billing.hasAccess) redirect("/dossiers");
+  if (billing.hasAccess) redirect("/dashboard");
 
   const returnedFromStripe = checkout === "success";
   const header = headerFor(billing, returnedFromStripe);

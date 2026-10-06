@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Plus, Search, SortAsc, Send, CheckSquare, Filter, ChevronDown, ChevronUp } from "lucide-react";
+import { Plus, Search, SortAsc, Send, CheckSquare, Filter } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -17,7 +17,7 @@ import { DossierSheet } from "./dossier-sheet";
 import { CreateDossierDialog } from "./create-dossier-dialog";
 import { BulkSendDialog } from "./bulk-send-dialog";
 import { SendAllDialog } from "./send-all-dialog";
-import { AshImportZone } from "./ash-import-zone";
+import { ModuleDropArea } from "./sorting/module-drop-area";
 import type { DossierWithDocuments } from "./actions";
 import {
   loadDossiersFilterPrefs,
@@ -32,6 +32,8 @@ interface DossiersPageClientProps {
   initialSearch: string;
   initialStatus?: "ACTIVE" | "CLOSED";
   initialSort: string;
+  /** Demo account ("Tester l'application"). */
+  isDemo?: boolean;
 }
 
 export function DossiersPageClient({
@@ -40,6 +42,7 @@ export function DossiersPageClient({
   initialSearch,
   initialStatus,
   initialSort,
+  isDemo = false,
 }: DossiersPageClientProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -54,7 +57,6 @@ export function DossiersPageClient({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isBulkSendOpen, setIsBulkSendOpen] = useState(false);
   const [isSendAllOpen, setIsSendAllOpen] = useState(false);
-  const [isImportOpen, setIsImportOpen] = useState(false);
 
   const basePath = `/${moduleType.toLowerCase()}/dossiers`;
 
@@ -317,25 +319,8 @@ export function DossiersPageClient({
         </div>
       </div>
 
-      {/* ASH PDF auto-import zone */}
-      {moduleType === "ASH" && (
-        <div className="border-b px-6 py-2">
-          <button
-            type="button"
-            onClick={() => setIsImportOpen((v) => !v)}
-            className="flex items-center gap-2 text-xs font-medium text-muted-foreground uppercase tracking-wide py-2 hover:text-foreground transition-colors"
-          >
-            {isImportOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-            Import ASH automatique
-          </button>
-          {isImportOpen && (
-            <div className="pb-3">
-              <AshImportZone />
-            </div>
-          )}
-        </div>
-      )}
-
+      {/* Dossier list: drop documents anywhere on it (same banner on every module) */}
+      <ModuleDropArea moduleType={moduleType} isDemo={isDemo}>
       {/* Content */}
       <div className="flex-1 overflow-auto p-6" data-tour="dossier-list">
         {displayedDossiers.length === 0 ? (
@@ -370,6 +355,7 @@ export function DossiersPageClient({
           </div>
         )}
       </div>
+      </ModuleDropArea>
 
       {/* Details Sheet */}
       <DossierSheet

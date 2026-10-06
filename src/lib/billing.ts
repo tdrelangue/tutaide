@@ -1,5 +1,6 @@
 import { headers } from "next/headers";
 import { db } from "./db";
+import { isDemoActive } from "./demo/state";
 
 /**
  * Tutellia subscription billing.
@@ -120,6 +121,9 @@ export async function getSubscriptionStatus(
   userId: string,
   options: { sessionId?: string; fresh?: boolean } = {}
 ): Promise<SubscriptionStatus> {
+  // Demo accounts are free and never reach Stripe.
+  if (isDemoActive()) return { status: "none", currentPeriodStart: null, currentPeriodEnd: null, cancelAtPeriodEnd: false };
+
   const cached = statusCache.get(userId);
   if (!options.fresh && !options.sessionId && cached && cached.expiresAt > Date.now()) {
     return cached.value;

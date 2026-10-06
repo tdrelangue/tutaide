@@ -12,6 +12,7 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { requireAuth } from "@/lib/auth";
 import { getDocumentsBaseDir } from "@/lib/documents-dir";
+import { openFileWithMacOs } from "@/lib/open-native";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 
@@ -55,6 +56,7 @@ export async function uploadDocuments(formData: FormData): Promise<{
     }
 
     const uploadedDocs: Array<{ id: string; filename: string; mimeType: string; size: number; createdAt: Date }> = [];
+
     const dir = path.join(getDocumentsBaseDir(), userId, dossierId);
     await fs.mkdir(dir, { recursive: true });
 
@@ -176,6 +178,27 @@ export async function getDocumentUrl(
   }
 
   return `/api/documents/${documentId}/download`;
+}
+
+/**
+ * Opens the document in its default app on the desktop app for macOS, where
+ * the webview cannot open it itself. `opened: false` means the caller should
+ * fall back to the browser download.
+ */
+export async function openDocumentNatively(
+  documentId: string
+): Promise<{ opened: boolean }> {
+  try {
+    const userId = await requireAuth();
+    const document = await db.document.findFirst({
+      where: { id: documentId, userId },
+      select: { blobUrl: true },
+    });
+    if (!document || !existsSync(document.blobUrl)) return { opened: false };
+    return { opened: await openFileWithMacOs(document.blobUrl) };
+  } catch {
+    return { opened: false };
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -341,4 +364,23 @@ export async function findOrCreateAshDossier(
     console.error("findOrCreateAshDossier error:", error);
     return { success: false, error: "Erreur lors de la recherche/création du dossier" };
   }
+}
+
+// ---------------------------------------------------------------------------
+// Manual sorting
+// ---------------------------------------------------------------------------
+
+const SORTABLE_MODULES = new Set(["APA", "ASH", "PCH"]);
+
+export type SortingTarget = { id: string; fullName: string; status: "ACTIVE" | "CLOSED" };
+
+/** Every dossier of the module, active and closed, for the manual sorting screen. */
+export async function listSortingTargets(moduleType: string): Promise<SortingTarget[]> {
+  const userId = await requireAuth();
+  if (!SORTABLE_MODULES.has(moduleType)) return [];
+
+  return db.dossier.findMany({
+    where: { userId, moduleType: moduleType as "APA" | "ASH" | "PCH" }, // checked against SORTABLE_MODULES above
+    select: { id: true, fullName: true, status: true },
+  });
 }
