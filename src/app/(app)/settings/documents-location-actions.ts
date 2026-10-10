@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { requireAuth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { isDemoActive } from "@/lib/demo/state";
+import { isServerMode } from "@/lib/deployment";
 import { getDefaultDocumentsDir, getDocumentsBaseDir } from "@/lib/documents-dir";
 import {
   readMachineSettings,
@@ -23,8 +24,10 @@ export type DocumentsLocation = {
   current: string;
   defaultDir: string;
   isDefault: boolean;
-  /** Demo mode: documents live in a temp folder that cannot be changed. */
+  /** Demo mode or organisation server: the folder cannot be changed here. */
   isLocked: boolean;
+  /** Why it is locked, shown to the user. */
+  lockedReason: string | null;
   /** Organisation members: the shared folder their admin asks everyone to choose. */
   sharedFolderHint: string | null;
 };
@@ -41,7 +44,12 @@ export async function getDocumentsLocation(): Promise<DocumentsLocation> {
     current,
     defaultDir,
     isDefault: path.resolve(current) === path.resolve(defaultDir),
-    isLocked: isDemoActive(),
+    isLocked: isDemoActive() || isServerMode(),
+    lockedReason: isServerMode()
+      ? "Les documents sont rangés sur le serveur de votre structure : rien à régler sur cet ordinateur."
+      : isDemoActive()
+        ? "Non modifiable pendant le test de l'application."
+        : null,
     sharedFolderHint: user?.organization?.sharedFolderHint ?? null,
   };
 }
@@ -62,8 +70,8 @@ export async function changeDocumentsLocation(
 ): Promise<ChangeLocationResult> {
   try {
     await requireAuth();
-    if (isDemoActive()) {
-      return { success: false, error: "Indisponible pendant le test de l'application" };
+    if (isDemoActive() || isServerMode()) {
+      return { success: false, error: "L'emplacement des documents ne peut pas être changé ici" };
     }
 
     const from = getDocumentsBaseDir();

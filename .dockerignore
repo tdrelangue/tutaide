@@ -1,0 +1,13 @@
+# Never in the organisation server image: secrets, local data, desktop build.
+.env
+.env.*
+!.env.example
+node_modules
+.next
+src-tauri
+$dest
+uploads
+scripts/tests
+deploy/releases
+**/*.log
+.git

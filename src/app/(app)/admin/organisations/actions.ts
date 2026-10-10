@@ -1,5 +1,6 @@
 "use server";
 
+import { randomBytes } from "crypto";
 import { revalidatePath } from "next/cache";
 import { z, ZodError } from "zod";
 import { requireAdmin } from "@/lib/auth";
@@ -19,6 +20,8 @@ export type OrgListItem = {
   createdAt: Date;
   memberCount: number;
   admins: string[];
+  /** A self-hosted server licence key exists (the key itself is never listed). */
+  hasLicense: boolean;
 };
 
 export type AdminOrgResult = { success: true } | { success: false; error: string };
@@ -38,6 +41,7 @@ export async function listOrganizations(): Promise<OrgListItem[]> {
       name: true,
       archivedAt: true,
       createdAt: true,
+      licenseKey: true,
       members: { select: { name: true, email: true, isOrgAdmin: true, archivedAt: true } },
     },
   });
@@ -48,6 +52,7 @@ export async function listOrganizations(): Promise<OrgListItem[]> {
     createdAt: org.createdAt,
     memberCount: org.members.filter((m) => m.archivedAt === null).length,
     admins: org.members.filter((m) => m.isOrgAdmin && m.archivedAt === null).map((m) => m.name || m.email),
+    hasLicense: org.licenseKey !== null,
   }));
 }
 
@@ -95,6 +100,24 @@ export async function setOrganizationArchived(orgId: string, archived: boolean):
     return { success: true };
   } catch (error) {
     return failure(error);
+  }
+}
+
+/**
+ * Creates (or replaces) the licence key of a self-hosted server. The key is
+ * shown once, to put in that server's .env (TUTELLIA_LICENSE_KEY); replacing
+ * it makes the old key invalid on the next check.
+ */
+export async function generateLicenseKey(orgId: string): Promise<{ success: true; key: string } | { success: false; error: string }> {
+  try {
+    await requireAdmin();
+    const key = randomBytes(32).toString("hex");
+    await db.organization.update({ where: { id: orgId }, data: { licenseKey: key } });
+    revalidatePath("/admin/organisations");
+    return { success: true, key };
+  } catch (error) {
+    console.error("[admin/organisations] licence", error);
+    return { success: false, error: "Erreur inattendue" };
   }
 }
 

@@ -14,6 +14,8 @@ import { DemoBanner } from "@/components/demo-banner";
 import { isDemoActive, isDemoEmail } from "@/lib/demo/state";
 import { getActorContext } from "@/lib/access/context";
 import { canWorkOnDossiers } from "@/lib/access/scope";
+import { getLicenseStatus } from "@/lib/license";
+import { LicenseBanner } from "@/components/license-banner";
 
 export default async function AppLayout({
   children,
@@ -51,10 +53,11 @@ export default async function AppLayout({
     await ensureDailyPaymentReminder(session.user.id, paymentReminder).catch(() => undefined);
   }
 
-  const [impersonation, moduleConfigs, actorContext] = await Promise.all([
+  const [impersonation, moduleConfigs, actorContext, licenseStatus] = await Promise.all([
     getImpersonationState(),
     getAllModuleConfigs(),
     getActorContext(),
+    getLicenseStatus(),
   ]);
   const worksOnDossiers = actorContext ? canWorkOnDossiers(actorContext.actor) : false;
   const isOrgAdmin = actorContext?.actor.isOrgAdmin ?? false;
@@ -71,6 +74,7 @@ export default async function AppLayout({
     <GuidedTourProvider userId={session.user.id}>
     <div className="flex min-h-screen flex-col">
       {isDemoSession && <DemoBanner />}
+      {licenseStatus === "invalid" && <LicenseBanner />}
       <UpdaterStartupCheck />
       {paymentReminder && <PaymentReminderCard reminder={paymentReminder} />}
       {impersonation && (

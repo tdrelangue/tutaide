@@ -32,7 +32,9 @@ export const authConfig: NextAuthConfig = {
                           nextUrl.pathname === "/forgot-password" ||
                           nextUrl.pathname.startsWith("/api/auth") ||
                           // Called server-to-server by desktop installs (see lib/billing.ts)
-                          nextUrl.pathname.startsWith("/api/billing/");
+                          nextUrl.pathname.startsWith("/api/billing/") ||
+                          // Monitoring + desktop "Serveur de ma structure" check (status only)
+                          nextUrl.pathname === "/api/health";
 
       if (isPublicPath) {
         // Redirect logged-in users away from login / signup

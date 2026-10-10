@@ -387,6 +387,78 @@
       "description": "Permission identifier",
       "oneOf": [
         {
+          "description": "Enables the check_for_update command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-check-for-update",
+          "markdownDescription": "Enables the check_for_update command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the get_connection command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-get-connection",
+          "markdownDescription": "Enables the get_connection command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the kill_server command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-kill-server",
+          "markdownDescription": "Enables the kill_server command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the open_connection_settings command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-open-connection-settings",
+          "markdownDescription": "Enables the open_connection_settings command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the save_and_open command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-save-and-open",
+          "markdownDescription": "Enables the save_and_open command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the set_connection command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-set-connection",
+          "markdownDescription": "Enables the set_connection command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the check_for_update command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-check-for-update",
+          "markdownDescription": "Denies the check_for_update command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the get_connection command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-get-connection",
+          "markdownDescription": "Denies the get_connection command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the kill_server command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-kill-server",
+          "markdownDescription": "Denies the kill_server command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the open_connection_settings command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-open-connection-settings",
+          "markdownDescription": "Denies the open_connection_settings command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the save_and_open command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-save-and-open",
+          "markdownDescription": "Denies the save_and_open command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the set_connection command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-set-connection",
+          "markdownDescription": "Denies the set_connection command without any pre-configured scope."
+        },
+        {
           "description": "Default core plugins set.\n#### This default permission set includes:\n\n- `core:path:default`\n- `core:event:default`\n- `core:window:default`\n- `core:webview:default`\n- `core:app:default`\n- `core:image:default`\n- `core:resources:default`\n- `core:menu:default`\n- `core:tray:default`",
           "type": "string",
           "const": "core:default",

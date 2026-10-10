@@ -1,6 +1,7 @@
 import { headers } from "next/headers";
 import { db } from "./db";
 import { isDemoActive } from "./demo/state";
+import { isServerMode } from "./deployment";
 
 /**
  * Tutellia subscription billing.
@@ -197,6 +198,7 @@ export function evaluateAccess(
 
 /** Cheap gate for every app page: free accounts never hit the network. */
 export async function isBlockedByPaywall(userId: string): Promise<boolean> {
+  if (isServerMode()) return false;
   const profile = await getBillingProfile(userId);
   if (!profile.required || isBeforeStart(profile, Date.now())) return false;
   const sub = await getSubscriptionStatus(userId);
@@ -205,6 +207,7 @@ export async function isBlockedByPaywall(userId: string): Promise<boolean> {
 
 /** The reminder to show while the account is in its 30-day grace, else null. */
 export async function getPaymentReminder(userId: string): Promise<PaymentReminder | null> {
+  if (isServerMode()) return null;
   const profile = await getBillingProfile(userId);
   if (!profile.required || isBeforeStart(profile, Date.now())) return null;
   const sub = await getSubscriptionStatus(userId);

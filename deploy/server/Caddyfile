@@ -1,0 +1,21 @@
+# HTTPS in front of Tutellia.
+# TUTELLIA_TLS (in .env) chooses the certificate:
+#   internal                              certificate from Caddy's own authority
+#                                         (intranet; install Caddy's root CA on the PCs)
+#   admin@example.org                     free public certificate (Let's Encrypt);
+#                                         the name must be reachable from the Internet
+#   /certs/cert.pem /certs/key.pem        the organisation's own certificate files
+{$TUTELLIA_DOMAIN} {
+	tls {$TUTELLIA_TLS}
+	encode gzip
+	request_body {
+		max_size 20MB
+	}
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+	reverse_proxy app:3000
+}

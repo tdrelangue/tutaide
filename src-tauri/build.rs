@@ -25,8 +25,22 @@ fn main() {
         windows_attr = windows_attr.window_icon_path(safe_icon);
     }
 
+    // App commands are declared so each capability grants only the ones its
+    // pages need (an undeclared command would be callable by every page,
+    // including a remote organisation server).
+    let app_manifest = tauri_build::AppManifest::new().commands(&[
+        "kill_server",
+        "check_for_update",
+        "get_connection",
+        "set_connection",
+        "open_connection_settings",
+        "save_and_open",
+    ]);
+
     tauri_build::try_build(
-        tauri_build::Attributes::new().windows_attributes(windows_attr),
+        tauri_build::Attributes::new()
+            .windows_attributes(windows_attr)
+            .app_manifest(app_manifest),
     )
     .expect("failed to run tauri build");
 }

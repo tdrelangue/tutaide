@@ -1,0 +1,62 @@
+# Tutellia — organisation server. Three services:
+#   db     PostgreSQL (data in the "db-data" volume)
+#   app    Tutellia (documents in the "documents" volume)
+#   caddy  HTTPS in front of the app (the only service reachable from outside)
+# Settings come from .env, created by init.sh / init.ps1. See docs/deploiement-serveur.md.
+name: tutellia
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: tutellia
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD manquant dans .env}
+      POSTGRES_DB: tutellia
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tutellia -d tutellia"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  app:
+    image: ${TUTELLIA_IMAGE:-tutellia-server}:${TUTELLIA_TAG:?TUTELLIA_TAG manquant dans .env}
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://tutellia:${DB_PASSWORD}@db:5432/tutellia
+      AUTH_SECRET: ${AUTH_SECRET:?AUTH_SECRET manquant dans .env}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?ENCRYPTION_KEY manquant dans .env}
+      # Public address (includes the port when HTTPS_PORT is not 443)
+      AUTH_URL: ${TUTELLIA_URL:-https://${TUTELLIA_DOMAIN}}
+      NEXTAUTH_URL: ${TUTELLIA_URL:-https://${TUTELLIA_DOMAIN}}
+      TUTELLIA_LICENSE_KEY: ${TUTELLIA_LICENSE_KEY:-}
+    volumes:
+      - documents:/data/documents
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - app
+    ports:
+      - "${HTTPS_PORT:-443}:443"
+      - "${HTTP_PORT:-80}:80"
+    environment:
+      TUTELLIA_DOMAIN: ${TUTELLIA_DOMAIN:?TUTELLIA_DOMAIN manquant dans .env}
+      TUTELLIA_TLS: ${TUTELLIA_TLS:-internal}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./certs:/certs:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  db-data:
+  documents:
+  caddy-data:
+  caddy-config:

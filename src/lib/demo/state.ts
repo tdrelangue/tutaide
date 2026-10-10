@@ -27,6 +27,7 @@ export const DEMO_EMAIL_DOMAIN = "demo.tutellia.invalid";
  * where a process-wide switch would affect every visitor.
  */
 export function isDemoAllowed(): boolean {
+  if (process.env.TUTELLIA_MODE === "server") return false;
   return process.env.TUTELLIA_DESKTOP === "1" || process.env.NODE_ENV === "development";
 }
 

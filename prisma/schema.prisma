@@ -231,6 +231,9 @@ model Organization {
   /// Shared documents folder every member should choose on their PC
   /// (e.g. "OneDrive – UDAF/Tutellia"); shown to members, set by the admin.
   sharedFolderHint String?
+  /// Licence key of a self-hosted server (checked by that server against
+  /// tutaide.vercel.app/api/billing/license). Null = cloud organisation.
+  licenseKey       String?           @unique
   archivedAt       DateTime?
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt

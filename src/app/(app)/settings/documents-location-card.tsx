@@ -181,7 +181,7 @@ export function DocumentsLocationCard() {
         )}
         <SyncExplanation />
         {location.isLocked ? (
-          <p className="text-sm text-muted-foreground">Non modifiable pendant le test de l&apos;application.</p>
+          <p className="text-sm text-muted-foreground">{location.lockedReason}</p>
         ) : pending ? (
           <ConfirmPanel pending={pending} isSaving={isSaving} onConfirm={handleConfirm} onCancel={closePanel} />
         ) : (

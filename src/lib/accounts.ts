@@ -1,6 +1,7 @@
 import { hash } from "bcryptjs";
 import { db } from "./db";
 import { seedGlobalTemplates } from "./default-templates";
+import { isServerMode } from "./deployment";
 
 /** Self-service signup. Always creates a USER; payment is required next. */
 export async function createSelfServeAccount(data: {
@@ -8,6 +9,9 @@ export async function createSelfServeAccount(data: {
   name: string;
   password: string;
 }): Promise<{ success: boolean; error?: string }> {
+  if (isServerMode()) {
+    return { success: false, error: "Les comptes sont créés par l'administrateur de la structure." };
+  }
   const email = data.email.toLowerCase();
 
   const existing = await db.user.findUnique({ where: { email }, select: { id: true } });

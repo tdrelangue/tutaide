@@ -1,11 +1,20 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "main-capability",
-  "description": "Tutellia desktop capabilities",
-  "platforms": ["linux", "macOS", "windows"],
-  "windows": ["main"],
+  "description": "Tutellia desktop capabilities (bundled start-up page and the local server)",
+  "platforms": [
+    "linux",
+    "macOS",
+    "windows"
+  ],
+  "windows": [
+    "main"
+  ],
   "remote": {
-    "urls": ["http://localhost:3456/*", "http://localhost:3000/*"]
+    "urls": [
+      "http://localhost:3456/*",
+      "http://localhost:3000/*"
+    ]
   },
   "permissions": [
     "core:default",
@@ -13,6 +22,12 @@
     "updater:allow-check",
     "updater:allow-download-and-install",
     "dialog:default",
-    "process:default"
+    "process:default",
+    "allow-kill-server",
+    "allow-check-for-update",
+    "allow-get-connection",
+    "allow-set-connection",
+    "allow-open-connection-settings",
+    "allow-save-and-open"
   ]
 }

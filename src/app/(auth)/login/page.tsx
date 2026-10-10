@@ -2,7 +2,9 @@ import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { LoginForm } from "./login-form";
 import { DemoEntry } from "./demo-entry";
+import { ConnectionLink } from "@/components/connection-card";
 import { isDemoAllowed } from "@/lib/demo/state";
+import { isServerMode } from "@/lib/deployment";
 
 export default async function LoginPage() {
   const session = await auth();
@@ -19,8 +21,9 @@ export default async function LoginPage() {
           Gestion des dossiers MJPM
         </p>
       </div>
-      <LoginForm />
+      <LoginForm allowSignup={!isServerMode()} />
       {isDemoAllowed() && <DemoEntry />}
+      <ConnectionLink />
     </div>
   );
 }

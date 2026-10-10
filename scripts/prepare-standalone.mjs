@@ -29,8 +29,11 @@ if (existsSync(publicSrc)) {
   console.log("Copied public/ → standalone/public/");
 }
 
-// Copy .env files → standalone/ and patch NEXTAUTH_URL for production port
-for (const envFile of [".env", ".env.local"]) {
+// Copy .env files → standalone/ and patch NEXTAUTH_URL for production port.
+// Skipped for the organisation server image (TUTELLIA_SKIP_ENV=1): secrets are
+// generated at install time on the client's server and never baked in.
+const envFiles = process.env.TUTELLIA_SKIP_ENV === "1" ? [] : [".env", ".env.local"];
+for (const envFile of envFiles) {
   const envSrc = join(root, envFile);
   const envDest = join(standalone, envFile);
   if (existsSync(envSrc)) {

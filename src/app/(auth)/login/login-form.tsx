@@ -26,7 +26,7 @@ type LoginFormData = {
   password: string;
 };
 
-export function LoginForm() {
+export function LoginForm({ allowSignup = true }: { allowSignup?: boolean }) {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -145,12 +145,18 @@ export function LoginForm() {
             Se connecter
           </Button>
         </form>
-        <p className="mt-6 text-center text-sm text-muted-foreground">
-          Pas encore de compte ?{" "}
-          <Link href="/signup" className="font-medium text-foreground underline-offset-4 hover:underline">
-            Créer un compte
-          </Link>
-        </p>
+        {allowSignup ? (
+          <p className="mt-6 text-center text-sm text-muted-foreground">
+            Pas encore de compte ?{" "}
+            <Link href="/signup" className="font-medium text-foreground underline-offset-4 hover:underline">
+              Créer un compte
+            </Link>
+          </p>
+        ) : (
+          <p className="mt-6 text-center text-sm text-muted-foreground">
+            Pas encore de compte ? Demandez-le à l&apos;administrateur de votre structure.
+          </p>
+        )}
       </CardContent>
     </Card>
   );

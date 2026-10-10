@@ -17,7 +17,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { InlineError, useStructureAction } from "../../structure/use-structure-action";
 import { fromRoleChoice, ROLE_LABELS, ROLE_NONE, type RoleChoice } from "../../structure/labels";
-import { attachExistingUser, createOrganization, renameOrganization, type OrgListItem } from "./actions";
+import { attachExistingUser, createOrganization, generateLicenseKey, renameOrganization, type OrgListItem } from "./actions";
 
 const ROLES: RoleChoice[] = ["MANDATAIRE", "ASSISTANT", ROLE_NONE];
 
@@ -161,5 +161,56 @@ export function AttachUserDialog({ org, onClose }: { org: OrgListItem | null; on
         <Label htmlFor="attach-admin" className="font-normal">Administrateur de la structure</Label>
       </div>
     </FormDialog>
+  );
+}
+
+/**
+ * Licence key of a self-hosted server: generated here, shown once, to put in
+ * the server's .env. Generating again replaces (and invalidates) the old one.
+ */
+export function LicenseDialog({ org, onClose }: { org: OrgListItem | null; onClose: () => void }) {
+  const [key, setKey] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [isBusy, setIsBusy] = useState(false);
+  useEffect(() => { setKey(null); setError(null); }, [org]);
+
+  async function handleGenerate() {
+    if (!org) return;
+    setIsBusy(true);
+    const result = await generateLicenseKey(org.id);
+    setIsBusy(false);
+    if (result.success) setKey(result.key);
+    else setError(result.error);
+  }
+
+  return (
+    <Dialog open={org !== null} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Licence du serveur de {org?.name}</DialogTitle>
+          <DialogDescription>
+            Pour une structure qui héberge Tutellia sur son propre serveur. La clé se met dans le
+            fichier .env du serveur (TUTELLIA_LICENSE_KEY).
+            {org?.hasLicense && " Une clé existe déjà : en générer une nouvelle rend l'ancienne invalide."}
+          </DialogDescription>
+        </DialogHeader>
+        {key ? (
+          <div className="space-y-2">
+            <Label htmlFor="license-key">Clé (affichée une seule fois)</Label>
+            <Input id="license-key" readOnly value={key} className="font-mono text-xs" onFocus={(e) => e.target.select()} />
+            <Button type="button" variant="outline" onClick={() => void navigator.clipboard.writeText(key)}>Copier la clé</Button>
+          </div>
+        ) : (
+          <Button type="button" onClick={handleGenerate} disabled={isBusy}>
+            {isBusy && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
+            {org?.hasLicense ? "Remplacer la clé" : "Générer la clé"}
+          </Button>
+        )}
+        <InlineError message={error} />
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={onClose}>Fermer</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

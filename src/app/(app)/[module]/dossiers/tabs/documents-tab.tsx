@@ -27,6 +27,7 @@ import { formatRelativeTime, formatFileSize } from "@/lib/utils";
 import { uploadDocuments, deleteDocument, openDocumentNatively } from "../document-actions";
 import type { DossierWithDocuments } from "../actions";
 import { PdfPreview } from "@/components/pdf-preview";
+import { openWithDesktopApp } from "@/lib/desktop-open";
 
 interface DocumentsTabProps {
   dossier: DossierWithDocuments;
@@ -159,6 +160,8 @@ export function DocumentsTab({ dossier }: DocumentsTabProps) {
   // macOS: WKWebView ignores window.open, so the desktop server opens the
   // file in its default app (Aperçu…). Other platforms keep the synchronous
   // window.open — after an await it could be popup-blocked.
+  // Connected to the organisation's server, the server cannot open a file
+  // on this Mac: the desktop app saves it to Downloads and opens it instead.
   const handleDownload = async (documentId: string) => {
     const url = `/api/documents/${documentId}/download`;
     if (!navigator.userAgent.includes("Mac OS X")) {
@@ -167,7 +170,9 @@ export function DocumentsTab({ dossier }: DocumentsTabProps) {
     }
     try {
       const { opened } = await openDocumentNatively(documentId);
-      if (!opened) window.location.href = url;
+      if (opened) return;
+      const filename = documents.find((d) => d.id === documentId)?.filename ?? "document.pdf";
+      if (!(await openWithDesktopApp(url, filename))) window.location.href = url;
     } catch {
       toast.error("Impossible d'ouvrir le document");
     }

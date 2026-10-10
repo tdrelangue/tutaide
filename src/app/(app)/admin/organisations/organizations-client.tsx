@@ -17,9 +17,9 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useStructureAction } from "../../structure/use-structure-action";
 import { setOrganizationArchived, type OrgListItem } from "./actions";
-import { AttachUserDialog, CreateOrganizationDialog, RenameDialog } from "./organization-dialogs";
+import { AttachUserDialog, CreateOrganizationDialog, LicenseDialog, RenameDialog } from "./organization-dialogs";
 
-type Dialog = { kind: "create" } | { kind: "rename" | "attach" | "archive"; org: OrgListItem } | null;
+type Dialog = { kind: "create" } | { kind: "rename" | "attach" | "archive" | "license"; org: OrgListItem } | null;
 
 export function OrganizationsClient({ organizations }: { organizations: OrgListItem[] }) {
   const [dialog, setDialog] = useState<Dialog>(null);
@@ -67,11 +67,12 @@ export function OrganizationsClient({ organizations }: { organizations: OrgListI
       <RenameDialog org={dialog?.kind === "rename" ? dialog.org : null} onClose={close} />
       <AttachUserDialog org={dialog?.kind === "attach" ? dialog.org : null} onClose={close} />
       <ArchiveDialog org={dialog?.kind === "archive" ? dialog.org : null} onClose={close} />
+      <LicenseDialog org={dialog?.kind === "license" ? dialog.org : null} onClose={close} />
     </div>
   );
 }
 
-function OrganizationItem({ org, onOpen }: { org: OrgListItem; onOpen: (kind: "rename" | "attach" | "archive") => void }) {
+function OrganizationItem({ org, onOpen }: { org: OrgListItem; onOpen: (kind: "rename" | "attach" | "archive" | "license") => void }) {
   const { run, isBusy } = useStructureAction();
   return (
     <li className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
@@ -81,9 +82,13 @@ function OrganizationItem({ org, onOpen }: { org: OrgListItem; onOpen: (kind: "r
           {org.memberCount} compte(s) actif(s) · Administrateur(s) : {org.admins.join(", ") || "aucun"}
         </p>
         {org.archived && <Badge variant="outline" className="mt-1">Archivée (aucun accès pour ses membres)</Badge>}
+        {org.hasLicense && <Badge variant="secondary" className="mt-1 ml-1">Serveur auto-hébergé</Badge>}
       </div>
       <div className="flex flex-wrap gap-2">
         <Button variant="outline" size="sm" onClick={() => onOpen("rename")} aria-label={`Renommer ${org.name}`}>Renommer</Button>
+        <Button variant="outline" size="sm" onClick={() => onOpen("license")} aria-label={`Clé de licence serveur de ${org.name}`}>
+          Clé de licence
+        </Button>
         <Button variant="outline" size="sm" onClick={() => onOpen("attach")} disabled={org.archived} aria-label={`Rattacher un compte à ${org.name}`}>
           Rattacher un compte
         </Button>

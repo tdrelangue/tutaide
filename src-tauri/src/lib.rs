@@ -1,3 +1,6 @@
+mod connection;
+mod remote;
+
 use tauri::Manager;
 use tauri_plugin_updater::UpdaterExt;
 use std::sync::Mutex;
@@ -84,19 +87,28 @@ struct UpdateMetadata {
 /// admin in the database, see web/src/lib/update-endpoints.ts) instead of only
 /// the ones baked into tauri.conf.json. Endpoints are tried in order. The
 /// signing public key still comes from tauri.conf.json.
+///
+/// Called from an organisation's server page, the endpoints and the downgrade
+/// flag are ignored: only OrigAI's own update addresses (tauri.conf.json), and
+/// never an older version — a server must not choose what this PC installs.
 #[tauri::command]
 async fn check_for_update(
+    app: tauri::AppHandle,
     webview: tauri::Webview,
     endpoints: Vec<String>,
     allow_downgrades: bool,
 ) -> Result<Option<UpdateMetadata>, String> {
-    let urls = endpoints
-        .iter()
-        .map(|e| tauri::Url::parse(e))
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| e.to_string())?;
-    let mut builder = webview.updater_builder().endpoints(urls).map_err(|e| e.to_string())?;
-    if allow_downgrades {
+    let is_local = remote::is_local_page(&app, &webview);
+    let mut builder = webview.updater_builder();
+    if is_local {
+        let urls = endpoints
+            .iter()
+            .map(|e| tauri::Url::parse(e))
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())?;
+        builder = builder.endpoints(urls).map_err(|e| e.to_string())?;
+    }
+    if allow_downgrades && is_local {
         builder = builder.version_comparator(|current, update| update.version != current);
     }
     let update = builder
@@ -130,9 +142,39 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_process::init())
-        .invoke_handler(tauri::generate_handler![kill_server, check_for_update])
+        .invoke_handler(tauri::generate_handler![
+            kill_server,
+            check_for_update,
+            remote::get_connection,
+            remote::set_connection,
+            remote::open_connection_settings,
+            remote::save_and_open
+        ])
         .setup(|app| {
             app.manage(ServerProcess(Mutex::new(None)));
+
+            // The window starts on the bundled start-up page: remember it, so
+            // "Changer de connexion" can come back to it.
+            let launcher = app.get_webview_window("main").and_then(|w| w.url().ok());
+            app.manage(remote::LauncherUrl(Mutex::new(launcher)));
+
+            // "Serveur de ma structure": no local server. The start-up page
+            // checks the server and opens it; the server only gets the minimal
+            // permissions it needs from this app.
+            match remote::saved(app.handle()) {
+                connection::Saved::Valid(connection::Connection::Server { url }) => {
+                    remote::grant_server_permissions(app.handle(), &url)?;
+                    #[cfg(debug_assertions)]
+                    if let (Some(window), Ok(target)) = (app.get_webview_window("main"), url.parse()) {
+                        window.navigate(target)?;
+                    }
+                    return Ok(());
+                }
+                // Unreadable setting: no server at all; the start-up page asks
+                // the person to choose again (never a silent switch).
+                connection::Saved::Invalid => return Ok(()),
+                connection::Saved::Valid(connection::Connection::Local) => {}
+            }
 
             #[cfg(not(debug_assertions))]
             {

@@ -1,6 +1,7 @@
 import path from "path";
 import { getDemoDocumentsDir, isDemoActive } from "./demo/state";
 import { getAppDataDir, readMachineSettings } from "./storage/machine-settings";
+import { getServerStorageDir, isServerMode } from "./deployment";
 
 /**
  * The default documents folder, used until the user picks another one.
@@ -20,6 +21,8 @@ export function getDefaultDocumentsDir(): string {
 export function getDocumentsBaseDir(): string {
   // Demo documents never mix with real ones: temp folder, wiped after the demo.
   if (isDemoActive()) return getDemoDocumentsDir();
+  // Organisation server: one storage folder for everybody (a Docker volume).
+  if (isServerMode()) return getServerStorageDir();
 
   return readMachineSettings().documentsDir ?? getDefaultDocumentsDir();
 }

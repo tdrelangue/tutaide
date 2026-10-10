@@ -2,12 +2,17 @@ import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { BILLING_PRICE_LABEL } from "@/lib/billing";
 import { SignupForm } from "./signup-form";
+import { isServerMode } from "@/lib/deployment";
 
 export default async function SignupPage() {
   const session = await auth();
 
   if (session?.user) {
     redirect("/dashboard");
+  }
+  // Organisation server: accounts are created by the organisation admin.
+  if (isServerMode()) {
+    redirect("/login");
   }
 
   return (
