@@ -7,13 +7,20 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { getDesktopConnection, openConnectionSettings, type DesktopConnection } from "@/lib/desktop-open";
 
 /**
+ * "Serveur de ma structure" is offered only once the organisation server is
+ * released (build with NEXT_PUBLIC_TUTELLIA_SERVER_UI=1). Until then the
+ * regular app shows nothing of it.
+ */
+const IS_SERVER_CHOICE_RELEASED = process.env.NEXT_PUBLIC_TUTELLIA_SERVER_UI === "1";
+
+/**
  * Settings → Général, desktop app only: where Tutellia runs (this computer or
  * the organisation's server) and the way to change it.
  */
 export function ConnectionCard() {
   const [connection, setConnection] = useState<DesktopConnection | null>(null);
   useEffect(() => {
-    void getDesktopConnection().then(setConnection);
+    if (IS_SERVER_CHOICE_RELEASED) void getDesktopConnection().then(setConnection);
   }, []);
 
   if (!connection) return null; // plain browser: nothing to choose
@@ -51,7 +58,7 @@ export function ConnectionCard() {
 export function ConnectionLink() {
   const [connection, setConnection] = useState<DesktopConnection | null>(null);
   useEffect(() => {
-    void getDesktopConnection().then(setConnection);
+    if (IS_SERVER_CHOICE_RELEASED) void getDesktopConnection().then(setConnection);
   }, []);
   if (!connection) return null;
   const label = connection.mode === "server" ? "Changer de serveur ou utiliser cet ordinateur" : "Votre structure a son propre serveur ?";
