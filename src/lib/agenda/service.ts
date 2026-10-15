@@ -1,7 +1,7 @@
 import { db } from "@/lib/db";
 import { personsFromDossiers, type AgendaEndReasonValue, type AgendaPeriodValue, type DossierPerson } from "./rules";
 import type { AddressPrecision } from "./geocode";
-import { seal, sealOrNull, unseal } from "./sealed";
+import { seal, sealOrNull, sealPoint, unseal, unsealPoint } from "./sealed";
 import type { AgendaPersonInput, AgendaSettingsInput } from "./validation";
 
 /**
@@ -58,10 +58,11 @@ function toPrecision(value: string | null): AddressPrecision {
   return value === "street" || value === "locality" || value === "municipality" ? value : "housenumber";
 }
 
-function toPlace(sealed: string | null, lat: number | null, lon: number | null, precision: string | null): Place | null {
-  const label = unseal(sealed);
-  if (label === null || lat === null || lon === null) return null;
-  return { label, lat, lon, precision: toPrecision(precision) };
+function toPlace(sealedLabel: string | null, sealedPoint: string | null, precision: string | null): Place | null {
+  const label = unseal(sealedLabel);
+  const point = unsealPoint(sealedPoint);
+  if (label === null || point === null) return null;
+  return { label, ...point, precision: toPrecision(precision) };
 }
 
 // ---------------------------------------------------------------------------
@@ -72,8 +73,8 @@ export async function getAgendaSettings(ownerId: string): Promise<AgendaSettings
   const row = await db.agendaSettings.findUnique({ where: { ownerId } });
   if (!row) return DEFAULT_SETTINGS;
   return {
-    home: toPlace(row.homeAddress, row.homeLat, row.homeLon, row.homePrecision),
-    office: toPlace(row.officeAddress, row.officeLat, row.officeLon, row.officePrecision),
+    home: toPlace(row.homeAddress, row.homePoint, row.homePrecision),
+    office: toPlace(row.officeAddress, row.officePoint, row.officePrecision),
     workDays: row.workDays,
     dayStartMinutes: row.dayStartMin,
     dayEndMinutes: row.dayEndMin,
@@ -86,12 +87,10 @@ function settingsColumns(input: AgendaSettingsInput) {
   const { home, office } = input;
   return {
     homeAddress: sealOrNull(home?.label),
-    homeLat: home?.lat ?? null,
-    homeLon: home?.lon ?? null,
+    homePoint: home ? sealPoint(home) : null,
     homePrecision: home?.precision ?? null,
     officeAddress: sealOrNull(office?.label),
-    officeLat: office?.lat ?? null,
-    officeLon: office?.lon ?? null,
+    officePoint: office ? sealPoint(office) : null,
     officePrecision: office?.precision ?? null,
     workDays: [...new Set(input.workDays)].sort((a, b) => a - b),
     dayStartMin: input.dayStartMinutes,
@@ -128,7 +127,7 @@ function toPersonView(r: PersonRow): AgendaPersonView {
     id: r.id,
     fullName: r.fullName,
     fromDossiers: r.dossierGroupKey !== null,
-    address: place ? toPlace(place.address, place.lat, place.lon, place.precision) : null,
+    address: place ? toPlace(place.address, place.point, place.precision) : null,
     visitsPerPeriod: r.visitsPerPeriod,
     visitPeriod: r.visitPeriod,
     visitMinutes: r.visitMin,
@@ -189,7 +188,7 @@ function personColumns(input: AgendaPersonInput) {
 }
 
 function placeColumns(ownerId: string, place: Place) {
-  return { ownerId, label: HOME_PLACE_LABEL, address: seal(place.label), lat: place.lat, lon: place.lon, precision: place.precision, position: 0 };
+  return { ownerId, label: HOME_PLACE_LABEL, address: seal(place.label), point: sealPoint(place), precision: place.precision, position: 0 };
 }
 
 /** Far above any real caseload (an MJPM follows ~50–80 persons): guards against runaway data. */
@@ -268,7 +267,7 @@ async function replaceDefaultPlace(tx: Tx, ownerId: string, contactId: string, a
 }
 
 const ERASED = "Contact supprimé";
-const ERASED_PLACE = { placeLabel: "", placeAddress: "", placeLat: null, placeLon: null };
+const ERASED_PLACE = { placeLabel: "", placeAddress: "", placePoint: null };
 
 type Erasure = { contactId: string; fullName: string; homes: Set<string> };
 

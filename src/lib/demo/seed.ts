@@ -3,6 +3,7 @@ import path from "path";
 import type { ModuleType, Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { encrypt } from "@/lib/encryption";
+import { sealPoint } from "@/lib/agenda/sealed";
 import { seedGlobalTemplates } from "@/lib/default-templates";
 import { getDemoDocumentsDir } from "./state";
 
@@ -146,8 +147,7 @@ async function seedAgendaPerson(ownerId: string, fullName: string, dossierGroupK
       contactId: contact.id,
       label: "Domicile",
       address: encrypt(visit.label),
-      lat: visit.lat,
-      lon: visit.lon,
+      point: sealPoint(visit),
       precision: "housenumber",
     },
   });
@@ -159,8 +159,7 @@ async function seedAgenda(userId: string): Promise<void> {
     data: {
       ownerId: userId,
       homeAddress: encrypt(DEMO_HOME.label),
-      homeLat: DEMO_HOME.lat,
-      homeLon: DEMO_HOME.lon,
+      homePoint: sealPoint(DEMO_HOME),
       homePrecision: "housenumber",
     },
   });

@@ -68,6 +68,7 @@ await check("settings: saved, read back, and the home address is encrypted at re
   const row = await client.agendaSettings.findUniqueOrThrow({ where: { ownerId: alice } });
   assert.notEqual(row.homeAddress, lille.label);
   assert.equal(row.version, 1);
+  assert.equal(row.homePoint?.includes(String(lille.lat)), false);
 });
 
 await check("person: created with its default place; address and notes encrypted at rest", async () => {
@@ -79,6 +80,7 @@ await check("person: created with its default place; address and notes encrypted
   assert.equal(contact.category, "PROTEGE");
   assert.notEqual(contact.notes, person.notes);
   assert.notEqual(contact.places[0].address, roubaix.label);
+  assert.equal(contact.places[0].point.includes(String(roubaix.lat)), false);
 });
 
 await check("person: changing the address updates the same place; removing it deletes the place", async () => {
@@ -114,7 +116,7 @@ await check("isolation: another MJPM can neither see, change nor delete the pers
 await check("isolation: the database refuses a place attached to another MJPM's contact", async () => {
   const { id } = await onlyPersonOf(alice);
   await assert.rejects(
-    client.agendaPlace.create({ data: { ownerId: bob, contactId: id, label: "x", address: "x", lat: 0, lon: 0 } })
+    client.agendaPlace.create({ data: { ownerId: bob, contactId: id, label: "x", address: "x", point: "x" } })
   );
 });
 
@@ -149,7 +151,7 @@ await check("delete: where the person was only a participant, their name and hom
   const item = await client.agendaItem.create({
     data: {
       ownerId: alice, itemKey: "appt-1", kind: "APPT", title: "Signature avec Jean Bonneau et Aude Javel",
-      placeLabel: "Chez Jean", placeAddress: home, placeLat: 50.69, placeLon: 3.17, date: day, startMin: 600,
+      placeLabel: "Chez Jean", placeAddress: home, placePoint: encrypt("50.69,3.17"), date: day, startMin: 600,
       endMin: 660, priority: "HIGH", earliestDate: day, latestDate: day,
       participants: { create: [{ contactId: id }, { contactId: other.id }] },
     },
@@ -181,7 +183,7 @@ await check("delete: the contact is erased from the validated planning first", a
   const item = await client.agendaItem.create({
     data: {
       ownerId: alice, itemKey: `${id}@2026-10-20`, kind: "VISIT", contactId: id, title: "Visite Jean Bonneau",
-      placeLabel: "Domicile", placeAddress: "secret", placeLat: 50.69, placeLon: 3.17, date: day, startMin: 600,
+      placeLabel: "Domicile", placeAddress: "", placePoint: null, date: day, startMin: 600,
       endMin: 660, priority: "NORMAL", earliestDate: day, latestDate: day,
     },
   });
@@ -190,7 +192,7 @@ await check("delete: the contact is erased from the validated planning first", a
   assert.equal(scrubbed.contactId, null);
   assert.equal(scrubbed.title, "Contact supprimé");
   assert.equal(scrubbed.placeAddress, "");
-  assert.equal(scrubbed.placeLat, null);
+  assert.equal(scrubbed.placePoint, null);
   assert.equal(await client.agendaContact.count({ where: { ownerId: alice } }), 0);
 });
 

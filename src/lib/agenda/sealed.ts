@@ -22,3 +22,19 @@ export function sealOrNull(plain: string | null | undefined): string | null {
 export function unseal(stored: string | null): string | null {
   return stored === null || stored === "" ? null : decrypt(stored);
 }
+
+export type Point = { lat: number; lon: number };
+
+/** Coordinates are sealed too: a name plus a readable point reveals the home to the metre. */
+export function sealPoint(point: Point): string {
+  return encrypt(`${point.lat},${point.lon}`);
+}
+
+/** Throws on an unreadable or malformed value, like unseal. */
+export function unsealPoint(stored: string | null): Point | null {
+  const plain = unseal(stored);
+  if (plain === null) return null;
+  const [lat, lon] = plain.split(",").map(Number);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) throw new Error("Malformed agenda point");
+  return { lat, lon };
+}

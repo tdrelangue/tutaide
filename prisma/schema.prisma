@@ -474,14 +474,13 @@ enum SendingFrequency {
 model AgendaSettings {
   id              String   @id @default(cuid())
   ownerId         String   @unique
-  /// Encrypted (AES-256-GCM, src/lib/agenda/sealed.ts), like officeAddress.
+  /// Addresses and points ("lat,lon") are encrypted (AES-256-GCM, src/lib/agenda/sealed.ts):
+  /// a name plus readable coordinates would reveal the home (decision 2026-10-15).
   homeAddress     String?
-  homeLat         Float?
-  homeLon         Float?
+  homePoint       String?
   homePrecision   String?
   officeAddress   String?
-  officeLat       Float?
-  officeLon       Float?
+  officePoint     String?
   officePrecision String?
   /// ISO weekdays worked (1 = Monday … 7 = Sunday).
   workDays        Int[]    @default([1, 2, 3, 4, 5])
@@ -556,10 +555,9 @@ model AgendaPlace {
   /// Null = a free place (« Cabinet dentaire »).
   contactId    String?
   label        String
-  /// Encrypted. lat/lon stay readable: the planner needs them.
+  /// Encrypted, like `point` ("lat,lon"); the planner decrypts both when it loads the agenda.
   address      String
-  lat          Float
-  lon          Float
+  point        String
   precision    String?
   position     Int                 @default(0)
   owner        User                @relation(fields: [ownerId], references: [id], onDelete: Cascade)
@@ -664,9 +662,8 @@ model AgendaItem {
   placeLabel    String
   /// Encrypted, like AgendaPin.placeAddress.
   placeAddress  String
-  /// Null for a video call.
-  placeLat      Float?
-  placeLon      Float?
+  /// Encrypted "lat,lon". Null for a video call.
+  placePoint    String?
   placeRemote   Boolean                 @default(false)
   date          DateTime                @db.Date
   startMin      Int
@@ -716,9 +713,9 @@ model AgendaPin {
   title          String
   participantIds String[]
   placeLabel     String
+  /// Encrypted, like placePoint ("lat,lon").
   placeAddress   String
-  placeLat       Float?
-  placeLon       Float?
+  placePoint     String?
   placeRemote    Boolean            @default(false)
   durationMin    Int
   priority       AgendaPriority
