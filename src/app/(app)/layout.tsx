@@ -16,6 +16,7 @@ import { getActorContext } from "@/lib/access/context";
 import { canWorkOnDossiers } from "@/lib/access/scope";
 import { getLicenseStatus } from "@/lib/license";
 import { LicenseBanner } from "@/components/license-banner";
+import { canSeeAgenda } from "@/lib/agenda/context";
 
 export default async function AppLayout({
   children,
@@ -53,11 +54,12 @@ export default async function AppLayout({
     await ensureDailyPaymentReminder(session.user.id, paymentReminder).catch(() => undefined);
   }
 
-  const [impersonation, moduleConfigs, actorContext, licenseStatus] = await Promise.all([
+  const [impersonation, moduleConfigs, actorContext, licenseStatus, showAgenda] = await Promise.all([
     getImpersonationState(),
     getAllModuleConfigs(),
     getActorContext(),
     getLicenseStatus(),
+    canSeeAgenda().catch(() => false),
   ]);
   const worksOnDossiers = actorContext ? canWorkOnDossiers(actorContext.actor) : false;
   const isOrgAdmin = actorContext?.actor.isOrgAdmin ?? false;
@@ -89,6 +91,7 @@ export default async function AppLayout({
           activeModules={activeModuleKeys}
           worksOnDossiers={worksOnDossiers}
           isOrgAdmin={isOrgAdmin}
+          showAgenda={showAgenda}
         />
         <div className="flex flex-1 flex-col">
           <AppHeader user={session.user} />

@@ -24,7 +24,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { BillingRequiredField, centsToEuros, eurosToCents, toDateInput } from "./billing-required-field";
+import { AgendaGrantField, BillingRequiredField, centsToEuros, eurosToCents, toDateInput } from "./billing-required-field";
 import { updateUser } from "../actions";
 import type { AdminUserData } from "../actions";
 
@@ -41,6 +41,7 @@ const schema = z.object({
   billingPlan: z.enum(["individual", "entreprise"]),
   customAmount: z.string(),
   billingStartsAt: z.string(),
+  agendaGranted: z.boolean(),
 }).refine((d) => !d.billingRequired || d.billingPlan === "individual" || eurosToCents(d.customAmount) !== null, {
   message: "Indiquez un prix annuel valide (ex. 1200)",
   path: ["customAmount"],
@@ -80,6 +81,7 @@ export function EditUserDialog({
       billingPlan: user.billingCustomAmountCents === null ? "individual" : "entreprise",
       customAmount: centsToEuros(user.billingCustomAmountCents),
       billingStartsAt: toDateInput(user.billingStartsAt),
+      agendaGranted: user.agendaGranted,
     },
   });
 
@@ -88,6 +90,7 @@ export function EditUserDialog({
   const billingPlan = watch("billingPlan");
   const customAmount = watch("customAmount");
   const billingStartsAt = watch("billingStartsAt");
+  const agendaGranted = watch("agendaGranted");
 
   async function onSubmit(data: FormData) {
     setIsSaving(true);
@@ -100,6 +103,7 @@ export function EditUserDialog({
         billingRequired?: boolean;
         billingCustomAmountCents?: number | null;
         billingStartsAt?: string | null;
+        agendaGranted?: boolean;
       } = {};
 
       if (data.email !== user.email) updateData.email = data.email;
@@ -121,6 +125,8 @@ export function EditUserDialog({
       if (startDate !== toDateInput(user.billingStartsAt)) {
         updateData.billingStartsAt = startDate || null;
       }
+
+      if (data.agendaGranted !== user.agendaGranted) updateData.agendaGranted = data.agendaGranted;
 
       if (Object.keys(updateData).length === 0) {
         toast.info("Aucune modification");
@@ -227,6 +233,13 @@ export function EditUserDialog({
             disabled={isSaving}
             warnOnEnable={!user.billingRequired}
             hasExistingPrice={user.billingRequired}
+          />
+
+          <AgendaGrantField
+            id="edit-agenda"
+            checked={agendaGranted}
+            onCheckedChange={(v) => setValue("agendaGranted", v)}
+            disabled={isSaving}
           />
 
           <DialogFooter>

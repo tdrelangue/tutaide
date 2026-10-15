@@ -153,3 +153,41 @@ export function BillingRequiredField({
     </div>
   );
 }
+
+/** « Agenda » add-on offered by OrigAI (no payment), shared by the create and edit user dialogs. */
+export function AgendaGrantField({
+  id,
+  checked,
+  onCheckedChange,
+  disabled,
+}: {
+  id: string;
+  checked: boolean;
+  onCheckedChange: (checked: boolean) => void;
+  disabled: boolean;
+}) {
+  function handleCheckedChange(value: boolean | "indeterminate") {
+    onCheckedChange(value === true);
+  }
+
+  return (
+    <div className="flex items-start gap-3 rounded-md border p-3">
+      <Checkbox
+        id={id}
+        checked={checked}
+        onCheckedChange={handleCheckedChange}
+        disabled={disabled}
+        aria-describedby={`${id}-hint`}
+        className="mt-0.5"
+      />
+      <div className="space-y-1">
+        <Label htmlFor={id}>Module Agenda offert</Label>
+        <p id={`${id}-hint`} className="text-sm text-muted-foreground">
+          Donne accès au module Agenda (visites et tournées) sans paiement. Pour un mandataire
+          d&apos;une structure, ses assistants y ont aussi accès. Décocher retire l&apos;accès ; les
+          données de l&apos;agenda sont conservées.
+        </p>
+      </div>
+    </div>
+  );
+}

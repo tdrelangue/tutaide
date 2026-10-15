@@ -24,7 +24,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { BillingRequiredField, eurosToCents } from "./billing-required-field";
+import { AgendaGrantField, BillingRequiredField, eurosToCents } from "./billing-required-field";
 import { createUser } from "../actions";
 
 const schema = z.object({
@@ -36,6 +36,7 @@ const schema = z.object({
   billingPlan: z.enum(["individual", "entreprise"]),
   customAmount: z.string(),
   billingStartsAt: z.string(),
+  agendaGranted: z.boolean(),
 }).refine((d) => !d.billingRequired || d.billingPlan === "individual" || eurosToCents(d.customAmount) !== null, {
   message: "Indiquez un prix annuel valide (ex. 1200)",
   path: ["customAmount"],
@@ -74,6 +75,7 @@ export function CreateUserDialog({
       billingPlan: "individual",
       customAmount: "",
       billingStartsAt: "",
+      agendaGranted: false,
     },
   });
 
@@ -82,6 +84,7 @@ export function CreateUserDialog({
   const billingPlan = watch("billingPlan");
   const customAmount = watch("customAmount");
   const billingStartsAt = watch("billingStartsAt");
+  const agendaGranted = watch("agendaGranted");
 
   async function onSubmit(data: FormData) {
     setIsSaving(true);
@@ -94,6 +97,7 @@ export function CreateUserDialog({
         billingRequired: data.billingRequired,
         billingCustomAmountCents: data.billingPlan === "entreprise" ? eurosToCents(data.customAmount) : null,
         billingStartsAt: data.billingRequired && data.billingStartsAt ? data.billingStartsAt : null,
+        agendaGranted: data.agendaGranted,
       });
       if (result.success) {
         toast.success("Utilisateur cree");
@@ -192,6 +196,13 @@ export function CreateUserDialog({
             disabled={isSaving}
             warnOnEnable={false}
             hasExistingPrice={false}
+          />
+
+          <AgendaGrantField
+            id="create-agenda"
+            checked={agendaGranted}
+            onCheckedChange={(v) => setValue("agendaGranted", v)}
+            disabled={isSaving}
           />
 
           <DialogFooter>

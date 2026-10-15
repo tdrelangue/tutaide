@@ -8,46 +8,58 @@ datasource db {
 }
 
 model User {
-  id                       String                @id @default(cuid())
-  email                    String                @unique
-  name                     String?
-  passwordHash             String
-  role                     UserRole              @default(USER)
-  archivedAt               DateTime?
-  createdAt                DateTime              @default(now())
-  updatedAt                DateTime              @updatedAt
-  signature                String?
+  id                        String                     @id @default(cuid())
+  email                     String                     @unique
+  name                      String?
+  passwordHash              String
+  role                      UserRole                   @default(USER)
+  archivedAt                DateTime?
+  createdAt                 DateTime                   @default(now())
+  updatedAt                 DateTime                   @updatedAt
+  signature                 String?
   /// Organisation ("structure") the account belongs to. Null = solo account.
-  orgId                    String?
-  organization             Organization?         @relation(fields: [orgId], references: [id], onDelete: SetNull)
+  orgId                     String?
+  organization              Organization?              @relation(fields: [orgId], references: [id], onDelete: SetNull)
   /// Working role inside the organisation. Null = no access to dossiers
   /// (e.g. an IT administrator who only has the admin right).
-  orgRole                  OrgRole?
+  orgRole                   OrgRole?
   /// Access to the organisation admin panel (/structure) — nothing else.
-  isOrgAdmin               Boolean               @default(false)
-  assistantAssignments     AssistantAssignment[] @relation("AssignmentAssistant")
-  mandataireAssignments    AssistantAssignment[] @relation("AssignmentMandataire")
+  isOrgAdmin                Boolean                    @default(false)
+  assistantAssignments      AssistantAssignment[]      @relation("AssignmentAssistant")
+  mandataireAssignments     AssistantAssignment[]      @relation("AssignmentMandataire")
   /// Paying account: must hold an active Stripe subscription. False = free
   /// account (admin-created accounts default to free; self-signup sets true).
-  billingRequired          Boolean               @default(false)
+  billingRequired           Boolean                    @default(false)
   /// Entreprise plan: custom yearly price in euro cents, set by the admin.
   /// Null = individual plan (STRIPE_PRICE_INDIVIDUAL).
-  billingCustomAmountCents Int?
+  billingCustomAmountCents  Int?
   /// Paying accounts only: date of the first 30 € charge, set by the admin for
   /// existing clients. Before it, full access + card registration at 0 €
   /// (Stripe trial_end). After it without a card: blocked like any paying account.
-  billingStartsAt          DateTime?
-  notificationReads        NotificationRead[]
-  notificationsCreated     AppNotification[]     @relation("NotificationAuthor")
-  notificationsTargeted    AppNotification[]     @relation("NotificationTarget")
-  documents                Document[]
-  dossiers                 Dossier[]
-  batches                  EmailBatch[]
-  sendEvents               EmailSendEvent[]
-  templates                EmailTemplate[]
-  smtpConfig               SmtpConfig?
-  moduleConfigs            ModuleConfig[]
-  resetTokens              PasswordResetToken[]
+  billingStartsAt           DateTime?
+  /// « Agenda » paid add-on granted for free by the admin (like a free account).
+  agendaGranted             Boolean                    @default(false)
+  agendaSettings            AgendaSettings?
+  agendaContacts            AgendaContact[]
+  agendaPlaces              AgendaPlace[]
+  agendaRules               AgendaRule[]
+  agendaAppointments        AgendaAppointment[]
+  agendaItems               AgendaItem[]
+  agendaPins                AgendaPin[]
+  agendaRuleAnswers         AgendaRuleAnswer[]
+  agendaOccurrenceOverrides AgendaOccurrenceOverride[]
+  agendaRouteCache          AgendaRouteCache[]
+  notificationReads         NotificationRead[]
+  notificationsCreated      AppNotification[]          @relation("NotificationAuthor")
+  notificationsTargeted     AppNotification[]          @relation("NotificationTarget")
+  documents                 Document[]
+  dossiers                  Dossier[]
+  batches                   EmailBatch[]
+  sendEvents                EmailSendEvent[]
+  templates                 EmailTemplate[]
+  smtpConfig                SmtpConfig?
+  moduleConfigs             ModuleConfig[]
+  resetTokens               PasswordResetToken[]
 
   @@index([email])
   @@index([orgId])
@@ -353,6 +365,21 @@ model NotificationRead {
   @@id([userId, notificationId])
 }
 
+enum AgendaPeriod {
+  WEEK
+  MONTH
+  QUARTER
+  YEAR
+}
+
+enum AgendaEndReason {
+  DECES
+  DESSAISISSEMENT
+  MAINLEVEE
+  TRANSFERT
+  AUTRE
+}
+
 enum NotificationAudience {
   ALL
   PAYING
@@ -441,4 +468,372 @@ enum UserRole {
 enum SendingFrequency {
   MONTHLY
   QUARTERLY
+}
+
+/// « Agenda » add-on: the MJPM's planning settings (one per MJPM, the owner).
+model AgendaSettings {
+  id              String   @id @default(cuid())
+  ownerId         String   @unique
+  /// Encrypted (AES-256-GCM, src/lib/agenda/sealed.ts), like officeAddress.
+  homeAddress     String?
+  homeLat         Float?
+  homeLon         Float?
+  homePrecision   String?
+  officeAddress   String?
+  officeLat       Float?
+  officeLon       Float?
+  officePrecision String?
+  /// ISO weekdays worked (1 = Monday … 7 = Sunday).
+  workDays        Int[]    @default([1, 2, 3, 4, 5])
+  /// Minutes after midnight, wall-clock time in `timezone`. dayEnd = wished end, drive home included.
+  dayStartMin     Int      @default(510)
+  dayEndMin       Int      @default(1080)
+  /// Strict limit, drive home included. Null = same as dayEndMin.
+  dayEndLimitMin  Int?     @default(1140)
+  /// Null = no lunch break.
+  lunchStartMin   Int?     @default(750)
+  lunchEndMin     Int?     @default(810)
+  defaultVisitMin Int      @default(60)
+  timezone        String   @default("Europe/Paris")
+  /// Optimistic locking: the MJPM and an assistant may edit at the same time.
+  version         Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  owner           User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+}
+
+/// « Agenda » add-on: the address book (protected persons, family, judges, professionals).
+model AgendaContact {
+  id                 String                         @id @default(cuid())
+  ownerId            String
+  createdById        String?
+  category           AgendaContactCategory
+  fullName           String
+  /// "Fils de Jean Bonneau", "Juge des contentieux de la protection"…
+  role               String?
+  /// Family member → the protected person they belong to (same owner, enforced).
+  linkedContactId    String?
+  /// Imported from the dossiers: their shared groupId, or the single dossier's id.
+  dossierGroupKey    String?
+  /// Not available before this time (minutes), e.g. « pas avant 10 h ».
+  notBeforeMin       Int?
+  /// Encrypted (may hold health information).
+  notes              String?
+  // Regular visits (protected persons only; all null = no regular visits).
+  visitsPerPeriod    Int?
+  visitPeriod        AgendaPeriod?
+  visitPriority      AgendaPriority?
+  visitMin           Int?
+  lastVisitOn        DateTime?                      @db.Date
+  prefDayDow         Int?
+  prefDayStrength    AgendaStrength?
+  status             AgendaContactStatus            @default(ACTIVE)
+  endReason          AgendaEndReason?
+  endedOn            DateTime?                      @db.Date
+  createdAt          DateTime                       @default(now())
+  updatedAt          DateTime                       @updatedAt
+  owner              User                           @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  linkedContact      AgendaContact?                 @relation("AgendaContactLink", fields: [linkedContactId, ownerId], references: [id, ownerId], onDelete: NoAction, onUpdate: NoAction)
+  linkedFrom         AgendaContact[]                @relation("AgendaContactLink")
+  places             AgendaPlace[]
+  availabilities     AgendaAvailability[]
+  participations     AgendaAppointmentParticipant[]
+  itemRefs           AgendaItem[]
+  itemParticipations AgendaItemParticipant[]
+  pins               AgendaPin[]
+  overrides          AgendaOccurrenceOverride[]
+
+  @@unique([id, ownerId])
+  @@unique([ownerId, dossierGroupKey])
+  @@index([ownerId, category, status])
+  @@index([linkedContactId])
+}
+
+/// An address: a contact's (position 0 = default) or a free place of the owner.
+model AgendaPlace {
+  id           String              @id @default(cuid())
+  ownerId      String
+  /// Null = a free place (« Cabinet dentaire »).
+  contactId    String?
+  label        String
+  /// Encrypted. lat/lon stay readable: the planner needs them.
+  address      String
+  lat          Float
+  lon          Float
+  precision    String?
+  position     Int                 @default(0)
+  owner        User                @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  contact      AgendaContact?      @relation(fields: [contactId, ownerId], references: [id, ownerId], onDelete: Cascade)
+  appointments AgendaAppointment[]
+
+  @@unique([id, ownerId])
+  @@index([ownerId])
+  @@index([contactId, position])
+}
+
+/// A contact's recurring availability, e.g. weekdays 17:00–19:00.
+model AgendaAvailability {
+  id        String        @id @default(cuid())
+  contactId String
+  dows      Int[]
+  fromMin   Int
+  toMin     Int
+  contact   AgendaContact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@index([contactId])
+}
+
+/// « Mes créneaux »: unavailability (all day or hours, at the office or not), vacation, visit cap.
+/// Which columns are filled depends on `type`; validated by the service (zod).
+model AgendaRule {
+  id        String         @id @default(cuid())
+  ownerId   String
+  type      AgendaRuleType
+  label     String
+  strength  AgendaStrength @default(HARD)
+  dow       Int?
+  allDay    Boolean?
+  fromMin   Int?
+  toMin     Int?
+  atOffice  Boolean        @default(false)
+  maxVisits Int?
+  fromDate  DateTime?      @db.Date
+  toDate    DateTime?      @db.Date
+  createdAt DateTime       @default(now())
+  owner     User           @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@index([ownerId])
+}
+
+/// An appointment to place (in a week, between two dates) or at a fixed time.
+model AgendaAppointment {
+  id           String                         @id @default(cuid())
+  ownerId      String
+  createdById  String?
+  title        String
+  placeKind    AgendaPlaceKind
+  /// Set when placeKind = PLACE (same owner, enforced). A place cannot be deleted while used.
+  placeId      String?
+  durationMin  Int
+  whenKind     AgendaWhenKind
+  date         DateTime?                      @db.Date
+  timeMin      Int?
+  fromDate     DateTime?                      @db.Date
+  toDate       DateTime?                      @db.Date
+  priority     AgendaPriority                 @default(NORMAL)
+  version      Int                            @default(0)
+  createdAt    DateTime                       @default(now())
+  updatedAt    DateTime                       @updatedAt
+  owner        User                           @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  place        AgendaPlace?                   @relation(fields: [placeId, ownerId], references: [id, ownerId], onDelete: NoAction, onUpdate: NoAction)
+  participants AgendaAppointmentParticipant[]
+  items        AgendaItem[]
+  pins         AgendaPin[]
+
+  @@unique([id, ownerId])
+  @@index([ownerId])
+  @@index([placeId])
+}
+
+model AgendaAppointmentParticipant {
+  appointmentId String
+  contactId     String
+  ownerId       String
+  appointment   AgendaAppointment @relation(fields: [appointmentId, ownerId], references: [id, ownerId], onDelete: Cascade)
+  contact       AgendaContact     @relation(fields: [contactId, ownerId], references: [id, ownerId], onDelete: Cascade)
+
+  @@id([appointmentId, contactId])
+  @@index([contactId])
+}
+
+/// The VALIDATED planning: nothing else is the planning (rule 8). Place, date and time
+/// are frozen at validation. MISSED = « N'a pas eu lieu »; CANCELLED = its appointment
+/// or contact was deleted. Kept for consultation, then purged (retention, see below).
+model AgendaItem {
+  id            String                  @id @default(cuid())
+  ownerId       String
+  /// The engine's item id (visit occurrence `contactId@due`, or appointment id).
+  /// Unique among this owner's items; once MISSED/CANCELLED it becomes `<status>:<id>`
+  /// so the same occurrence can be planned and validated again.
+  itemKey       String
+  kind          AgendaItemKind
+  appointmentId String?
+  /// The protected person of a regular visit.
+  contactId     String?
+  title         String
+  placeLabel    String
+  /// Encrypted, like AgendaPin.placeAddress.
+  placeAddress  String
+  /// Null for a video call.
+  placeLat      Float?
+  placeLon      Float?
+  placeRemote   Boolean                 @default(false)
+  date          DateTime                @db.Date
+  startMin      Int
+  endMin        Int
+  priority      AgendaPriority
+  earliestDate  DateTime                @db.Date
+  latestDate    DateTime                @db.Date
+  fixed         Boolean                 @default(false)
+  movable       Boolean                 @default(false)
+  moved         Boolean                 @default(false)
+  status        AgendaItemStatus        @default(VALIDATED)
+  statusAt      DateTime?
+  createdAt     DateTime                @default(now())
+  updatedAt     DateTime                @updatedAt
+  owner         User                    @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  appointment   AgendaAppointment?      @relation(fields: [appointmentId, ownerId], references: [id, ownerId], onDelete: NoAction, onUpdate: NoAction)
+  contact       AgendaContact?          @relation(fields: [contactId, ownerId], references: [id, ownerId], onDelete: NoAction, onUpdate: NoAction)
+  participants  AgendaItemParticipant[]
+
+  @@unique([id, ownerId])
+  @@unique([ownerId, itemKey])
+  @@index([ownerId, date])
+  @@index([ownerId, status, date])
+  @@index([appointmentId])
+  @@index([contactId])
+}
+
+model AgendaItemParticipant {
+  itemId    String
+  contactId String
+  ownerId   String
+  item      AgendaItem    @relation(fields: [itemId, ownerId], references: [id, ownerId], onDelete: Cascade)
+  contact   AgendaContact @relation(fields: [contactId, ownerId], references: [id, ownerId], onDelete: Cascade)
+
+  @@id([itemId, contactId])
+  @@index([contactId])
+}
+
+/// A proposed block the user dragged elsewhere before validation (removed at validation).
+model AgendaPin {
+  id             String             @id @default(cuid())
+  ownerId        String
+  itemKey        String
+  kind           AgendaItemKind
+  appointmentId  String?
+  contactId      String?
+  title          String
+  participantIds String[]
+  placeLabel     String
+  placeAddress   String
+  placeLat       Float?
+  placeLon       Float?
+  placeRemote    Boolean            @default(false)
+  durationMin    Int
+  priority       AgendaPriority
+  date           DateTime           @db.Date
+  startMin       Int
+  createdAt      DateTime           @default(now())
+  owner          User               @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  appointment    AgendaAppointment? @relation(fields: [appointmentId, ownerId], references: [id, ownerId], onDelete: Cascade)
+  contact        AgendaContact?     @relation(fields: [contactId, ownerId], references: [id, ownerId], onDelete: Cascade)
+
+  @@unique([ownerId, itemKey])
+  @@index([date])
+}
+
+/// Answers to « Important » questions and refused « Souhaité » exceptions.
+/// ruleKey = AgendaRule.id, or "pref:<contactId>" for a contact's preferred day.
+model AgendaRuleAnswer {
+  ownerId String
+  ruleKey String
+  answer  AgendaAnswer?
+  refused Boolean       @default(false)
+  owner   User          @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@id([ownerId, ruleKey])
+}
+
+/// « Pas cette fois » and per-occurrence priority of a regular visit.
+model AgendaOccurrenceOverride {
+  ownerId       String
+  occurrenceKey String
+  contactId     String
+  /// Due date of the occurrence: rows older than a few months are purged.
+  dueOn         DateTime        @db.Date
+  skipped       Boolean         @default(false)
+  priority      AgendaPriority?
+  owner         User            @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  contact       AgendaContact   @relation(fields: [contactId, ownerId], references: [id, ownerId], onDelete: Cascade)
+
+  @@id([ownerId, occurrenceKey])
+  @@index([ownerId, dueOn])
+  @@index([contactId])
+}
+
+/// IGN road times already asked, per MJPM. pairKey = HMAC of the rounded coordinate
+/// pair (no readable location). Purged after 90 days.
+model AgendaRouteCache {
+  ownerId   String
+  pairKey   String
+  km        Float
+  minutes   Float
+  fetchedAt DateTime @default(now())
+  owner     User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@id([ownerId, pairKey])
+  @@index([fetchedAt])
+}
+
+enum AgendaContactCategory {
+  PROTEGE
+  FAMILLE
+  JUGE
+  PRO
+}
+
+enum AgendaContactStatus {
+  ACTIVE
+  PAUSED
+  ENDED
+}
+
+enum AgendaPriority {
+  LOW
+  NORMAL
+  HIGH
+  MUST
+}
+
+enum AgendaStrength {
+  HARD
+  STRONG
+  MEDIUM
+  SOFT
+}
+
+enum AgendaRuleType {
+  UNAVAILABLE
+  MAX_VISITS
+  VACATION
+}
+
+enum AgendaPlaceKind {
+  HOME
+  OFFICE
+  VISIO
+  PLACE
+}
+
+enum AgendaWhenKind {
+  FIXED
+  WEEK
+  RANGE
+}
+
+enum AgendaItemKind {
+  VISIT
+  APPT
+}
+
+enum AgendaItemStatus {
+  VALIDATED
+  MISSED
+  CANCELLED
+}
+
+enum AgendaAnswer {
+  BREAK
+  RESPECT
 }

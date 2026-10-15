@@ -297,6 +297,9 @@ function UserRow({
                 ? ` · dès le ${new Date(user.billingStartsAt).toLocaleDateString("fr-FR")}`
                 : ""}
             </Badge>
+            {user.agendaGranted && (
+              <Badge variant="outline" className="text-xs">Agenda offert</Badge>
+            )}
             {isArchived ? (
               <Badge variant="secondary" className="text-xs bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
                 Archive

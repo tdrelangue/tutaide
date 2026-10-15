@@ -40,6 +40,7 @@ export type AdminUserData = {
   billingRequired: boolean;
   billingCustomAmountCents: number | null;
   billingStartsAt: Date | null;
+  agendaGranted: boolean;
   archivedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
@@ -60,6 +61,7 @@ const createUserSchema = z.object({
   role: z.enum(["USER", "ADMIN"]).default("USER"),
   billingRequired: z.boolean().default(false),
   billingCustomAmountCents: z.number().int().positive().max(10_000_000).nullable().default(null),
+  agendaGranted: z.boolean().default(false),
 });
 
 const updateUserSchema = z.object({
@@ -73,6 +75,7 @@ const updateUserSchema = z.object({
   role: z.enum(["USER", "ADMIN"]).optional(),
   billingRequired: z.boolean().optional(),
   billingCustomAmountCents: z.number().int().positive().max(10_000_000).nullable().optional(),
+  agendaGranted: z.boolean().optional(),
 });
 
 // ---------------------------------------------------------------------------
@@ -93,6 +96,7 @@ export async function getUsers(): Promise<AdminUserData[]> {
       billingRequired: true,
       billingCustomAmountCents: true,
       billingStartsAt: true,
+      agendaGranted: true,
       archivedAt: true,
       createdAt: true,
       updatedAt: true,
@@ -137,6 +141,7 @@ export async function createUser(data: {
   billingRequired?: boolean;
   billingCustomAmountCents?: number | null;
   billingStartsAt?: string | null;
+  agendaGranted?: boolean;
 }): Promise<{ success: boolean; id?: string; error?: string }> {
   try {
     await requireAdmin();
@@ -162,6 +167,7 @@ export async function createUser(data: {
         billingRequired: validated.billingRequired,
         billingCustomAmountCents: validated.billingCustomAmountCents,
         billingStartsAt: start.date ?? null,
+        agendaGranted: validated.agendaGranted,
       },
     });
 
@@ -186,6 +192,7 @@ export async function updateUser(
     billingRequired?: boolean;
     billingCustomAmountCents?: number | null;
     billingStartsAt?: string | null;
+    agendaGranted?: boolean;
   }
 ): Promise<{ success: boolean; error?: string }> {
   try {
@@ -217,6 +224,7 @@ export async function updateUser(
     if (validated.name !== undefined) updateData.name = validated.name;
     if (validated.role) updateData.role = validated.role;
     if (validated.billingRequired !== undefined) updateData.billingRequired = validated.billingRequired;
+    if (validated.agendaGranted !== undefined) updateData.agendaGranted = validated.agendaGranted;
     if (validated.billingCustomAmountCents !== undefined) {
       updateData.billingCustomAmountCents = validated.billingCustomAmountCents;
     }

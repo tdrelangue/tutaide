@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
-import { Building2, FolderOpen, Settings, ShieldCheck, LayoutDashboard } from "lucide-react";
+import { Building2, CalendarDays, FolderOpen, Settings, ShieldCheck, LayoutDashboard } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface NavItem {
@@ -57,6 +57,16 @@ const moduleItems: NavItem[] = [
   },
 ];
 
+/** « Agenda » paid add-on: shown only to accounts that hold it. */
+const agendaItem: NavItem = {
+  href: "/agenda",
+  icon: CalendarDays,
+  label: "Agenda des visites",
+  shortLabel: "Agenda",
+  description: "Personnes à visiter et tournées",
+  activePrefix: "/agenda",
+};
+
 const adminItem: NavItem = {
   href: "/admin/users",
   icon: ShieldCheck,
@@ -91,9 +101,11 @@ interface AppSidebarProps {
   /** False for an organisation admin without a working role (e.g. IT). */
   worksOnDossiers: boolean;
   isOrgAdmin: boolean;
+  /** The « Agenda » add-on is active for this account (or one of the assistant's MJPMs). */
+  showAgenda: boolean;
 }
 
-export function AppSidebar({ userRole, activeModules, worksOnDossiers, isOrgAdmin }: AppSidebarProps) {
+export function AppSidebar({ userRole, activeModules, worksOnDossiers, isOrgAdmin, showAgenda }: AppSidebarProps) {
   const pathname = usePathname();
 
   const visibleModules = worksOnDossiers
@@ -149,6 +161,9 @@ export function AppSidebar({ userRole, activeModules, worksOnDossiers, isOrgAdmi
               <SidebarItem key={item.href} item={item} isActive={isActive} />
             );
           })}
+          {showAgenda && (
+            <SidebarItem item={agendaItem} isActive={pathname.startsWith(agendaItem.activePrefix)} />
+          )}
         </ul>
       </div>
 
