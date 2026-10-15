@@ -38,6 +38,8 @@
   "exclude": [
     "node_modules",
     "src-tauri",
-    "$dest"
+    "$dest",
+    "src/lib/agenda-engine/test",
+    "src/lib/agenda-engine/vitest.config.ts"
   ]
 }
