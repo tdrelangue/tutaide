@@ -21,9 +21,9 @@ const COPY: Record<"auto" | "manual", { hint: string; detail: string }> = {
 
 /** Fictional documents offered during a demo (public/demo/exemples). */
 const DEMO_SAMPLES: Record<SortModule, string[]> = {
-  ASH: ["ASH_Garnier_T3_2026.pdf", "ASH_Lemaire_T3_2026.pdf", "ASH_Petit_T3_2026.pdf", "Courrier_departement.pdf"],
-  APA: ["Facture_aide_a_domicile_Odette_Lefevre.pdf", "Releve_bancaire_Marcel_Fournier.pdf"],
-  PCH: ["Devis_amenagement_Sophie_Moreau.pdf"],
+  ASH: ["ASH_Versaire_T3_2026.pdf", "ASH_Ochon_T3_2026.pdf", "ASH_Cover_T3_2026.pdf", "Courrier_departement.pdf"],
+  APA: ["Facture_aide_a_domicile_Aude_Javel.pdf", "Releve_bancaire_Marc_Assin.pdf"],
+  PCH: ["Devis_amenagement_Sophie_Stique.pdf"],
 };
 
 async function loadDemoSamples(moduleType: SortModule): Promise<File[]> {

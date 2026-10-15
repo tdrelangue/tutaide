@@ -62,9 +62,9 @@ export async function startDemo(): Promise<{ email: string; password: string }> 
     const user = await db.user.create({
       data: {
         email,
-        name: "Marie Dupont (démonstration)",
+        name: "Claire Delune (démonstration)",
         passwordHash: await hash(password, 10),
-        signature: "Marie Dupont\nMandataire judiciaire à la protection des majeurs\n01 23 45 67 89",
+        signature: "Claire Delune\nMandataire judiciaire à la protection des majeurs\n01 23 45 67 89",
       },
     });
     await seedDemoAccount(user.id);
