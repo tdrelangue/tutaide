@@ -50,6 +50,18 @@ export default {
           "4": "hsl(var(--chart-4))",
           "5": "hsl(var(--chart-5))",
         },
+        agenda: {
+          held: "hsl(var(--agenda-held))",
+          "held-soft": "hsl(var(--agenda-held-soft))",
+          proposed: "hsl(var(--agenda-proposed))",
+          fixed: "hsl(var(--agenda-fixed))",
+          "fixed-soft": "hsl(var(--agenda-fixed-soft))",
+          warn: "hsl(var(--agenda-warn))",
+          "warn-soft": "hsl(var(--agenda-warn-soft))",
+          missed: "hsl(var(--agenda-missed))",
+          busy: "hsl(var(--agenda-busy))",
+          paper: "hsl(var(--agenda-paper))",
+        },
       },
       borderRadius: {
         lg: "var(--radius)",

@@ -1,11 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { z, ZodError } from "zod";
-import { AgendaAccessError, requireAgendaOwner } from "@/lib/agenda/context";
+import { z } from "zod";
+import { requireAgendaOwner } from "@/lib/agenda/context";
 import { searchAddress, type GeocodeResult } from "@/lib/agenda/geocode";
 import {
-  AgendaRefusal,
   createAgendaPerson,
   deleteAgendaPerson,
   importPersonsFromDossiers,
@@ -13,6 +12,7 @@ import {
   updateAgendaPerson,
 } from "@/lib/agenda/service";
 import { agendaPersonSchema, agendaSettingsSchema, personIdSchema } from "@/lib/agenda/validation";
+import { failureMessage } from "./action-errors";
 
 /**
  * /agenda — the « Agenda » add-on. Every action works on the agenda of the
@@ -23,12 +23,7 @@ import { agendaPersonSchema, agendaSettingsSchema, personIdSchema } from "@/lib/
 export type AgendaActionResult = { success: true; message?: string } | { success: false; error: string };
 
 function failure(action: string, error: unknown): AgendaActionResult {
-  if (error instanceof AgendaAccessError) return { success: false, error: error.message };
-  if (error instanceof ZodError) return { success: false, error: error.issues[0]?.message ?? "Données invalides." };
-  if (error instanceof AgendaRefusal) return { success: false, error: error.message };
-  // Action name and error type only: never the payload (protected-person data).
-  console.error(`[agenda] ${action} failed:`, error instanceof Error ? error.name : typeof error);
-  return { success: false, error: "Erreur inattendue. Réessayez ; si cela persiste, contactez le support OrigAI." };
+  return { success: false, error: failureMessage(action, error) };
 }
 
 function done(message: string): AgendaActionResult {

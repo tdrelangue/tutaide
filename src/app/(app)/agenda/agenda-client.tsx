@@ -1,12 +1,21 @@
 "use client";
 
-import { CalendarDays, Settings2, Users } from "lucide-react";
+import { CalendarClock, CalendarDays, ListTodo, Settings2, Users } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { MandataireSelect } from "@/components/mandataire-select";
 import type { MandataireContext } from "@/lib/access/selection-actions";
 import type { AgendaPersonView, AgendaSettingsView } from "@/lib/agenda/service";
+import { AppointmentsTab } from "./appointments/appointments-tab";
 import { PersonsTab } from "./persons-tab";
 import { SettingsTab } from "./settings-tab";
+import { WeekTab } from "./week/week-tab";
+
+const TABS = ["planning", "rendez-vous", "personnes", "parametres"] as const;
+type TabKey = (typeof TABS)[number];
+
+function isTabKey(value: string | undefined): value is TabKey {
+  return TABS.some((t) => t === value);
+}
 
 type AgendaData = {
   ownerName: string;
@@ -25,7 +34,8 @@ type Props = {
 export function AgendaClient({ data, mandataires, initialTab }: Props) {
   const isAssistant = mandataires.choices.length > 0;
   const needsSetup = data !== null && data.profile.home === null;
-  const defaultTab = initialTab === "parametres" || (initialTab === undefined && needsSetup) ? "parametres" : "personnes";
+  const personOptions = (data?.persons ?? []).filter((p) => p.status !== "ENDED").map((p) => ({ id: p.id, fullName: p.fullName }));
+  const defaultTab: TabKey = isTabKey(initialTab) ? initialTab : needsSetup ? "parametres" : "planning";
 
   return (
     <div className="flex h-full flex-col">
@@ -36,7 +46,7 @@ export function AgendaClient({ data, mandataires, initialTab }: Props) {
             <h1 className="text-xl font-semibold tracking-tight">Agenda</h1>
             <p className="text-sm text-muted-foreground">
               {isAssistant && data ? `Agenda de ${data.ownerName}. ` : ""}
-              Les personnes à visiter, leur adresse et la fréquence des visites.
+              Vos tournées : la semaine proposée, les rendez-vous et les personnes à visiter.
             </p>
           </div>
           {isAssistant && (
@@ -56,7 +66,13 @@ export function AgendaClient({ data, mandataires, initialTab }: Props) {
           </p>
         ) : (
           <Tabs defaultValue={defaultTab} className="w-full">
-            <TabsList className="grid h-auto w-full max-w-md grid-cols-2">
+            <TabsList className="grid h-auto w-full max-w-2xl grid-cols-2 sm:grid-cols-4">
+              <TabsTrigger value="planning" className="flex items-center gap-2">
+                <CalendarClock className="h-4 w-4" aria-hidden="true" /> Planning
+              </TabsTrigger>
+              <TabsTrigger value="rendez-vous" className="flex items-center gap-2">
+                <ListTodo className="h-4 w-4" aria-hidden="true" /> Rendez-vous
+              </TabsTrigger>
               <TabsTrigger value="personnes" className="flex items-center gap-2">
                 <Users className="h-4 w-4" aria-hidden="true" /> Personnes à visiter
               </TabsTrigger>
@@ -70,7 +86,13 @@ export function AgendaClient({ data, mandataires, initialTab }: Props) {
                 départ et d&apos;arrivée de vos tournées.
               </p>
             )}
-            {/* Both panels stay mounted: switching tabs never loses unsaved settings. */}
+            {/* Panels stay mounted: switching tabs never loses unsaved work (settings, a proposal on screen). */}
+            <TabsContent value="planning" forceMount className="mt-6 data-[state=inactive]:hidden">
+              <WeekTab needsSetup={needsSetup} persons={personOptions} />
+            </TabsContent>
+            <TabsContent value="rendez-vous" forceMount className="mt-6 data-[state=inactive]:hidden">
+              <AppointmentsTab persons={personOptions} />
+            </TabsContent>
             <TabsContent value="personnes" forceMount className="mt-6 data-[state=inactive]:hidden">
               <PersonsTab
                 persons={data.persons}
