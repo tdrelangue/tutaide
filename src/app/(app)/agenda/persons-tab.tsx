@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { FolderInput, Loader2, Pencil, Plus, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -17,9 +17,14 @@ import {
 } from "@/components/ui/alert-dialog";
 import { END_REASON_LABELS, formatDuration, formatFrequency } from "@/lib/agenda/rules";
 import type { AgendaPersonView } from "@/lib/agenda/service";
+import type { IsoDate, VisitStatusRow } from "@/lib/agenda/views/types";
+import { formatDayPlain } from "./appointments/format";
+import { InlineError } from "./appointments/inline-error";
 import { ERROR_TEXT, PrecisionBadge } from "./address-field";
 import { PersonDialog } from "./person-dialog";
 import { importAgendaPersons, removeAgendaPerson } from "./actions";
+import { getVisitStatus } from "./planning-actions";
+import { useAgendaQuery } from "./use-agenda-query";
 import { useAgendaAction } from "./use-agenda-action";
 
 type Props = {
@@ -31,6 +36,26 @@ type Props = {
 /** Dialog state: closed, a new person, or an existing one. */
 type Editing = { person: AgendaPersonView | null } | null;
 
+/** « Vu le / Prévu le / Prochaine visite » by person id; null while loading. */
+type VisitStatuses = ReadonlyMap<string, VisitStatusRow> | null;
+
+/** Loads the visit dates on mount and whenever the list of persons changes. */
+function useVisitStatuses(persons: AgendaPersonView[]) {
+  const [statuses, setStatuses] = useState<VisitStatuses>(null);
+  const { run, error } = useAgendaQuery();
+
+  const load = useCallback(async () => {
+    const rows = await run(getVisitStatus);
+    if (rows !== null) setStatuses(new Map(rows.map((row) => [row.personId, row])));
+  }, [run]);
+
+  useEffect(() => {
+    void load();
+  }, [load, persons]);
+
+  return { statuses, error, reload: load };
+}
+
 export function PersonsTab({ persons, importableCount, defaultVisitMinutes }: Props) {
   const [editing, setEditing] = useState<Editing>(null);
   const [toDelete, setToDelete] = useState<AgendaPersonView | null>(null);
@@ -39,6 +64,7 @@ export function PersonsTab({ persons, importableCount, defaultVisitMinutes }: Pr
   const addRef = useRef<HTMLButtonElement>(null);
   const importAction = useAgendaAction();
   const deleteAction = useAgendaAction();
+  const visits = useVisitStatuses(persons);
 
   const active = persons.filter((p) => p.status === "ACTIVE");
   const paused = persons.filter((p) => p.status === "PAUSED");
@@ -62,6 +88,10 @@ export function PersonsTab({ persons, importableCount, defaultVisitMinutes }: Pr
   function askDelete(person: AgendaPersonView) {
     setDeleteName(person.fullName);
     setToDelete(person);
+  }
+
+  function handleVisitsRetry() {
+    void visits.reload();
   }
 
   function handleDialogOpenChange(open: boolean) {
@@ -113,9 +143,13 @@ export function PersonsTab({ persons, importableCount, defaultVisitMinutes }: Pr
         </div>
       )}
 
-      <PersonTable title="À visiter" rows={active} defaultVisitMinutes={defaultVisitMinutes} onEdit={setEditing} onDelete={askDelete} />
-      <PersonTable title="En pause" rows={paused} defaultVisitMinutes={defaultVisitMinutes} onEdit={setEditing} onDelete={askDelete} />
-      <PersonTable title="Mesures terminées" rows={ended} defaultVisitMinutes={defaultVisitMinutes} onEdit={setEditing} onDelete={askDelete} />
+      {visits.error && persons.length > 0 && (
+        <InlineError message={`Les dates de visite n'ont pas pu être chargées. ${visits.error}`} onRetry={handleVisitsRetry} />
+      )}
+
+      <PersonTable title="À visiter" rows={active} statuses={visits.statuses} defaultVisitMinutes={defaultVisitMinutes} onEdit={setEditing} onDelete={askDelete} />
+      <PersonTable title="En pause" rows={paused} statuses={visits.statuses} defaultVisitMinutes={defaultVisitMinutes} onEdit={setEditing} onDelete={askDelete} />
+      <PersonTable title="Mesures terminées" rows={ended} statuses={visits.statuses} defaultVisitMinutes={defaultVisitMinutes} onEdit={setEditing} onDelete={askDelete} />
 
       {editing && (
         <PersonDialog
@@ -160,12 +194,14 @@ export function PersonsTab({ persons, importableCount, defaultVisitMinutes }: Pr
 function PersonTable({
   title,
   rows,
+  statuses,
   defaultVisitMinutes,
   onEdit,
   onDelete,
 }: {
   title: string;
   rows: AgendaPersonView[];
+  statuses: VisitStatuses;
   defaultVisitMinutes: number;
   onEdit: (editing: Editing) => void;
   onDelete: (person: AgendaPersonView) => void;
@@ -183,12 +219,15 @@ function PersonTable({
               <th scope="col" className="px-3 py-2 font-medium">Lieu de visite</th>
               <th scope="col" className="px-3 py-2 font-medium">Fréquence</th>
               <th scope="col" className="px-3 py-2 font-medium">Durée</th>
+              <th scope="col" className="whitespace-nowrap px-3 py-2 font-medium">Vu le</th>
+              <th scope="col" className="whitespace-nowrap px-3 py-2 font-medium">Prévu le</th>
+              <th scope="col" className="whitespace-nowrap px-3 py-2 font-medium">Prochaine visite</th>
               <th scope="col" className="px-3 py-2"><span className="sr-only">Actions</span></th>
             </tr>
           </thead>
           <tbody>
             {rows.map((person) => (
-              <PersonRow key={person.id} person={person} defaultVisitMinutes={defaultVisitMinutes} onEdit={onEdit} onDelete={onDelete} />
+              <PersonRow key={person.id} person={person} status={statuses === null ? undefined : (statuses.get(person.id) ?? null)} defaultVisitMinutes={defaultVisitMinutes} onEdit={onEdit} onDelete={onDelete} />
             ))}
           </tbody>
         </table>
@@ -199,11 +238,14 @@ function PersonTable({
 
 function PersonRow({
   person,
+  status,
   defaultVisitMinutes,
   onEdit,
   onDelete,
 }: {
   person: AgendaPersonView;
+  /** undefined while loading, null when the agenda has nothing for this person. */
+  status: VisitStatusRow | null | undefined;
   defaultVisitMinutes: number;
   onEdit: (editing: Editing) => void;
   onDelete: (person: AgendaPersonView) => void;
@@ -237,6 +279,7 @@ function PersonRow({
         {formatDuration(duration)}
         {person.visitMinutes === null && <span className="sr-only"> (durée par défaut)</span>}
       </td>
+      <VisitCells person={person} status={status} />
       <td className="px-3 py-2">
         <div className="flex justify-end gap-1">
           <Button variant="ghost" size="sm" onClick={() => onEdit({ person })} aria-label={`Modifier ${person.fullName}`}>
@@ -248,5 +291,30 @@ function PersonRow({
         </div>
       </td>
     </tr>
+  );
+}
+
+function DateCell({ date }: { date: IsoDate | null }) {
+  return <td className="whitespace-nowrap px-3 py-2">{date ? formatDayPlain(date) : <span aria-label="aucune">—</span>}</td>;
+}
+
+/** « Vu le », « Prévu le », « Prochaine visite » (rule 8). */
+function VisitCells({ person, status }: { person: AgendaPersonView; status: VisitStatusRow | null | undefined }) {
+  if (status === undefined) {
+    return (
+      <td colSpan={3} className="px-3 py-2 text-muted-foreground">
+        <span aria-hidden="true">…</span><span className="sr-only">Chargement des dates de visite</span>
+      </td>
+    );
+  }
+  const isPaused = person.status === "PAUSED" || status?.paused === true;
+  return (
+    <>
+      <DateCell date={status?.seenOn ?? null} />
+      <DateCell date={status?.plannedOn ?? null} />
+      {isPaused
+        ? <td className="whitespace-nowrap px-3 py-2 text-muted-foreground">En pause</td>
+        : <DateCell date={person.status === "ENDED" ? null : (status?.nextDue ?? null)} />}
+    </>
   );
 }

@@ -52,6 +52,18 @@ const GONE_MESSAGE = "Ce rendez-vous n'existe plus. Rechargez la page.";
 const CHANGED_MESSAGE = "Le planning a changé entre-temps. Rien n'a été modifié.";
 const NO_SLOT_MESSAGE = "Plus aucun créneau ne convient. Rechargez la page.";
 
+/**
+ * The validated items the user may allow to move for an urgent insertion:
+ * still to come (after today) and not fixed-time, soonest first, at most
+ * MAX_MOVABLE. Items of today are left out: they may already have happened.
+ */
+export function movableCandidates(state: PlannerState): ValidatedItem[] {
+  return state.validated
+    .filter((v) => v.date > state.today && !v.fixed)
+    .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : a.start - b.start))
+    .slice(0, MAX_MOVABLE);
+}
+
 type Planning = { readonly ctx: PlannerContext; readonly ap: Appointment; readonly version: number };
 
 /** The travel period of an appointment: its own window, clamped to today and to one calculation (a month). */

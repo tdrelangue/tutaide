@@ -1,6 +1,9 @@
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { fromIso, isRealDate } from "./bridge/dates";
+import { ownerToday } from "./bridge/load";
+import { sortAppointmentRows, toAppointmentRow } from "./views/appointment-rows";
+import type { AppointmentRow } from "./views/types";
 import { AgendaRefusal, rethrowAsConflict } from "./bridge/errors";
 import { queuePlanning, TX_OPTIONS } from "./bridge/lock";
 import type { Tx } from "./bridge/lock";
@@ -113,4 +116,28 @@ async function cancelFutureItems(tx: Tx, ownerId: string, appointmentId: string,
       data: { status: "CANCELLED", statusAt: new Date(), itemKey: `CANCELLED:${item.id}` },
     });
   }
+}
+
+/**
+ * The « Rendez-vous » list, soonest first, with a status derived from the
+ * validated planning (see views/appointment-rows.ts). `now` is the server clock:
+ * « today » is taken in the owner's timezone.
+ */
+export async function listAppointments(ownerId: string, now: Date): Promise<AppointmentRow[]> {
+  const [today, rows] = await Promise.all([
+    ownerToday(ownerId, now),
+    db.agendaAppointment.findMany({
+      where: { ownerId },
+      include: {
+        participants: { include: { contact: { select: { fullName: true } } } },
+        place: { select: { label: true } },
+        items: { select: { date: true, status: true } },
+      },
+    }),
+  ]);
+  const mapped = rows.flatMap((row) => {
+    const view = toAppointmentRow(row, today);
+    return view === null ? [] : [view];
+  });
+  return sortAppointmentRows(mapped);
 }

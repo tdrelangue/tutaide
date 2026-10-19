@@ -47,6 +47,11 @@ export type EntryView = {
   /** Visit occurrence key `<contactId>@<due>` for « Pas cette fois »; null otherwise. */
   readonly occurrenceKey: string | null;
   readonly kind: "VISIT" | "APPT" | "BLOCK";
+  /**
+   * Day of the entry. Always filled by the server (week entries and the
+   * « ont-ils eu lieu ? » list, which has no day column to read it from).
+   */
+  readonly date?: IsoDate;
   readonly title: string;
   /** Second line: place label, participants, or the reason of a busy block. */
   readonly subtitle: string | null;

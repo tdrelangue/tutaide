@@ -14,7 +14,7 @@ export default defineConfig({
     hookTimeout: 60_000,
     coverage: {
       provider: "v8",
-      include: ["*.ts", "bridge/**/*.ts"],
+      include: ["*.ts", "bridge/**/*.ts", "views/**/*.ts"],
       exclude: ["vitest.config.ts", "context.ts", "geocode.ts"],
       thresholds: { statements: 80, branches: 80, functions: 80, lines: 80 },
     },
