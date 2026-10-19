@@ -73,9 +73,9 @@ describe("travelFor", () => {
     const { owner, state } = await agendaWithTwoVisits("travel-ok@test.invalid");
     const urls: string[] = [];
     // Act
-    const first = await travelFor(owner, state, WEEK, { fetch: recordingFetch(urls), now: NOW });
+    const first = await travelFor(owner, state, WEEK, { fetch: recordingFetch(urls), now: NOW, ignMinIntervalMs: 0 });
     const askedFirst = urls.length;
-    const second = await travelFor(owner, state, WEEK, { fetch: recordingFetch(urls), now: NOW });
+    const second = await travelFor(owner, state, WEEK, { fetch: recordingFetch(urls), now: NOW, ignMinIntervalMs: 0 });
     // Assert
     assert.equal(askedFirst, 3, "home, Roubaix, Tourcoing: three pairs");
     assert.equal(urls.length, askedFirst, "second run is served from the cache");
@@ -88,14 +88,14 @@ describe("travelFor", () => {
     const { owner: first, state: stateA } = await agendaWithTwoVisits("travel-a@test.invalid");
     const { owner: second, state: stateB } = await agendaWithTwoVisits("travel-b@test.invalid");
     const urls: string[] = [];
-    await travelFor(first, stateA, WEEK, { fetch: recordingFetch(urls), now: NOW });
-    await travelFor(second, stateB, WEEK, { fetch: recordingFetch(urls), now: NOW });
+    await travelFor(first, stateA, WEEK, { fetch: recordingFetch(urls), now: NOW, ignMinIntervalMs: 0 });
+    await travelFor(second, stateB, WEEK, { fetch: recordingFetch(urls), now: NOW, ignMinIntervalMs: 0 });
     assert.equal(urls.length, 6);
   });
 
   it("reports estimated road times when IGN fails, still answers, and caches nothing", async () => {
     const { owner, state } = await agendaWithTwoVisits("travel-down@test.invalid");
-    const matrix = await travelFor(owner, state, WEEK, { fetch: failingFetch, now: NOW });
+    const matrix = await travelFor(owner, state, WEEK, { fetch: failingFetch, now: NOW, ignMinIntervalMs: 0 });
     assert.equal(matrix.estimated.length > 0, true);
     const [a, b] = placesForPeriod(state, WEEK.from, WEEK.to).slice(2, 4);
     assert.ok(a && b);
@@ -110,7 +110,7 @@ describe("travelFor", () => {
     try {
       process.env.ENCRYPTION_KEY = "not-a-key";
       const urls: string[] = [];
-      const matrix = await travelFor(owner, state, WEEK, { fetch: recordingFetch(urls), now: NOW });
+      const matrix = await travelFor(owner, state, WEEK, { fetch: recordingFetch(urls), now: NOW, ignMinIntervalMs: 0 });
       assert.deepEqual(matrix.estimated, []);
       assert.equal(urls.length, 3, "road times were asked, an empty cache was used");
       assert.equal(String(log.mock.calls[0]?.[0]).includes("route cache not loaded"), true);
@@ -127,7 +127,7 @@ describe("travelFor", () => {
     const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
     try {
       // "no-such-user" violates the cache's owner foreign key on flush.
-      const matrix = await travelFor("no-such-user", state, WEEK, { fetch: recordingFetch([]), now: NOW });
+      const matrix = await travelFor("no-such-user", state, WEEK, { fetch: recordingFetch([]), now: NOW, ignMinIntervalMs: 0 });
       assert.deepEqual(matrix.estimated, []);
       assert.equal(log.mock.calls.length, 1);
       assert.equal(String(log.mock.calls[0]?.[0]).includes("route cache not saved"), true);

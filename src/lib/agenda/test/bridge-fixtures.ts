@@ -42,7 +42,7 @@ export const failingFetch: FetchLike = async () => {
 };
 
 export function depsWith(fetch: FetchLike): PlanDeps {
-  return { fetch, now: NOW };
+  return { fetch, now: NOW, ignMinIntervalMs: 0 };
 }
 
 export async function seedOwner(client: PrismaClient, email: string, settings: AgendaSettingsInput = SETTINGS): Promise<string> {

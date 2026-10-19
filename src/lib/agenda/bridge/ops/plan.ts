@@ -13,7 +13,12 @@ import { itemRow } from "../map";
 import { travelFor } from "../travel";
 
 export type { Period };
-export type PlanDeps = { readonly fetch: FetchLike; readonly now: Date };
+export type PlanDeps = {
+  readonly fetch: FetchLike;
+  readonly now: Date;
+  /** Gap between two IGN requests; tests with a fake service set 0 (default: the engine's). */
+  readonly ignMinIntervalMs?: number;
+};
 
 export type ProposeResult =
   /** The period is not two real dates, in order, within a month. */

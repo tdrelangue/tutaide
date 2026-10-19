@@ -37,7 +37,7 @@ export async function travelFor(
 ): Promise<TravelMatrix> {
   const stored = await loadStoredCache(ownerId, deps.now);
   const cache = stored ?? createMemoryCache();
-  const matrix = await buildTravelModel(placesForPeriod(state, period.from, period.to), { fetch: deps.fetch, cache });
+  const matrix = await buildTravelModel(placesForPeriod(state, period.from, period.to), { fetch: deps.fetch, cache, minIntervalMs: deps.ignMinIntervalMs });
   if (stored !== null) await saveStoredCache(ownerId, stored, deps.now);
   return matrix;
 }

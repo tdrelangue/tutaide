@@ -268,6 +268,7 @@ describe("travel model from IGN, with cache and offline estimate", () => {
       fetch: slow,
       cache: memoryCache(),
       concurrency: 2,
+      minIntervalMs: 0,
     });
     expect(peak).toBe(2);
   });
@@ -329,6 +330,72 @@ describe("travel model from IGN, with cache and offline estimate", () => {
     });
     expect(f.calls).toHaveLength(1);
     expect(model.km(BRIVE, TULLE)).toBeCloseTo(28.7564, 4);
+  });
+
+  it("waits and asks again when IGN says « too many requests » (429), without taking it as down", async () => {
+    const waits: number[] = [];
+    let clock = 0;
+    let calls = 0;
+    const throttled: FetchLike = () => {
+      calls++;
+      // Every first attempt is refused, every retry answers.
+      return Promise.resolve(
+        calls % 2 === 1
+          ? { ok: false, status: 429, json: () => Promise.resolve({}) }
+          : jsonResponse(IGN_ROUTE),
+      );
+    };
+    const places = Array.from({ length: 5 }, (_, i) => ({
+      ...BRIVE,
+      id: `p${i}`,
+      lat: 45 + i / 10,
+    }));
+    const { estimated } = await buildTravelModel(places, {
+      fetch: throttled,
+      cache: memoryCache(),
+      concurrency: 1,
+      now: () => clock,
+      sleep: (ms) => {
+        waits.push(ms);
+        clock += ms;
+        return Promise.resolve();
+      },
+    });
+    expect(estimated).toEqual([]);
+    expect(calls).toBe(20);
+    expect(waits.filter((ms) => ms >= 1000)).toHaveLength(10);
+  });
+
+  it("gives up on a pair still throttled after the retries, and estimates it", async () => {
+    const always429: FetchLike = () =>
+      Promise.resolve({ ok: false, status: 429, json: () => Promise.resolve({}) });
+    const { estimated } = await buildTravelModel([BRIVE, TULLE], {
+      fetch: always429,
+      cache: memoryCache(),
+      sleep: () => Promise.resolve(),
+    });
+    expect(estimated).toHaveLength(1);
+  });
+
+  it("spaces requests out to stay under IGN's rate limit", async () => {
+    const waits: number[] = [];
+    const f = fakeFetch(() => IGN_ROUTE);
+    let clock = 0;
+    await buildTravelModel([BRIVE, TULLE, OBJAT], {
+      fetch: f,
+      cache: memoryCache(),
+      concurrency: 1,
+      now: () => clock,
+      sleep: (ms) => {
+        waits.push(ms);
+        clock += ms;
+        return Promise.resolve();
+      },
+    });
+    expect(f.calls).toHaveLength(3);
+    // Three requests at least MIN_INTERVAL apart: two waits before the 2nd and 3rd.
+    expect(waits.filter((ms) => ms > 0)).toHaveLength(2);
+    expect(Math.min(...waits.filter((ms) => ms > 0))).toBeGreaterThanOrEqual(200);
   });
 
   it("falls back to the default concurrency for a nonsense value", async () => {

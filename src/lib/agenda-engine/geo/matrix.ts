@@ -17,7 +17,13 @@ import {
 } from "./routing";
 import type { RouteTime } from "./routing";
 
-const DEFAULT_CONCURRENCY = 4;
+/** IGN's Géoplateforme refuses bursts (HTTP 429): few requests in flight, spaced out. */
+const DEFAULT_CONCURRENCY = 2;
+/** At most ~4.5 requests per second overall, under IGN's per-IP limit. */
+const MIN_INTERVAL_MS = 220;
+/** Waits before asking again a pair IGN answered « too many requests ». */
+const RETRY_DELAYS_MS: readonly number[] = [1000, 2000];
+const TOO_MANY_REQUESTS = 429;
 /** After this many failures in a row the service is taken as down: the rest is estimated at once. */
 const MAX_CONSECUTIVE_FAILURES = 3;
 /** About one metre: two places closer than this are the same building. */
@@ -29,6 +35,11 @@ export interface MatrixDeps {
   readonly concurrency?: number;
   /** Mirror or test endpoint; ignored unless HTTPS. */
   readonly url?: string;
+  /** Injected in tests: waiting and the clock. */
+  readonly sleep?: (ms: number) => Promise<void>;
+  readonly now?: () => number;
+  /** Minimum gap between two request starts (default MIN_INTERVAL_MS; 0 in tests with a fake service). */
+  readonly minIntervalMs?: number;
 }
 
 export interface TravelMatrix {
@@ -76,28 +87,61 @@ function safeSet(cache: TravelCache, key: string, value: RouteTime): void {
   }
 }
 
-async function fetchRoute(
-  a: Place,
-  b: Place,
-  deps: MatrixDeps,
-): Promise<RouteTime | null> {
+const realSleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** Spaces request starts at least MIN_INTERVAL_MS apart, across all workers. */
+function makePacer(deps: MatrixDeps): () => Promise<void> {
+  const sleep = deps.sleep ?? realSleep;
+  const now = deps.now ?? Date.now;
+  const interval = deps.minIntervalMs ?? MIN_INTERVAL_MS;
+  let nextAt = 0;
+  return async () => {
+    const t = now();
+    const wait = Math.max(0, nextAt - t);
+    nextAt = Math.max(t, nextAt) + interval;
+    if (wait > 0) await sleep(wait);
+  };
+}
+
+type Attempt = RouteTime | null | "THROTTLED";
+
+async function askOnce(a: Place, b: Place, deps: MatrixDeps): Promise<Attempt> {
   try {
     const res = await deps.fetch(routeUrl(a, b, httpsOr(deps.url, ROUTE_URL)), {
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
+    if (res.status === TOO_MANY_REQUESTS) return "THROTTLED";
     return res.ok ? parseRouteResponse(await res.json()) : null;
   } catch {
     return null;
   }
 }
 
-/** Fetches pairs, at most `limit` at a time; stops asking once the service looks down. */
+/** One pair: asked again after a pause while IGN says « too many requests ». */
+async function fetchRoute(
+  a: Place,
+  b: Place,
+  deps: MatrixDeps,
+  pace: () => Promise<void>,
+): Promise<RouteTime | null> {
+  const sleep = deps.sleep ?? realSleep;
+  for (const delay of [0, ...RETRY_DELAYS_MS]) {
+    if (delay > 0) await sleep(delay);
+    await pace();
+    const attempt = await askOnce(a, b, deps);
+    if (attempt !== "THROTTLED") return attempt;
+  }
+  return null;
+}
+
+/** Fetches pairs, at most `limit` at a time and spaced out; stops asking once the service looks down. */
 async function fetchAll(
   pairs: readonly [Place, Place][],
   deps: MatrixDeps,
 ): Promise<(RouteTime | null)[]> {
   const out: (RouteTime | null)[] = pairs.map(() => null);
   const limit = Math.floor(deps.concurrency ?? DEFAULT_CONCURRENCY);
+  const pace = makePacer(deps);
   let next = 0;
   let failures = 0;
   const worker = async (): Promise<void> => {
@@ -108,7 +152,7 @@ async function fetchAll(
     ) {
       const pair = pairs[i];
       if (!pair) continue;
-      out[i] = await fetchRoute(pair[0], pair[1], deps);
+      out[i] = await fetchRoute(pair[0], pair[1], deps, pace);
       failures = out[i] ? 0 : failures + 1;
     }
   };
