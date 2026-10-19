@@ -89,6 +89,11 @@ export const PRIORITY_CLASS: Record<PriorityValue, string> = {
   MUST: "border-agenda-warn bg-agenda-warn-soft text-agenda-warn",
 };
 
+/** A fixed-time appointment is not « placed » by Tutellia: it waits for the week's validation. */
+export function statusLabel(row: { readonly status: AppointmentStatus; readonly when: { readonly kind: string } }): string {
+  return row.status === "A_PLACER" && row.when.kind === "FIXED" ? "Heure fixe · à valider" : STATUS_LABELS[row.status];
+}
+
 export const STATUS_LABELS: Record<AppointmentStatus, string> = {
   A_PLACER: "À placer",
   PREVU: "Prévu",

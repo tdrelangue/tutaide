@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { formatDuration } from "@/lib/agenda/rules";
 import type { AppointmentRow, IsoDate } from "@/lib/agenda/views/types";
-import { formatDayLong, formatWhen, PRIORITY_CLASS, PRIORITY_LABELS, STATUS_CLASS, STATUS_LABELS } from "./format";
+import { formatDayLong, formatWhen, PRIORITY_CLASS, PRIORITY_LABELS, STATUS_CLASS, statusLabel } from "./format";
 
 type ListProps = {
   readonly rows: readonly AppointmentRow[];
@@ -31,7 +31,7 @@ export function AppointmentGroups({ rows, onDelete }: ListProps) {
   const past = rows.filter((r) => r.status === "FAIT" || r.status === "ANNULE").sort((a, b) => byStart(b, a));
   return (
     <div className="space-y-6">
-      <Group title="À placer" hint="Tutellia les placera dans la prochaine proposition." rows={toPlace} onDelete={onDelete} />
+      <Group title="À placer ou à valider" hint="Tutellia les placera dans la prochaine proposition ; ceux à heure fixe entrent au planning quand vous validez leur semaine." rows={toPlace} onDelete={onDelete} />
       <Group title="Prévus" hint="Dans le planning validé." rows={planned} onDelete={onDelete} />
       {past.length > 0 && (
         <Collapsible>
@@ -81,7 +81,7 @@ function Row({ row, onDelete }: { readonly row: AppointmentRow; readonly onDelet
       <div className="min-w-0 flex-1 space-y-1">
         <div className="flex flex-wrap items-center gap-2">
           <span className={`font-medium ${isPast ? "" : "text-foreground"}`}>{row.title}</span>
-          <Badge variant="outline" className={STATUS_CLASS[row.status]}>{STATUS_LABELS[row.status]}</Badge>
+          <Badge variant="outline" className={STATUS_CLASS[row.status]}>{statusLabel(row)}</Badge>
           <Badge variant="outline" className={PRIORITY_CLASS[row.priority]}>
             <span className="sr-only">Priorité </span>{PRIORITY_LABELS[row.priority].label}
           </Badge>
