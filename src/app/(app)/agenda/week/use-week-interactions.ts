@@ -11,26 +11,12 @@ import type { WeekData } from "./use-week-data";
 
 export type MissedItem = NonNullable<MissedDialogProps["item"]>;
 
-/** Dialog state and the handlers wiring the grid, toolbar and dialogs to the week's data and commands. */
-export function useWeekInteractions(data: WeekData, commands: WeekCommands) {
+/** Which dialog is open (« Déplacer… », « N'a pas eu lieu », « Nouveau rendez-vous ») and how each closes. */
+function useWeekDialogState(data: WeekData) {
   const [moving, setMoving] = useState<MoveTarget | null>(null);
   const [missed, setMissed] = useState<MissedItem | null>(null);
   const [isAppointmentOpen, setIsAppointmentOpen] = useState(false);
 
-  function handleEntryAction(action: EntryAction, entry: EntryView, day: DayView) {
-    if (action === "move") setMoving({ entry, date: day.date });
-    else if (action === "unpin") commands.unpin(entry);
-    else if (action === "skip") void commands.skip(entry);
-    else if (entry.itemKey !== null) setMissed({ itemKey: entry.itemKey, title: entry.title, date: day.date, kind: entry.kind });
-  }
-
-  function handleDrop(entry: EntryView, date: IsoDate, start: Minutes) {
-    commands.pin(entry, date, start);
-  }
-  function handleMoveConfirm(entry: EntryView, date: IsoDate, start: Minutes) {
-    setMoving(null);
-    commands.pin(entry, date, start);
-  }
   function closeMove() {
     setMoving(null);
   }
@@ -45,6 +31,11 @@ export function useWeekInteractions(data: WeekData, commands: WeekCommands) {
     setIsAppointmentOpen(true);
   }
 
+  return { moving, setMoving, missed, setMissed, isAppointmentOpen, setIsAppointmentOpen, closeMove, handleMissedOpenChange, handleDialogDone, openAppointment };
+}
+
+/** Week navigation: previous, next, and the server's « today ». */
+function useWeekNavigation(data: WeekData) {
   function goPrevious() {
     data.goTo(addDays(data.from, -7));
   }
@@ -54,23 +45,32 @@ export function useWeekInteractions(data: WeekData, commands: WeekCommands) {
   function goToday() {
     data.goTo(mondayOf(data.view?.today ?? localToday()));
   }
+  return { goPrevious, goNext, goToday };
+}
 
-  return {
-    moving,
-    missed,
-    isAppointmentOpen,
-    setIsAppointmentOpen,
-    handleEntryAction,
-    handleDrop,
-    handleMoveConfirm,
-    closeMove,
-    handleMissedOpenChange,
-    handleDialogDone,
-    openAppointment,
-    goPrevious,
-    goNext,
-    goToday,
-  };
+/** Dialog state and the handlers wiring the grid, toolbar and dialogs to the week's data and commands. */
+export function useWeekInteractions(data: WeekData, commands: WeekCommands) {
+  const dialogs = useWeekDialogState(data);
+  const navigation = useWeekNavigation(data);
+  const { setMoving, setMissed } = dialogs;
+
+  function handleEntryAction(action: EntryAction, entry: EntryView, day: DayView) {
+    if (action === "move") setMoving({ entry, date: day.date });
+    else if (action === "unpin") void commands.unpin(entry);
+    else if (action === "skip") void commands.skip(entry);
+    else if (action === "missed" && entry.itemKey !== null) {
+      setMissed({ itemKey: entry.itemKey, title: entry.title, date: day.date, kind: entry.kind });
+    }
+  }
+  function handleDrop(entry: EntryView, date: IsoDate, start: Minutes) {
+    commands.pin(entry, date, start);
+  }
+  function handleMoveConfirm(entry: EntryView, date: IsoDate, start: Minutes) {
+    setMoving(null);
+    commands.pin(entry, date, start);
+  }
+
+  return { ...dialogs, ...navigation, handleEntryAction, handleDrop, handleMoveConfirm };
 }
 
 export type WeekInteractions = ReturnType<typeof useWeekInteractions>;

@@ -1,10 +1,13 @@
 "use client";
 
+import type { RefObject } from "react";
 import { CalendarPlus, ChevronLeft, ChevronRight, Loader2, Wand2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { BusyButton } from "./busy-button";
 
 type WeekToolbarProps = {
   readonly label: string;
+  /** Focus target when the control the user acted on disappears (validation, unpin, skip). */
+  readonly headingRef: RefObject<HTMLHeadingElement | null>;
   readonly busy: boolean;
   readonly isProposing: boolean;
   readonly hasProposal: boolean;
@@ -16,34 +19,39 @@ type WeekToolbarProps = {
   readonly onNewAppointment: () => void;
 };
 
-/** Week label and navigation on the left, the two main actions on the right. */
+/** Week label and navigation on the left, the two main actions on the right. Buttons stay focusable while busy. */
 export function WeekToolbar(props: WeekToolbarProps) {
-  const { label, busy, isProposing, hasProposal, canPlan, onPrevious, onToday, onNext, onPropose, onNewAppointment } = props;
+  const { label, headingRef, busy, isProposing, hasProposal, canPlan, onPrevious, onToday, onNext, onPropose, onNewAppointment } = props;
   return (
     <div className="flex flex-wrap items-center gap-3">
       <div className="flex items-center gap-1">
-        <Button variant="outline" size="icon" onClick={onPrevious} disabled={busy} aria-label="Semaine précédente">
+        <BusyButton variant="outline" size="icon" onClick={onPrevious} busy={busy} aria-label="Semaine précédente">
           <ChevronLeft aria-hidden="true" />
-        </Button>
-        <Button variant="outline" onClick={onToday} disabled={busy}>
+        </BusyButton>
+        <BusyButton variant="outline" onClick={onToday} busy={busy}>
           Aujourd&apos;hui
-        </Button>
-        <Button variant="outline" size="icon" onClick={onNext} disabled={busy} aria-label="Semaine suivante">
+        </BusyButton>
+        <BusyButton variant="outline" size="icon" onClick={onNext} busy={busy} aria-label="Semaine suivante">
           <ChevronRight aria-hidden="true" />
-        </Button>
+        </BusyButton>
       </div>
-      <h2 className="text-lg font-semibold tracking-tight" aria-live="polite">
+      <h2
+        ref={headingRef}
+        tabIndex={-1}
+        className="rounded-sm text-lg font-semibold tracking-tight outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        aria-live="polite"
+      >
         {label}
       </h2>
       <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
-        <Button variant="outline" onClick={onNewAppointment} disabled={busy}>
+        <BusyButton variant="outline" onClick={onNewAppointment} busy={busy}>
           <CalendarPlus aria-hidden="true" />
           Nouveau rendez-vous
-        </Button>
-        <Button onClick={onPropose} disabled={busy || !canPlan}>
+        </BusyButton>
+        <BusyButton onClick={onPropose} busy={busy} disabled={!canPlan}>
           {isProposing ? <Loader2 className="motion-safe:animate-spin" aria-hidden="true" /> : <Wand2 aria-hidden="true" />}
           {hasProposal ? "Recalculer la proposition" : "Préparer une proposition"}
-        </Button>
+        </BusyButton>
       </div>
     </div>
   );

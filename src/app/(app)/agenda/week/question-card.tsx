@@ -1,13 +1,16 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
+import { useEffect, useRef, type RefObject } from "react";
 import type { PlanSummary, QuestionView } from "@/lib/agenda/views/types";
+import { BusyButton } from "./busy-button";
 import { STRENGTH_LABEL, km, plural } from "./format";
+
+type Answer = "respect" | "break" | null;
 
 type QuestionCardProps = {
   readonly question: QuestionView;
   readonly busy: boolean;
-  readonly onAnswer: (ruleKey: string, answer: "respect" | "break" | null) => void;
+  readonly onAnswer: (ruleKey: string, answer: Answer) => void;
 };
 
 function gainText(question: QuestionView): string {
@@ -20,15 +23,21 @@ function gainText(question: QuestionView): string {
 
 /** « Important » rule: both plans side by side, the user chooses. Respecting the rule is the prominent, safe path. */
 export function QuestionCard({ question, busy, onAnswer }: QuestionCardProps) {
-  function handleRespect() {
-    onAnswer(question.ruleKey, "respect");
+  const respectRef = useRef<HTMLButtonElement>(null);
+  const askedAgain = useRef(false);
+
+  // « Me reposer la question » disappears once the answer is cleared: focus goes to the first choice.
+  useEffect(() => {
+    if (!askedAgain.current || question.answer !== null) return;
+    askedAgain.current = false;
+    respectRef.current?.focus();
+  }, [question.answer]);
+
+  function handleAnswer(answer: Answer) {
+    askedAgain.current = answer === null;
+    onAnswer(question.ruleKey, answer);
   }
-  function handleBreak() {
-    onAnswer(question.ruleKey, "break");
-  }
-  function handleAskAgain() {
-    onAnswer(question.ruleKey, null);
-  }
+
   return (
     <div className="space-y-3 rounded-md border border-primary/40 bg-background p-3">
       <div>
@@ -41,23 +50,48 @@ export function QuestionCard({ question, busy, onAnswer }: QuestionCardProps) {
         <PlanColumn title="Respecter la règle" plan={question.respect} />
         <PlanColumn title="Faire une exception" plan={question.exception} />
       </dl>
+      <AnswerButtons answer={question.answer} busy={busy} respectRef={respectRef} onAnswer={handleAnswer} />
+    </div>
+  );
+}
+
+type AnswerButtonsProps = {
+  readonly answer: Answer;
+  readonly busy: boolean;
+  readonly respectRef: RefObject<HTMLButtonElement | null>;
+  readonly onAnswer: (answer: Answer) => void;
+};
+
+function AnswerButtons({ answer, busy, respectRef, onAnswer }: AnswerButtonsProps) {
+  function handleRespect() {
+    onAnswer("respect");
+  }
+  function handleBreak() {
+    onAnswer("break");
+  }
+  function handleAskAgain() {
+    onAnswer(null);
+  }
+  return (
+    <>
       <div className="flex flex-wrap gap-2">
-        <Button size="sm" onClick={handleRespect} disabled={busy} aria-pressed={question.answer === "respect"}>
+        <BusyButton ref={respectRef} size="sm" onClick={handleRespect} busy={busy} aria-pressed={answer === "respect"}>
           Respecter la règle
-        </Button>
-        <Button size="sm" variant="outline" onClick={handleBreak} disabled={busy} aria-pressed={question.answer === "break"}>
+        </BusyButton>
+        <BusyButton size="sm" variant="outline" onClick={handleBreak} busy={busy} aria-pressed={answer === "break"}>
           Faire une exception
-        </Button>
+        </BusyButton>
       </div>
-      {question.answer !== null && (
+      {answer !== null && (
         <p className="flex flex-wrap items-center gap-2 text-xs">
-          Votre choix : {question.answer === "respect" ? "respecter la règle" : "faire une exception"}.
-          <Button size="sm" variant="link" className="h-auto p-0 text-xs" onClick={handleAskAgain} disabled={busy}>
+          Votre choix : {answer === "respect" ? "respecter la règle" : "faire une exception"}.
+          {/* min-h-6: a ≥ 24 px target (WCAG 2.5.8). */}
+          <BusyButton size="sm" variant="link" className="h-auto min-h-6 p-0 text-xs" onClick={handleAskAgain} busy={busy}>
             Me reposer la question
-          </Button>
+          </BusyButton>
         </p>
       )}
-    </div>
+    </>
   );
 }
 

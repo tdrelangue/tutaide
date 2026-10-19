@@ -43,10 +43,15 @@ type VisitStatuses = ReadonlyMap<string, VisitStatusRow> | null;
 function useVisitStatuses(persons: AgendaPersonView[]) {
   const [statuses, setStatuses] = useState<VisitStatuses>(null);
   const { run, error } = useAgendaQuery();
+  /** Request counter: only the latest answer is shown (the list may change while one is on its way). */
+  const sequence = useRef(0);
 
   const load = useCallback(async () => {
-    const rows = await run(getVisitStatus);
-    if (rows !== null) setStatuses(new Map(rows.map((row) => [row.personId, row])));
+    sequence.current += 1;
+    const id = sequence.current;
+    const isCurrent = () => id === sequence.current;
+    const rows = await run(getVisitStatus, { isCurrent });
+    if (rows !== null && isCurrent()) setStatuses(new Map(rows.map((row) => [row.personId, row])));
   }, [run]);
 
   useEffect(() => {
@@ -180,7 +185,7 @@ export function PersonsTab({ persons, importableCount, defaultVisitMinutes }: Pr
             <AlertDialogAction
               onClick={handleConfirmDelete}
               disabled={deleteAction.isBusy}
-              className={cn(buttonVariants({ variant: "outline" }), "border-red-300 text-red-700 hover:bg-red-50 hover:text-red-800")}
+              className={cn(buttonVariants({ variant: "outline" }), "border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive")}
             >
               Retirer de l&apos;agenda
             </AlertDialogAction>

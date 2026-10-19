@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { DayView, EntryView, IsoDate, Minutes, WeekView } from "@/lib/agenda/views/types";
@@ -38,8 +38,11 @@ function columnTemplate(days: readonly DayView[], isNarrow: boolean): string {
 export function WeekGrid({ view, busy, onEntryAction, onDrop }: WeekGridProps) {
   const isNarrow = useMediaQuery(NARROW_QUERY);
   const [dayIndex, setDayIndex] = useState(() => initialDayIndex(view.days));
-  const range: GridRange = { from: view.grid.from, to: view.grid.to };
-  const drag = usePointerDrag({ range, disabled: busy, onDrop });
+  // Stable while the hours do not change, so memoised day columns skip re-rendering during a drag.
+  const range = useMemo<GridRange>(() => ({ from: view.grid.from, to: view.grid.to }), [view.grid.from, view.grid.to]);
+  // A new view (reload, recomputed proposal) cancels a drag whose entry may be gone.
+  const drag = usePointerDrag({ range, disabled: busy, resetKey: view, onDrop });
+  const draggedKey = drag.preview?.entry.key ?? null;
   const index = Math.min(dayIndex, Math.max(0, view.days.length - 1));
   const days = isNarrow ? view.days.slice(index, index + 1) : view.days;
 
@@ -54,17 +57,7 @@ export function WeekGrid({ view, busy, onEntryAction, onDrop }: WeekGridProps) {
           ))}
           <HourRail range={range} limits={view.grid} />
           {days.map((day) => (
-            <DayBody
-              key={day.date}
-              day={day}
-              range={range}
-              limits={view.grid}
-              columnRef={drag.registerColumn(day.date)}
-              preview={drag.preview}
-              busy={busy}
-              bindDrag={drag.bind}
-              onAction={onEntryAction}
-            />
+            <DayBody key={day.date} day={day} range={range} limits={view.grid} registerColumn={drag.registerColumn} ghost={drag.preview?.date === day.date ? drag.preview : null} draggedKey={draggedKey} busy={busy} bindDrag={drag.bind} onAction={onEntryAction} />
           ))}
           <div className="sticky left-0 z-20 border-t bg-background" />
           {days.map((day) => (

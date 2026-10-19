@@ -5,6 +5,7 @@ import type {
   Minutes,
   PinWarningValue,
   PriorityValue,
+  ProposalMeta,
   StrengthValue,
   UnplacedReasonValue,
 } from "@/lib/agenda/views/types";
@@ -131,7 +132,8 @@ export const REASON_LABEL: Readonly<Record<UnplacedReasonValue | "LATE", string>
 export function entryAccessibleName(entry: EntryView, dayLabel: string): string {
   return [
     entry.title,
-    `${dayLabel}, de ${hm(entry.start)} à ${hm(entry.end)}`,
+    // Same wording as the visible time line (WCAG 2.5.3): « 9 h 05 – 10 h 05 ».
+    `${dayLabel}, ${timeRange(entry.start, entry.end)}`,
     SOURCE_WORD[entry.source],
     entry.priority ? `priorité ${PRIORITY_LABEL[entry.priority]}` : null,
     entry.moved ? "décalé" : null,
@@ -141,4 +143,22 @@ export function entryAccessibleName(entry: EntryView, dayLabel: string): string 
   ]
     .filter((part): part is string => part !== null && part !== "")
     .join(", ");
+}
+
+/** Unanswered « Important » questions and unplaced « Incontournable » visits: what validation would leave behind. */
+export function openPoints(proposal: ProposalMeta): { readonly questions: number; readonly alerts: number } {
+  return {
+    questions: proposal.questions.filter((q) => q.answer === null).length,
+    alerts: proposal.problems.filter((p) => p.isAlert).length,
+  };
+}
+
+/** « Proposition prête : 12 visites, 1 question, 2 non placés », announced once a proposal is computed. */
+export function proposalSummary(proposal: ProposalMeta): string {
+  const unplaced = proposal.problems.filter((p) => p.reason !== "LATE").length;
+  return [
+    `Proposition prête : ${plural(proposal.placedCount, "visite", "visites")}`,
+    plural(proposal.questions.length, "question", "questions"),
+    plural(unplaced, "non placé", "non placés"),
+  ].join(", ");
 }

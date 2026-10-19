@@ -7,7 +7,7 @@ const KEYS: readonly { readonly label: string; readonly swatch: string }[] = [
   { label: "Proposé (pointillés)", swatch: "border-2 border-dashed border-agenda-proposed/60 bg-background" },
   { label: "Placé à la main", swatch: "border-2 border-agenda-proposed bg-background" },
   { label: "Heure fixe", swatch: "border border-agenda-fixed/40 border-l-4 border-l-agenda-fixed bg-agenda-fixed-soft" },
-  { label: "Vu / N'a pas eu lieu", swatch: "border border-border bg-muted" },
+  { label: "Vu / N'a pas eu lieu", swatch: "border border-muted-foreground bg-muted" },
   { label: "Indisponible, pause (hachuré)", swatch: "agenda-hatch border border-agenda-busy bg-agenda-paper" },
 ];
 

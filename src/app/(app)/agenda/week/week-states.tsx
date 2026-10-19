@@ -1,7 +1,7 @@
 "use client";
 
 import { Loader2, RefreshCw } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { BusyButton } from "./busy-button";
 import type { WeekView } from "@/lib/agenda/views/types";
 import { ERROR_TEXT } from "../address-field";
 import type { WeekMode } from "./use-week-data";
@@ -26,15 +26,21 @@ export function LoadError({ message, onRetry, busy }: { message: string; onRetry
   return (
     <div role="alert" className="flex flex-wrap items-center gap-3 rounded-lg border border-destructive/60 p-4">
       <p className={ERROR_TEXT}>{message}</p>
-      <Button size="sm" variant="outline" onClick={onRetry} disabled={busy}>
+      <BusyButton size="sm" variant="outline" onClick={onRetry} busy={busy}>
         <RefreshCw aria-hidden="true" />
         Réessayer
-      </Button>
+      </BusyButton>
     </div>
   );
 }
 
-type BusyProps = { readonly mode: WeekMode; readonly isActing: boolean; readonly isValidating: boolean };
+type BusyProps = {
+  readonly mode: WeekMode;
+  readonly isActing: boolean;
+  readonly isValidating: boolean;
+  /** Outcome of the last step, once nothing is in flight: « Proposition prête : … », « Semaine validée… ». */
+  readonly announcement: string;
+};
 
 function busyMessage({ mode, isActing, isValidating }: BusyProps): string {
   if (mode === "proposing") return "Calcul des trajets… quelques secondes.";
@@ -44,13 +50,13 @@ function busyMessage({ mode, isActing, isValidating }: BusyProps): string {
   return "";
 }
 
-/** Always mounted, so screen readers hear each change of state. */
+/** Always mounted, so screen readers hear each change of state (and the outcome, politely, once it is done). */
 export function BusyStatus(props: BusyProps) {
-  const message = busyMessage(props);
+  const busy = busyMessage(props);
   return (
     <p role="status" aria-live="polite" className="flex min-h-5 items-center gap-2 text-sm text-muted-foreground">
-      {message && <Loader2 className="h-4 w-4 motion-safe:animate-spin" aria-hidden="true" />}
-      {message}
+      {busy && <Loader2 className="h-4 w-4 motion-safe:animate-spin" aria-hidden="true" />}
+      {busy || props.announcement}
     </p>
   );
 }

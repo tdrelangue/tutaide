@@ -3,7 +3,6 @@
 import { useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { Loader2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,6 +10,7 @@ import type { AppointmentInput } from "@/lib/agenda/appointments";
 import { formatDuration } from "@/lib/agenda/rules";
 import type { PriorityValue } from "@/lib/agenda/views/types";
 import { ERROR_TEXT } from "../address-field";
+import { BusyButton } from "../week/busy-button";
 import { localToday, PRIORITY_LABELS } from "./format";
 import {
   checkValues,
@@ -80,11 +80,12 @@ export function AppointmentForm({ persons, defaultParticipantIds, isBusy, onSubm
       </fieldset>
       {children}
       <DialogFooter className="gap-2">
-        <Button type="button" variant="outline" onClick={onCancel} disabled={isBusy}>Annuler</Button>
-        <Button type="submit" disabled={isBusy}>
+        {/* Focusable while saving: a disabled button would drop focus to <body> (WCAG 2.4.3). */}
+        <BusyButton type="button" variant="outline" onClick={onCancel} busy={isBusy}>Annuler</BusyButton>
+        <BusyButton type="submit" busy={isBusy}>
           {isBusy && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
           Ajouter le rendez-vous
-        </Button>
+        </BusyButton>
       </DialogFooter>
     </form>
   );

@@ -101,7 +101,7 @@ function SlotPicker({ options, chosen, onChoose, disabled }: SlotPickerProps) {
     <fieldset className="space-y-2" disabled={disabled}>
       <legend className="text-sm font-medium">Créneaux libres</legend>
       {options.map((option, index) => (
-        <label key={`${option.date}-${option.start}`} className="flex cursor-pointer items-center gap-3 rounded-md border p-2 text-sm has-[:checked]:border-agenda-held has-[:checked]:bg-agenda-held-soft">
+        <label key={`${option.date}-${option.start}`} className="flex min-h-6 cursor-pointer items-center gap-3 rounded-md border p-2 text-sm has-[:checked]:border-agenda-held has-[:checked]:bg-agenda-held-soft">
           <input type="radio" name="insert-slot" value={index} checked={chosen === index} onChange={handleChoose} className="h-4 w-4 accent-primary" />
           <span className="font-medium">{formatSlot(option)}</span>
           <span className="ml-auto text-muted-foreground">{detour(option)}</span>

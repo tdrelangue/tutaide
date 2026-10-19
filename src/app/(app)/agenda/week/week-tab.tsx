@@ -1,5 +1,7 @@
 "use client";
 
+import { useMemo, useRef, type RefObject } from "react";
+
 import type { PersonOption } from "../appointments/shared-contracts";
 import { AppointmentDialog } from "../appointments/appointment-dialog";
 import { MissedDialog } from "../appointments/missed-dialog";
@@ -9,7 +11,7 @@ import { IssuesCard } from "./issues-card";
 import { Legend } from "./legend";
 import { MoveDialog } from "./move-dialog";
 import { ProposalPanel } from "./proposal-panel";
-import { useWeekCommands, type WeekCommands } from "./use-week-commands";
+import { useWeekCommands, type FocusTargets, type WeekCommands } from "./use-week-commands";
 import { useWeekData, type WeekData } from "./use-week-data";
 import { useWeekInteractions, type WeekInteractions } from "./use-week-interactions";
 import { ValidateBar } from "./validate-bar";
@@ -25,9 +27,25 @@ export type WeekTabProps = {
   readonly persons: readonly PersonOption[];
 };
 
+/** Focus targets for when the control the user acted on disappears (WCAG 2.4.3). */
+function useFocusTargets() {
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  const proposalTitleRef = useRef<HTMLHeadingElement>(null);
+  const focus = useMemo<FocusTargets>(
+    () => ({
+      week: () => headingRef.current?.focus(),
+      // The panel title is gone with the proposal: fall back to the week heading.
+      proposal: () => (proposalTitleRef.current ?? headingRef.current)?.focus(),
+    }),
+    [],
+  );
+  return { headingRef, proposalTitleRef, focus };
+}
+
 export function WeekTab({ needsSetup, persons }: WeekTabProps) {
   const data = useWeekData(!needsSetup);
-  const commands = useWeekCommands(data);
+  const targets = useFocusTargets();
+  const commands = useWeekCommands(data, targets.focus);
   const ui = useWeekInteractions(data, commands);
   if (needsSetup) return <SetupNotice />;
 
@@ -37,6 +55,7 @@ export function WeekTab({ needsSetup, persons }: WeekTabProps) {
     <div className="space-y-3">
       <WeekToolbar
         label={weekLabel(view?.from ?? data.from, view?.to ?? addDays(data.from, 6))}
+        headingRef={targets.headingRef}
         busy={busy}
         isProposing={data.mode === "proposing"}
         hasProposal={view?.proposal != null}
@@ -47,27 +66,26 @@ export function WeekTab({ needsSetup, persons }: WeekTabProps) {
         onPropose={commands.recompute}
         onNewAppointment={ui.openAppointment}
       />
-      <BusyStatus mode={data.mode} isActing={commands.isActing} isValidating={commands.isValidating} />
+      <BusyStatus mode={data.mode} isActing={commands.isActing} isValidating={commands.isValidating} announcement={data.announcement} />
       {commands.stepError && <p role="alert" className={ERROR_TEXT}>{commands.stepError}</p>}
-      <WeekContent data={data} commands={commands} ui={ui} busy={busy} />
+      <WeekContent data={data} commands={commands} ui={ui} busy={busy} proposalTitleRef={targets.proposalTitleRef} />
       {view?.proposal && (
-        <ValidateBar
-          proposal={view.proposal}
-          busy={busy}
-          isValidating={commands.isValidating}
-          error={commands.validateError}
-          onValidate={commands.validate}
-          onRecompute={commands.recompute}
-        />
+        <ValidateBar proposal={view.proposal} busy={busy} isValidating={commands.isValidating} error={commands.validateError} onValidate={commands.validate} onRecompute={commands.recompute} />
       )}
       <WeekDialogs data={data} ui={ui} persons={persons} />
     </div>
   );
 }
 
-type ContentProps = { readonly data: WeekData; readonly commands: WeekCommands; readonly ui: WeekInteractions; readonly busy: boolean };
+type ContentProps = {
+  readonly data: WeekData;
+  readonly commands: WeekCommands;
+  readonly ui: WeekInteractions;
+  readonly busy: boolean;
+  readonly proposalTitleRef: RefObject<HTMLHeadingElement | null>;
+};
 
-function WeekContent({ data, commands, ui, busy }: ContentProps) {
+function WeekContent({ data, commands, ui, busy, proposalTitleRef }: ContentProps) {
   const view = data.view;
   function handleRetry() {
     void data.retry();
@@ -90,7 +108,7 @@ function WeekContent({ data, commands, ui, busy }: ContentProps) {
         <WeekGrid key={view.from} view={view} busy={busy} onEntryAction={ui.handleEntryAction} onDrop={ui.handleDrop} />
         <Legend grid={view.grid} />
       </div>
-      <ProposalPanel proposal={view.proposal} busy={busy} onAnswer={commands.answer} onRefuse={commands.refuse} />
+      <ProposalPanel proposal={view.proposal} titleRef={proposalTitleRef} busy={busy} onAnswer={commands.answer} onRefuse={commands.refuse} />
     </div>
   );
 }

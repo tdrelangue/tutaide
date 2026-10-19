@@ -12,7 +12,7 @@ import { AppointmentForm } from "./appointment-form";
 import { InlineError, IssueList } from "./inline-error";
 import { InsertStep } from "./insert-step";
 import type { NeedsInsert } from "./insert-step";
-import type { AppointmentDialogProps } from "./shared-contracts";
+import type { AppointmentDialogProps, PersonOption } from "./shared-contracts";
 
 type Step =
   | { readonly kind: "FORM" }
@@ -34,32 +34,27 @@ const TITLES: Record<Step["kind"], { title: string; description: string }> = {
   },
 };
 
-/** « Nouveau rendez-vous », with the rule 12 insertion flow when its dates touch a validated week. */
-export function AppointmentDialog({ open, onOpenChange, persons, defaultParticipantIds = [], onDone }: AppointmentDialogProps) {
+/** Steps of the dialog. Every opening starts afresh on the form (state adjusted while rendering, no effect). */
+function useAppointmentSteps({ open, onOpenChange, onDone }: Pick<AppointmentDialogProps, "open" | "onOpenChange" | "onDone">) {
   const [step, setStep] = useState<Step>({ kind: "FORM" });
   const [formKey, setFormKey] = useState(0);
   const [refused, setRefused] = useState<readonly IssueView[]>([]);
-  const stepRef = useRef<HTMLDivElement>(null);
+  const [wasOpen, setWasOpen] = useState(open);
   const query = useAgendaQuery();
 
-  // The submit button disappears with the form: give focus a place in the new step.
-  useEffect(() => {
-    if (step.kind !== "FORM") stepRef.current?.focus();
-  }, [step]);
+  if (open !== wasOpen) {
+    setWasOpen(open);
+    if (open) {
+      setStep({ kind: "FORM" });
+      setFormKey((key) => key + 1);
+      setRefused([]);
+      query.clearError();
+    }
+  }
 
   function close(created: boolean) {
     if (created) onDone();
-    setStep({ kind: "FORM" });
-    setFormKey((key) => key + 1);
-    setRefused([]);
-    query.clearError();
     onOpenChange(false);
-  }
-
-  function handleOpenChange(next: boolean) {
-    if (next) onOpenChange(true);
-    // Past the form, the appointment exists: the caller must reload in any case.
-    else close(step.kind !== "FORM");
   }
 
   function handleView(view: InsertView) {
@@ -77,43 +72,84 @@ export function AppointmentDialog({ open, onOpenChange, persons, defaultParticip
     if (view !== null) handleView(view);
   }
 
-  function handleCancel() {
-    close(false);
+  return { step, formKey, refused, query, close, handleSubmit };
+}
+
+/** The title takes focus when the step changes: the submit button is gone, and the new title is read (WCAG 2.4.3). */
+function useStepFocus(kind: Step["kind"]) {
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    if (kind !== "FORM") titleRef.current?.focus();
+  }, [kind]);
+  return titleRef;
+}
+
+/** « Nouveau rendez-vous », with the rule 12 insertion flow when its dates touch a validated week. */
+export function AppointmentDialog({ open, onOpenChange, persons, defaultParticipantIds = [], onDone }: AppointmentDialogProps) {
+  const flow = useAppointmentSteps({ open, onOpenChange, onDone });
+  const titleRef = useStepFocus(flow.step.kind);
+  const isBusy = flow.query.isBusy;
+
+  function handleOpenChange(next: boolean) {
+    if (next) onOpenChange(true);
+    // A save in flight cannot be abandoned; past the form, the appointment exists: the caller must reload in any case.
+    else if (!isBusy) flow.close(flow.step.kind !== "FORM");
+  }
+  function preventCloseWhileBusy(event: Event) {
+    if (isBusy) event.preventDefault();
   }
 
-  function handleCreatedClose() {
-    close(true);
-  }
-
-  const heading = TITLES[step.kind];
+  const heading = TITLES[flow.step.kind];
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+      <DialogContent
+        className="max-h-[90vh] overflow-y-auto sm:max-w-2xl"
+        closeDisabled={isBusy}
+        onEscapeKeyDown={preventCloseWhileBusy}
+        onInteractOutside={preventCloseWhileBusy}
+      >
         <DialogHeader>
-          <DialogTitle>{heading.title}</DialogTitle>
+          <DialogTitle ref={titleRef} tabIndex={-1} className="outline-none">{heading.title}</DialogTitle>
           <DialogDescription>{heading.description}</DialogDescription>
         </DialogHeader>
-        {step.kind === "FORM" && (
-          <AppointmentForm key={formKey} persons={persons} defaultParticipantIds={defaultParticipantIds} isBusy={query.isBusy} onSubmit={handleSubmit} onCancel={handleCancel}>
-            <InlineError message={query.error} issues={query.issues} focusOnShow />
-            {refused.length > 0 && <RefusedNotice issues={refused} />}
-          </AppointmentForm>
-        )}
-        <div ref={stepRef} tabIndex={-1} className="outline-none">
-          {step.kind === "INSERT" && <InsertStep view={step.view} onPlaced={handleCreatedClose} onLater={handleCreatedClose} />}
-          {step.kind === "UNPLANNABLE" && (
-            <div className="space-y-4">
-              <div role="alert" className="rounded-md border border-agenda-warn bg-agenda-warn-soft p-3">
-                <IssueList issues={step.issues} />
-              </div>
-              <DialogFooter>
-                <Button type="button" onClick={handleCreatedClose}>Fermer</Button>
-              </DialogFooter>
-            </div>
-          )}
-        </div>
+        <StepBody flow={flow} persons={persons} defaultParticipantIds={defaultParticipantIds} />
       </DialogContent>
     </Dialog>
+  );
+}
+
+type StepBodyProps = {
+  readonly flow: ReturnType<typeof useAppointmentSteps>;
+  readonly persons: readonly PersonOption[];
+  readonly defaultParticipantIds: readonly string[];
+};
+
+function StepBody({ flow, persons, defaultParticipantIds }: StepBodyProps) {
+  const { step, query } = flow;
+  function handleCancel() {
+    flow.close(false);
+  }
+  function handleCreatedClose() {
+    flow.close(true);
+  }
+  if (step.kind === "INSERT") return <InsertStep view={step.view} onPlaced={handleCreatedClose} onLater={handleCreatedClose} />;
+  if (step.kind === "UNPLANNABLE") {
+    return (
+      <div className="space-y-4">
+        <div role="alert" className="rounded-md border border-agenda-warn bg-agenda-warn-soft p-3">
+          <IssueList issues={step.issues} />
+        </div>
+        <DialogFooter>
+          <Button type="button" onClick={handleCreatedClose}>Fermer</Button>
+        </DialogFooter>
+      </div>
+    );
+  }
+  return (
+    <AppointmentForm key={flow.formKey} persons={persons} defaultParticipantIds={defaultParticipantIds} isBusy={query.isBusy} onSubmit={flow.handleSubmit} onCancel={handleCancel}>
+      <InlineError message={query.error} issues={query.issues} focusOnShow />
+      {flow.refused.length > 0 && <RefusedNotice issues={flow.refused} />}
+    </AppointmentForm>
   );
 }
 

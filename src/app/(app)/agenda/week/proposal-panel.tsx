@@ -1,37 +1,28 @@
 "use client";
 
-import type { ReactNode } from "react";
+import type { ReactNode, RefObject } from "react";
 import { AlertOctagon, CheckCircle2, Route } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { BentView, ProblemView, ProposalMeta } from "@/lib/agenda/views/types";
 import { PRIORITY_LABEL, REASON_LABEL, dayShort, km, plural } from "./format";
+import { BusyButton } from "./busy-button";
 import { QuestionCard } from "./question-card";
 
 type ProposalPanelProps = {
   readonly proposal: ProposalMeta | null;
+  /** The « Proposition » title: focus target when a refused exception leaves the list. */
+  readonly titleRef: RefObject<HTMLHeadingElement | null>;
   readonly busy: boolean;
   readonly onAnswer: (ruleKey: string, answer: "respect" | "break" | null) => void;
   readonly onRefuse: (ruleKey: string) => void;
 };
 
 /** What the proposal needs from the user, most urgent first. Beside the grid from 1280 px, below it otherwise. */
-export function ProposalPanel({ proposal, busy, onAnswer, onRefuse }: ProposalPanelProps) {
+export function ProposalPanel({ proposal, titleRef, busy, onAnswer, onRefuse }: ProposalPanelProps) {
   if (proposal === null) return <NoProposal />;
   return (
     <aside aria-labelledby="agenda-proposal-title" className="space-y-3">
-      <Section titleId="agenda-proposal-title" title="Proposition">
-        <p className="text-sm font-medium">
-          {plural(proposal.placedCount, "visite", "visites")} · {km(proposal.totalKm)}
-        </p>
-        <p className="text-xs text-muted-foreground">Rien n&apos;est planifié tant que vous n&apos;avez pas validé la semaine.</p>
-        {proposal.estimatedRouteCount > 0 && (
-          <p className="mt-2 flex items-start gap-2 rounded border border-agenda-warn bg-agenda-warn-soft p-2 text-xs">
-            <Route className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-            {plural(proposal.estimatedRouteCount, "trajet estimé", "trajets estimés")} : IGN indisponible. Ces temps de route sont approximatifs.
-          </p>
-        )}
-      </Section>
+      <SummarySection proposal={proposal} titleRef={titleRef} />
       {proposal.questions.length > 0 && (
         <Section title="Questions « Important »" tone="ask">
           <div className="space-y-3">
@@ -58,6 +49,38 @@ export function ProposalPanel({ proposal, busy, onAnswer, onRefuse }: ProposalPa
   );
 }
 
+function SummarySection({ proposal, titleRef }: { proposal: ProposalMeta; titleRef: RefObject<HTMLHeadingElement | null> }) {
+  return (
+    <Section titleId="agenda-proposal-title" titleRef={titleRef} title="Proposition">
+      <p className="text-sm font-medium">
+        {plural(proposal.placedCount, "visite", "visites")} · {km(proposal.totalKm)}
+      </p>
+      <p className="text-xs text-muted-foreground">Rien n&apos;est planifié tant que vous n&apos;avez pas validé la semaine.</p>
+      {proposal.estimatedRouteCount > 0 && <EstimatedRoutesNotice count={proposal.estimatedRouteCount} />}
+    </Section>
+  );
+}
+
+/**
+ * The views carry only a count of estimated road times (no per-entry flag),
+ * so the notice says plainly what it means and what to check.
+ */
+function EstimatedRoutesNotice({ count }: { count: number }) {
+  return (
+    <div className="mt-2 flex items-start gap-2 rounded border border-agenda-warn bg-agenda-warn-soft p-2 text-xs text-foreground">
+      <Route className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+      <div className="space-y-1">
+        <p className="font-semibold">Temps de route approximatifs</p>
+        <p>
+          Le calcul d&apos;itinéraire (IGN) n&apos;a pas répondu pour {plural(count, "trajet", "trajets")} : leur durée est
+          seulement estimée. Vérifiez les enchaînements serrés avant de valider, ou recalculez la proposition
+          plus tard.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 function NoProposal() {
   return (
     <aside aria-label="Proposition" className="rounded-lg border border-dashed p-4 text-sm">
@@ -70,9 +93,15 @@ function NoProposal() {
   );
 }
 
-type SectionProps = { readonly title: string; readonly titleId?: string; readonly tone?: "ask" | "alert"; readonly children: ReactNode };
+type SectionProps = {
+  readonly title: string;
+  readonly titleId?: string;
+  readonly titleRef?: RefObject<HTMLHeadingElement | null>;
+  readonly tone?: "ask" | "alert";
+  readonly children: ReactNode;
+};
 
-function Section({ title, titleId, tone, children }: SectionProps) {
+function Section({ title, titleId, titleRef, tone, children }: SectionProps) {
   return (
     <section
       aria-labelledby={titleId}
@@ -83,7 +112,12 @@ function Section({ title, titleId, tone, children }: SectionProps) {
         tone === "alert" && "border-2 border-destructive",
       )}
     >
-      <h3 id={titleId} className="mb-2 flex items-center gap-2 text-sm font-semibold">
+      <h3
+        id={titleId}
+        ref={titleRef}
+        tabIndex={titleRef ? -1 : undefined}
+        className="mb-2 flex items-center gap-2 rounded-sm text-sm font-semibold outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
         {tone === "alert" && <AlertOctagon className="h-4 w-4 text-destructive" aria-hidden="true" />}
         {title}
       </h3>
@@ -174,9 +208,9 @@ function BentItem({ bent, busy, onRefuse }: { bent: BentView; busy: boolean; onR
       <p>
         « {bent.label} » non respecté pour <span className="font-medium">{bent.title}</span> ({dayShort(bent.date)})
       </p>
-      <Button size="sm" variant="outline" onClick={handleRefuse} disabled={busy}>
+      <BusyButton size="sm" variant="outline" onClick={handleRefuse} busy={busy}>
         Refuser cette exception
-      </Button>
+      </BusyButton>
     </li>
   );
 }

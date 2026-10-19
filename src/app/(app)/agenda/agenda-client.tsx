@@ -57,7 +57,8 @@ export function AgendaClient({ data, mandataires, initialTab }: Props) {
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto p-6">
+      {/* scroll-pb-28: a focused control scrolled into view never ends up under the sticky « Valider la semaine » bar (WCAG 2.4.11). */}
+      <div className="flex-1 overflow-auto scroll-pb-28 p-6">
         {data === null ? (
           <p className="max-w-xl rounded-lg border border-dashed p-6 text-sm">
             L&apos;agenda est propre à chaque mandataire. Choisissez dans la liste ci-dessus le

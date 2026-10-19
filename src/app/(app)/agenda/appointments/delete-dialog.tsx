@@ -60,7 +60,7 @@ export function DeleteAppointmentDialog({ open, onOpenChange, row, onDone }: Del
             variant="outline"
             onClick={handleConfirm}
             disabled={query.isBusy || row === null}
-            className="border-red-300 text-red-700 hover:bg-red-50 hover:text-red-800"
+            className="border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
           >
             {query.isBusy && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
             Supprimer le rendez-vous
