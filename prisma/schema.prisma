@@ -727,7 +727,9 @@ model AgendaPin {
   contact        AgendaContact?     @relation(fields: [contactId, ownerId], references: [id, ownerId], onDelete: Cascade)
 
   @@unique([ownerId, itemKey])
-  @@index([date])
+  @@index([ownerId, date])
+  @@index([appointmentId])
+  @@index([contactId])
 }
 
 /// Answers to « Important » questions and refused « Souhaité » exceptions.

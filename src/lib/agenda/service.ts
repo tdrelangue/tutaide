@@ -1,6 +1,9 @@
 import { db } from "@/lib/db";
 import { personsFromDossiers, type AgendaEndReasonValue, type AgendaPeriodValue, type DossierPerson } from "./rules";
 import type { AddressPrecision } from "./geocode";
+import { AgendaRefusal } from "./bridge/errors";
+import { TX_OPTIONS } from "./bridge/lock";
+import type { Tx } from "./bridge/lock";
 import { seal, sealOrNull, sealPoint, unseal, unsealPoint } from "./sealed";
 import type { AgendaPersonInput, AgendaSettingsInput } from "./validation";
 
@@ -61,7 +64,9 @@ function toPrecision(value: string | null): AddressPrecision {
 function toPlace(sealedLabel: string | null, sealedPoint: string | null, precision: string | null): Place | null {
   const label = unseal(sealedLabel);
   const point = unsealPoint(sealedPoint);
-  if (label === null || point === null) return null;
+  if (label === null && point === null) return null;
+  // Half an address read as « no address » would be erased by the next save.
+  if (label === null || point === null) throw new Error("Incomplete agenda address");
   return { label, ...point, precision: toPrecision(precision) };
 }
 
@@ -172,7 +177,7 @@ export async function importPersonsFromDossiers(ownerId: string, actorId: string
   return db.$transaction(async (tx) => {
     await assertRoomFor(tx, ownerId, data.length);
     return (await tx.agendaContact.createMany({ data, skipDuplicates: true })).count;
-  });
+  }, TX_OPTIONS);
 }
 
 function personColumns(input: AgendaPersonInput) {
@@ -194,8 +199,8 @@ function placeColumns(ownerId: string, place: Place) {
 /** Far above any real caseload (an MJPM follows ~50–80 persons): guards against runaway data. */
 const MAX_PERSONS_PER_OWNER = 2000;
 
-/** Errors whose message is safe and useful to show to the user. */
-export class AgendaRefusal extends Error {}
+/** Errors whose message is safe and useful to show to the user (defined in bridge/errors, kept importable from here). */
+export { AgendaRefusal };
 
 const CAP_MESSAGE = `L'agenda est limité à ${MAX_PERSONS_PER_OWNER} personnes.`;
 const PLACE_IN_USE_MESSAGE =
@@ -205,8 +210,6 @@ const PLACE_IN_USE_MESSAGE =
 function todayUtc(): Date {
   return new Date(`${new Date().toISOString().slice(0, 10)}T00:00:00.000Z`);
 }
-
-type Tx = Parameters<Parameters<typeof db.$transaction>[0]>[0];
 
 /** Checked inside the write transaction, so two simultaneous additions cannot both pass. */
 async function assertRoomFor(tx: Tx, ownerId: string, added: number): Promise<void> {
@@ -267,15 +270,38 @@ async function replaceDefaultPlace(tx: Tx, ownerId: string, contactId: string, a
 }
 
 const ERASED = "Contact supprimé";
+
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/** Every occurrence of the name, whatever its case (« jean bonneau », « JEAN BONNEAU »). */
+function eraseName(text: string, fullName: string): string {
+  const name = fullName.trim();
+  return name ? text.replace(new RegExp(escapeRegExp(name), "gi"), ERASED) : text;
+}
+
 const ERASED_PLACE = { placeLabel: "", placeAddress: "", placePoint: null };
 
 type Erasure = { contactId: string; fullName: string; homes: Set<string> };
 
 /** The person's name leaves a title; their home leaves the place. */
 function erasedFields(e: Erasure, row: { title: string; placeAddress: string }) {
-  const title = e.fullName ? row.title.split(e.fullName).join(ERASED) : row.title;
+  const title = eraseName(row.title, e.fullName);
   const address = unseal(row.placeAddress);
   return address !== null && e.homes.has(address) ? { title, ...ERASED_PLACE } : { title };
+}
+
+/** Appointment titles often name the person (« Signature chez le notaire pour Jean Bonneau »). */
+async function scrubAppointmentTitles(tx: Tx, ownerId: string, e: Erasure): Promise<void> {
+  const rows = await tx.agendaAppointment.findMany({
+    where: { ownerId, participants: { some: { contactId: e.contactId } } },
+    select: { id: true, title: true },
+  });
+  for (const row of rows) {
+    const title = eraseName(row.title, e.fullName);
+    if (title !== row.title) await tx.agendaAppointment.update({ where: { id_ownerId: { id: row.id, ownerId } }, data: { title } });
+  }
 }
 
 /** Validated items and pins where the person was only a participant (pins of their own visits cascade). */
@@ -311,8 +337,10 @@ export async function deleteAgendaPerson(ownerId: string, personId: string): Pro
     await tx.agendaContact.updateMany({ where: { ownerId, linkedContactId: personId }, data: { linkedContactId: null } });
     await tx.agendaItem.updateMany({ where: { ownerId, contactId: personId }, data: { contactId: null, title: ERASED, ...ERASED_PLACE } });
     const homes = new Set(contact.places.map((p) => unseal(p.address)).filter((a): a is string => a !== null));
-    await scrubParticipations(tx, ownerId, { contactId: contact.id, fullName: contact.fullName, homes });
+    const erasure = { contactId: contact.id, fullName: contact.fullName, homes };
+    await scrubParticipations(tx, ownerId, erasure);
+    await scrubAppointmentTitles(tx, ownerId, erasure);
     await tx.agendaContact.delete({ where: { id_ownerId: { id: personId, ownerId } } });
-  });
+  }, TX_OPTIONS);
   return true;
 }

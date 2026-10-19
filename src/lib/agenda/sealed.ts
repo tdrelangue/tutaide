@@ -23,6 +23,9 @@ export function unseal(stored: string | null): string | null {
   return stored === null || stored === "" ? null : decrypt(stored);
 }
 
+const MAX_LAT = 90;
+const MAX_LON = 180;
+
 export type Point = { lat: number; lon: number };
 
 /** Coordinates are sealed too: a name plus a readable point reveals the home to the metre. */
@@ -34,7 +37,10 @@ export function sealPoint(point: Point): string {
 export function unsealPoint(stored: string | null): Point | null {
   const plain = unseal(stored);
   if (plain === null) return null;
-  const [lat, lon] = plain.split(",").map(Number);
-  if (!Number.isFinite(lat) || !Number.isFinite(lon)) throw new Error("Malformed agenda point");
+  const parts = plain.split(",");
+  if (parts.length !== 2 || parts.some((part) => part.trim() === "")) throw new Error("Malformed agenda point");
+  const [lat, lon] = parts.map(Number);
+  const valid = Number.isFinite(lat) && Number.isFinite(lon) && Math.abs(lat) <= MAX_LAT && Math.abs(lon) <= MAX_LON;
+  if (!valid) throw new Error("Malformed agenda point");
   return { lat, lon };
 }

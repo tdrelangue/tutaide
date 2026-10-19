@@ -18,13 +18,34 @@ function files(dir: string): string[] {
   });
 }
 
+// Static imports and re-exports, side-effect imports, dynamic import() and require().
+const IMPORT_PATTERNS = [
+  /(?:import|export)[^"';]*?from\s+["']([^"']+)["']/g,
+  /import\s+["']([^"']+)["']/g,
+  /import\s*\(\s*["'`]([^"'`]+)["'`]\s*\)/g,
+  /require\s*\(\s*["'`]([^"'`]+)["'`]\s*\)/g,
+];
+
 function imports(source: string): string[] {
-  return [
-    ...source.matchAll(/(?:import|export)[^"']*?from\s+["']([^"']+)["']/g),
-  ].map((m) => m[1] ?? "");
+  return IMPORT_PATTERNS.flatMap((re) =>
+    [...source.matchAll(re)].map((m) => m[1] ?? ""),
+  );
 }
 
 describe("engine boundary", () => {
+  it("sees every kind of import", () => {
+    const source = [
+      'import { a } from "./a";',
+      'export * from "@/lib/db";',
+      'import "next/headers";',
+      'const m = await import("@prisma/client");',
+      'const fs = require("../../agenda/service");',
+    ].join("\n");
+    expect(imports(source).sort()).toEqual(
+      ["./a", "@/lib/db", "next/headers", "@prisma/client", "../../agenda/service"].sort(),
+    );
+  });
+
   it("imports nothing from outside the engine folder", () => {
     const offenders: string[] = [];
     for (const file of SOURCES.flatMap((d) => files(join(ROOT, d)))) {

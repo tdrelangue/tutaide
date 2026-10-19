@@ -19,6 +19,7 @@
     "db:seed": "tsx prisma/seed.ts",
     "db:studio": "prisma studio",
     "demo:schema": "node scripts/generate-demo-schema.mjs",
+    "test:agenda": "vitest run --config src/lib/agenda/vitest.config.ts",
     "test:agenda-engine": "vitest run --config src/lib/agenda-engine/vitest.config.ts --coverage",
     "typecheck:agenda-engine": "tsc -p src/lib/agenda-engine/tsconfig.json",
     "bench:agenda-engine": "vitest bench --run --config src/lib/agenda-engine/vitest.config.ts"
