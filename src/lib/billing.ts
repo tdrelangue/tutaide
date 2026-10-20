@@ -1,7 +1,10 @@
 import { headers } from "next/headers";
-import { db } from "./db";
 import { isDemoActive } from "./demo/state";
 import { isServerMode } from "./deployment";
+import { BILLING_PRICE_LABEL, formatYearlyPrice, getBillingProfile, type BillingProfile } from "./billing-profile";
+import type { InvoiceDetails } from "./stripe-org-billing";
+
+export { BILLING_PRICE_LABEL, formatYearlyPrice };
 
 /**
  * Tutellia subscription billing.
@@ -16,15 +19,6 @@ const BILLING_API_URL = process.env.BILLING_API_URL ?? "https://tutaide.vercel.a
 
 /** Stripe no-code customer portal login link (public URL, safe to ship). */
 export const BILLING_PORTAL_URL = process.env.STRIPE_PORTAL_LOGIN_URL ?? null;
-
-/** Individual plan price, shown before payment so it is never a surprise. */
-export const BILLING_PRICE_LABEL = process.env.BILLING_PRICE_LABEL ?? "30 € / an";
-
-/** "1 200 € / an" for an Entreprise account's custom yearly amount. */
-export function formatYearlyPrice(amountCents: number): string {
-  const euros = new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 2 }).format(amountCents / 100);
-  return `${euros} € / an`;
-}
 
 const REQUEST_TIMEOUT_MS = 8000;
 const PAID_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
@@ -45,6 +39,10 @@ export type SubscriptionStatus = {
   currentPeriodStart: string | null;
   currentPeriodEnd: string | null;
   cancelAtPeriodEnd: boolean;
+  /** "invoice" = a structure paying on a yearly invoice; "card" = automatic charge. */
+  collection: "card" | "invoice";
+  /** Due date of an invoice-paid subscription's open invoice. */
+  paymentDueAt: string | null;
 };
 
 /** Shown in the bell and the bottom-right card while an account is in its 30-day grace. */
@@ -68,14 +66,18 @@ export type BillingState = SubscriptionStatus & {
   graceUntil: string | null;
   /** Set during the 30-day grace (still has access) and after it (access stopped). */
   reminder: PaymentReminder | null;
-};
+} & Pick<BillingProfile, "scope" | "orgName" | "canPay" | "orgAdmins" | "planLabel" | "email">;
 
-const UNKNOWN: SubscriptionStatus = {
-  status: "unknown",
+const NO_SUBSCRIPTION: SubscriptionStatus = {
+  status: "none",
   currentPeriodStart: null,
   currentPeriodEnd: null,
   cancelAtPeriodEnd: false,
+  collection: "card",
+  paymentDueAt: null,
 };
+
+const UNKNOWN: SubscriptionStatus = { ...NO_SUBSCRIPTION, status: "unknown" };
 
 // Single-user desktop process: a tiny in-memory cache avoids a network
 // round-trip on every page.
@@ -112,6 +114,9 @@ async function fetchStatus(userId: string, sessionId?: string): Promise<Subscrip
       ...body,
       currentPeriodStart: typeof body.currentPeriodStart === "string" ? body.currentPeriodStart : null,
       cancelAtPeriodEnd: Boolean(body.cancelAtPeriodEnd),
+      // Older billing servers do not send these two fields.
+      collection: body.collection === "invoice" ? "invoice" : "card",
+      paymentDueAt: typeof body.paymentDueAt === "string" ? body.paymentDueAt : null,
     };
   } catch {
     return UNKNOWN;
@@ -123,7 +128,7 @@ export async function getSubscriptionStatus(
   options: { sessionId?: string; fresh?: boolean } = {}
 ): Promise<SubscriptionStatus> {
   // Demo accounts are free and never reach Stripe.
-  if (isDemoActive()) return { status: "none", currentPeriodStart: null, currentPeriodEnd: null, cancelAtPeriodEnd: false };
+  if (isDemoActive()) return NO_SUBSCRIPTION;
 
   const cached = statusCache.get(userId);
   if (!options.fresh && !options.sessionId && cached && cached.expiresAt > Date.now()) {
@@ -139,28 +144,9 @@ export async function getSubscriptionStatus(
   return value;
 }
 
-type BillingProfile = {
-  required: boolean;
-  priceLabel: string;
-  /** Admin-set first charge date (existing clients), ISO, past or future. */
-  startsAt: string | null;
-};
+type AccessProfile = Pick<BillingProfile, "required" | "startsAt">;
 
-/** Paying vs free (and the Entreprise price) are set by the admin in /admin/users or by self-signup. */
-async function getBillingProfile(userId: string): Promise<BillingProfile> {
-  const user = await db.user.findUnique({
-    where: { id: userId },
-    select: { billingRequired: true, billingCustomAmountCents: true, billingStartsAt: true },
-  });
-  const custom = user?.billingCustomAmountCents ?? null;
-  return {
-    required: user?.billingRequired === true,
-    priceLabel: custom === null ? BILLING_PRICE_LABEL : formatYearlyPrice(custom),
-    startsAt: user?.billingStartsAt?.toISOString() ?? null,
-  };
-}
-
-function isBeforeStart(profile: BillingProfile, now: number): boolean {
+function isBeforeStart(profile: AccessProfile, now: number): boolean {
   return profile.startsAt !== null && now < new Date(profile.startsAt).getTime();
 }
 
@@ -171,7 +157,7 @@ function isBeforeStart(profile: BillingProfile, now: number): boolean {
  * Vercel down) never locks anyone out of their dossiers.
  */
 export function evaluateAccess(
-  profile: BillingProfile,
+  profile: AccessProfile,
   sub: SubscriptionStatus,
   now: number
 ): { hasAccess: boolean; reminder: PaymentReminder | null } {
@@ -182,7 +168,9 @@ export function evaluateAccess(
   let reason: PaymentReminder["reason"] = "no_card";
   if (PAYMENT_ISSUE_STATUSES.has(sub.status)) {
     reason = "payment_failed";
-    graceStart = sub.currentPeriodStart ? new Date(sub.currentPeriodStart).getTime() : now;
+    // An unpaid invoice counts from its due date, a failed card charge from the renewal.
+    const from = sub.paymentDueAt ?? sub.currentPeriodStart;
+    graceStart = from ? new Date(from).getTime() : now;
   } else if (profile.startsAt) {
     graceStart = new Date(profile.startsAt).getTime();
   }
@@ -230,6 +218,12 @@ export async function getBillingState(
     priceLabel: profile.priceLabel,
     graceUntil: isBeforeStart(profile, now) ? profile.startsAt : null,
     reminder,
+    scope: profile.scope,
+    orgName: profile.orgName,
+    canPay: profile.canPay,
+    orgAdmins: profile.orgAdmins,
+    planLabel: profile.planLabel,
+    email: profile.email,
   };
 }
 
@@ -255,9 +249,33 @@ export async function createCheckoutUrl(
     });
     const body: unknown = await res.json();
     if (res.status === 409) return { error: "already_subscribed" };
+    if (res.status === 403) return { error: "not_org_admin" };
     if (res.ok && typeof body === "object" && body !== null && "url" in body && typeof body.url === "string") {
       return { url: body.url };
     }
+    return { error: "unavailable" };
+  } catch {
+    return { error: "unavailable" };
+  }
+}
+
+/** A structure's admin chooses to pay by invoice: Stripe emails the yearly invoice. */
+export async function requestOrgInvoice(userId: string, details: InvoiceDetails): Promise<{ ok: true } | { error: string }> {
+  try {
+    const res = await fetch(`${BILLING_API_URL}/invoice`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ userId, details }),
+      cache: "no-store",
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS * 2),
+    });
+    if (res.ok) {
+      statusCache.delete(userId);
+      return { ok: true };
+    }
+    if (res.status === 409) return { error: "already_subscribed" };
+    if (res.status === 403) return { error: "not_org_admin" };
+    if (res.status === 400) return { error: "invalid" };
     return { error: "unavailable" };
   } catch {
     return { error: "unavailable" };

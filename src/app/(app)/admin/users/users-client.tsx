@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Bell, Building2, FileText, KeyRound, Plus, Search, Send, Users } from "lucide-react";
+import { Bell, Building2, FileText, KeyRound, Plus, Search, Send, Tags, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -14,6 +14,8 @@ import { ImapFoldersDialog } from "./imap-folders-dialog";
 import { archiveUser, unarchiveUser, startImpersonationAction } from "../actions";
 import type { AdminUserData } from "../actions";
 import type { OrgListItem } from "../organisations/actions";
+import type { BillingOfferItem } from "../organisations/billing-actions";
+import { OffersDialog, OrgBillingDialog } from "./billing-dialogs";
 import { ArchiveDialog, AttachUserDialog, CreateOrganizationDialog, LicenseDialog, RenameDialog } from "../organisations/organization-dialogs";
 import { StructureRow } from "./structure-row";
 import type { OrgDialogKind, UserHandlers } from "./structure-row";
@@ -21,7 +23,7 @@ import { UserRow } from "./user-row";
 
 type StatusFilter = "all" | "active" | "archived";
 type KindFilter = "all" | "individuals" | "structures";
-type OrgDialog = { kind: "create" } | { kind: OrgDialogKind; org: OrgListItem } | null;
+type OrgDialog = { kind: "create" } | { kind: "offers" } | { kind: OrgDialogKind; org: OrgListItem } | null;
 
 /** A line of the client list: an individual MJPM, or a structure with its accounts. */
 type ClientLine =
@@ -31,6 +33,7 @@ type ClientLine =
 interface UsersPageClientProps {
   initialUsers: AdminUserData[];
   organizations: OrgListItem[];
+  offers: BillingOfferItem[];
 }
 
 /** Inside a structure: its administrators first, then by name. */
@@ -96,7 +99,7 @@ function useUserCommands() {
   return { archive, unarchive, impersonate, refresh: () => router.refresh() };
 }
 
-export function UsersPageClient({ initialUsers, organizations }: UsersPageClientProps) {
+export function UsersPageClient({ initialUsers, organizations, offers }: UsersPageClientProps) {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [kindFilter, setKindFilter] = useState<KindFilter>("all");
@@ -134,6 +137,7 @@ export function UsersPageClient({ initialUsers, organizations }: UsersPageClient
         structures={organizations.filter((o) => !o.archived).length}
         onCreateUser={() => setCreateOpen(true)}
         onCreateOrg={() => setOrgDialog({ kind: "create" })}
+        onOffers={() => setOrgDialog({ kind: "offers" })}
       />
       <ClientsFilters search={search} onSearch={setSearch} status={statusFilter} onStatus={setStatusFilter} kind={kindFilter} onKind={setKindFilter} />
 
@@ -181,13 +185,15 @@ export function UsersPageClient({ initialUsers, organizations }: UsersPageClient
       <AttachUserDialog org={orgDialog?.kind === "attach" ? orgDialog.org : null} onClose={closeOrgDialog} />
       <ArchiveDialog org={orgDialog?.kind === "archive" ? orgDialog.org : null} onClose={closeOrgDialog} />
       <LicenseDialog org={orgDialog?.kind === "license" ? orgDialog.org : null} onClose={closeOrgDialog} />
+      <OrgBillingDialog org={orgDialog?.kind === "billing" ? orgDialog.org : null} offers={offers} onClose={closeOrgDialog} />
+      <OffersDialog open={orgDialog?.kind === "offers"} offers={offers} onClose={closeOrgDialog} />
     </div>
   );
 }
 
-type HeaderProps = { individuals: number; structures: number; onCreateUser: () => void; onCreateOrg: () => void };
+type HeaderProps = { individuals: number; structures: number; onCreateUser: () => void; onCreateOrg: () => void; onOffers: () => void };
 
-function ClientsHeader({ individuals, structures, onCreateUser, onCreateOrg }: HeaderProps) {
+function ClientsHeader({ individuals, structures, onCreateUser, onCreateOrg, onOffers }: HeaderProps) {
   return (
     <div className="border-b px-6 py-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -207,6 +213,10 @@ function ClientsHeader({ individuals, structures, onCreateUser, onCreateOrg }: H
           <AdminLink href="/admin/system-config" icon={KeyRound} label="Configuration système" />
           <AdminLink href="/admin/notifications" icon={Bell} label="Notifications" />
           <AdminLink href="/admin/broadcast" icon={Send} label="Email à tous" />
+          <Button variant="outline" onClick={onOffers}>
+            <Tags className="mr-2 h-4 w-4" aria-hidden="true" />
+            Offres types
+          </Button>
           <Button variant="outline" onClick={onCreateOrg}>
             <Building2 className="mr-2 h-4 w-4" aria-hidden="true" />
             Nouvelle structure

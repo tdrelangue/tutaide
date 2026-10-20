@@ -1,14 +1,15 @@
 import { Suspense } from "react";
 import { getUsers } from "../actions";
 import { listOrganizations } from "../organisations/actions";
+import { listBillingOffers } from "../organisations/billing-actions";
 import { UsersPageClient } from "./users-client";
 
 export default async function AdminUsersPage() {
-  const [users, organizations] = await Promise.all([getUsers(), listOrganizations()]);
+  const [users, organizations, offers] = await Promise.all([getUsers(), listOrganizations(), listBillingOffers()]);
 
   return (
     <Suspense fallback={<UsersLoading />}>
-      <UsersPageClient initialUsers={users} organizations={organizations} />
+      <UsersPageClient initialUsers={users} organizations={organizations} offers={offers} />
     </Suspense>
   );
 }

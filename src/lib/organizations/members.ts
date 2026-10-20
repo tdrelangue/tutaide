@@ -10,6 +10,7 @@ import {
   type MemberState,
   type OrgRoleValue,
 } from "./rules";
+import { refuseOverSeatLimit } from "./seats";
 
 /**
  * Organisation membership service: every write for /structure (organisation
@@ -82,6 +83,8 @@ export async function createOrgMember(orgId: string, input: NewMember): Promise<
   if (await db.user.findUnique({ where: { email } })) {
     return { success: false, error: "Cet email est déjà utilisé" };
   }
+  const overLimit = await refuseOverSeatLimit(orgId);
+  if (overLimit) return { success: false, error: overLimit };
   const user = await db.user.create({
     data: {
       email,
@@ -143,6 +146,10 @@ export async function setOrgMemberArchived(
   if (guard.refusal) return { success: false, error: guard.refusal };
   const refusal = refuseMemberChange(guard.states, memberId, { archived }, archived ? await ownedDossierCount(memberId) : 0);
   if (refusal) return { success: false, error: refusal };
+  if (!archived && guard.states.find((m) => m.id === memberId)?.archived) {
+    const overLimit = await refuseOverSeatLimit(orgId);
+    if (overLimit) return { success: false, error: overLimit };
+  }
   await db.user.update({ where: { id: memberId }, data: { archivedAt: archived ? new Date() : null } });
   return { success: true };
 }

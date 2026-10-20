@@ -10,16 +10,54 @@ import {
 } from "@/lib/billing";
 import { buttonVariants } from "@/components/ui/button";
 import { CheckoutButton } from "@/app/(billing)/checkout-button";
+import { OrgPaymentChoice } from "@/app/(billing)/org-payment-choice";
 
 function formatDate(iso: string | null): string | null {
   return iso ? format(new Date(iso), "d MMMM yyyy", { locale: fr }) : null;
 }
 
+type StatusText = { title: string; detail: string };
+
+/** A structure member who is not its admin: the structure pays, they only see the outcome. */
+function describeForMember(billing: BillingState): StatusText | null {
+  if (billing.scope !== "organization" || billing.canPay) return null;
+  const admins = billing.orgAdmins.join(", ") || "l'administrateur de votre structure";
+  if (!billing.required) return { title: "Compte pris en charge", detail: `Votre accès est inclus dans celui de ${billing.orgName}. Aucun paiement n'est demandé.` };
+  if (billing.status === "unknown") return null;
+  if (grantsAccess(billing.status) && !hasPaymentIssue(billing.status)) {
+    return { title: "Abonnement de la structure actif", detail: `L'abonnement de ${billing.orgName} couvre votre compte.` };
+  }
+  return {
+    title: "Abonnement de la structure à régler",
+    detail: `L'abonnement de ${billing.orgName} n'est pas encore réglé.${graceSentence(billing)} C'est son administrateur qui s'en occupe : ${admins}.`,
+  };
+}
+
+/** A structure paying on invoice. */
+function describeInvoice(billing: BillingState): StatusText | null {
+  if (billing.collection !== "invoice" || !grantsAccess(billing.status)) return null;
+  if (hasPaymentIssue(billing.status)) {
+    return {
+      title: "Facture en attente de règlement",
+      detail: `La facture annuelle n'est pas encore réglée${billing.paymentDueAt ? ` (échéance le ${formatDate(billing.paymentDueAt)})` : ""}. Le virement peut prendre quelques jours à être reçu.${graceSentence(billing)}`,
+    };
+  }
+  const date = formatDate(billing.currentPeriodEnd);
+  if (billing.status === "trialing") {
+    return { title: "Paiement sur facture enregistré", detail: `La première facture sera envoyée le ${date ?? "jour prévu"}, à régler sous 30 jours par virement.` };
+  }
+  return { title: "Abonnement actif, réglé sur facture", detail: date ? `Prochaine facture le ${date}.` : "Une facture est envoyée chaque année." };
+}
+
 /** Plain-language status line; no alarm colours for a normal state. */
-function describeStatus(billing: BillingState): { title: string; detail: string } {
+function describeStatus(billing: BillingState): StatusText {
+  const special = describeForMember(billing) ?? describeInvoice(billing);
+  if (special) return special;
   const date = formatDate(billing.currentPeriodEnd);
   if (!billing.required && !grantsAccess(billing.status)) {
-    return { title: "Compte offert", detail: "Aucun paiement n'est demandé pour ce compte." };
+    return billing.scope === "organization"
+      ? { title: "Structure offerte", detail: "Aucun paiement n'est demandé pour votre structure." }
+      : { title: "Compte offert", detail: "Aucun paiement n'est demandé pour ce compte." };
   }
   if (billing.status === "unknown") {
     return {
@@ -69,6 +107,18 @@ function graceSentence(billing: BillingState): string {
   return ` Il vous reste ${days}, jusqu'au ${formatDate(billing.reminder.deadline)}, avant la suspension de l'accès.`;
 }
 
+function introLine(billing: BillingState): string {
+  if (billing.scope === "organization") {
+    const plan = billing.planLabel ? ` (${billing.planLabel})` : "";
+    return billing.required
+      ? `Abonnement annuel de ${billing.orgName} — ${billing.priceLabel}${plan}, un seul abonnement pour tous ses comptes.`
+      : `Votre compte fait partie de ${billing.orgName}.`;
+  }
+  return billing.required || grantsAccess(billing.status)
+    ? `Abonnement annuel — ${billing.priceLabel}, payé par carte via Stripe.`
+    : "Abonnement annuel, payé par carte via Stripe.";
+}
+
 export async function BillingTab({
   checkout,
   sessionId,
@@ -83,7 +133,7 @@ export async function BillingTab({
   const { title, detail } = describeStatus(billing);
   const hasSubscription = grantsAccess(billing.status);
   const paymentIssue = hasPaymentIssue(billing.status);
-  const canSubscribe = billing.required && !hasSubscription && billing.status !== "unknown";
+  const canSubscribe = billing.required && billing.canPay && !hasSubscription && billing.status !== "unknown";
   const checkoutLabel = billing.graceUntil
     ? "Enregistrer ma carte (0 € aujourd'hui)"
     : billing.reminder?.reason === "no_card"
@@ -94,11 +144,7 @@ export async function BillingTab({
     <section aria-labelledby="billing-heading" className="max-w-2xl space-y-6">
       <div>
         <h3 id="billing-heading" className="text-lg font-medium">Abonnement</h3>
-        <p className="text-sm text-muted-foreground">
-          {billing.required || grantsAccess(billing.status)
-            ? `Abonnement annuel — ${billing.priceLabel}, payé par carte via Stripe.`
-            : "Abonnement annuel, payé par carte via Stripe."}
-        </p>
+        <p className="text-sm text-muted-foreground">{introLine(billing)}</p>
       </div>
 
       {checkout === "success" && hasSubscription && (
@@ -117,11 +163,14 @@ export async function BillingTab({
         <p className="text-sm text-muted-foreground">{detail}</p>
       </div>
 
-      {canSubscribe && (
+      {canSubscribe && billing.scope === "organization" && (
+        <OrgPaymentChoice from="settings" orgName={billing.orgName ?? ""} email={billing.email ?? ""} priceLabel={billing.priceLabel} firstChargeOn={billing.graceUntil} />
+      )}
+      {canSubscribe && billing.scope === "personal" && (
         <CheckoutButton from="settings" label={checkoutLabel} />
       )}
 
-      {hasSubscription && BILLING_PORTAL_URL && (
+      {hasSubscription && billing.canPay && BILLING_PORTAL_URL && (
         <div className="space-y-2">
           <a href={BILLING_PORTAL_URL} className={buttonVariants({ variant: paymentIssue ? "default" : "outline" })}>
             {paymentIssue ? "Mettre à jour ma carte" : "Gérer mon paiement"}

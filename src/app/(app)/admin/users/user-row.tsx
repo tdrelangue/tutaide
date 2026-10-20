@@ -70,7 +70,8 @@ export function UserRow({
                 Admin
               </Badge>
             )}
-            <Badge variant="outline" className="text-xs">
+            {/* A structure's members are billed by the structure (see its line), never one by one. */}
+            {user.orgId === null && <Badge variant="outline" className="text-xs">
               {!user.billingRequired
                 ? "Offert"
                 : user.billingCustomAmountCents === null
@@ -79,7 +80,7 @@ export function UserRow({
               {user.billingRequired && user.billingStartsAt && new Date(user.billingStartsAt) > new Date()
                 ? ` · dès le ${new Date(user.billingStartsAt).toLocaleDateString("fr-FR")}`
                 : ""}
-            </Badge>
+            </Badge>}
             {user.agendaGranted && (
               <Badge variant="outline" className="text-xs">Agenda offert</Badge>
             )}

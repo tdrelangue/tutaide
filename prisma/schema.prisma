@@ -238,21 +238,50 @@ model ModuleConfig {
 
 /// A company/association using Tutellia with several people ("structure").
 model Organization {
-  id               String            @id @default(cuid())
-  name             String
+  id                       String            @id @default(cuid())
+  name                     String
   /// Shared documents folder every member should choose on their PC
   /// (e.g. "OneDrive – UDAF/Tutellia"); shown to members, set by the admin.
-  sharedFolderHint String?
+  sharedFolderHint         String?
   /// Licence key of a self-hosted server (checked by that server against
   /// tutaide.vercel.app/api/billing/license). Null = cloud organisation.
-  licenseKey       String?           @unique
-  archivedAt       DateTime?
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
-  members          User[]
-  smtpConfig       OrgSmtpConfig?
-  moduleConfigs    OrgModuleConfig[]
-  auditEvents      OrgAuditEvent[]
+  licenseKey               String?           @unique
+  archivedAt               DateTime?
+  createdAt                DateTime          @default(now())
+  updatedAt                DateTime          @updatedAt
+  /// One subscription for the whole structure (its members' own billing
+  /// fields are ignored while they belong to it). False = offered.
+  billingRequired          Boolean           @default(false)
+  /// Standard offer (price + account limit). Null = specific price below.
+  billingOfferId           String?
+  billingOffer             BillingOffer?     @relation(fields: [billingOfferId], references: [id], onDelete: Restrict)
+  /// Negotiated deal: yearly price in euro cents, used when no offer is set.
+  billingCustomAmountCents Int?
+  /// Negotiated deal: maximum active accounts. Null = no limit.
+  billingCustomMaxSeats    Int?
+  /// Date of the first charge (existing clients). Before it, full access.
+  billingStartsAt          DateTime?
+  members                  User[]
+  smtpConfig               OrgSmtpConfig?
+  moduleConfigs            OrgModuleConfig[]
+  auditEvents              OrgAuditEvent[]
+
+  @@index([billingOfferId])
+}
+
+/// Standard structure offer set by OrigAI's super-administrator ("Offre 10
+/// comptes — 2 400 € / an"). Archived offers stay on the structures that have
+/// them but can no longer be chosen.
+model BillingOffer {
+  id                String         @id @default(cuid())
+  name              String
+  yearlyAmountCents Int
+  /// Maximum active accounts. Null = no limit.
+  maxSeats          Int?
+  archivedAt        DateTime?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+  organizations     Organization[]
 }
 
 /// Journal of every change made in the organisation admin panel (who did

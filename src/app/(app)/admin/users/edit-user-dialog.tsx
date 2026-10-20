@@ -219,6 +219,12 @@ export function EditUserDialog({
             </Select>
           </div>
 
+          {user.orgId !== null ? (
+            <p className="rounded-md border p-3 text-sm text-muted-foreground">
+              Abonnement : ce compte est couvert par l&apos;abonnement de sa structure (bouton
+              « Abonnement » sur la ligne de la structure).
+            </p>
+          ) : (
           <BillingRequiredField
             id="edit-billing"
             checked={billingRequired}
@@ -234,6 +240,7 @@ export function EditUserDialog({
             warnOnEnable={!user.billingRequired}
             hasExistingPrice={user.billingRequired}
           />
+          )}
 
           <AgendaGrantField
             id="edit-agenda"

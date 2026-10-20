@@ -6,6 +6,8 @@ import { z, ZodError } from "zod";
 import { requireAdmin } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { createOrgMember, newMemberSchema } from "@/lib/organizations/members";
+import { refuseOverSeatLimit } from "@/lib/organizations/seats";
+import { resolveOrgPlan, type OrgPlan } from "@/lib/organizations/billing-plan";
 
 /**
  * Super-administrator (OrigAI): organisations and their first admin. Day-to-day
@@ -22,9 +24,22 @@ export type OrgListItem = {
   admins: string[];
   /** A self-hosted server licence key exists (the key itself is never listed). */
   hasLicense: boolean;
+  billing: OrgBillingSummary;
 };
 
-export type AdminOrgResult = { success: true } | { success: false; error: string };
+/** What the structure pays (set in its « Abonnement » dialog). */
+export type OrgBillingSummary = {
+  required: boolean;
+  offerId: string | null;
+  customAmountCents: number | null;
+  customMaxSeats: number | null;
+  /** ISO date of the first charge, or null. */
+  startsAt: string | null;
+  /** Resolved price and limit (offer or negotiated), null when none is set. */
+  plan: OrgPlan | null;
+};
+
+export type AdminOrgResult = { success: true; message?: string } | { success: false; error: string };
 
 function failure(error: unknown): AdminOrgResult {
   if (error instanceof ZodError) return { success: false, error: error.issues[0]?.message ?? "Données invalides" };
@@ -42,6 +57,12 @@ export async function listOrganizations(): Promise<OrgListItem[]> {
       archivedAt: true,
       createdAt: true,
       licenseKey: true,
+      billingRequired: true,
+      billingOfferId: true,
+      billingCustomAmountCents: true,
+      billingCustomMaxSeats: true,
+      billingStartsAt: true,
+      billingOffer: { select: { name: true, yearlyAmountCents: true, maxSeats: true } },
       members: { select: { name: true, email: true, isOrgAdmin: true, archivedAt: true } },
     },
   });
@@ -53,6 +74,14 @@ export async function listOrganizations(): Promise<OrgListItem[]> {
     memberCount: org.members.filter((m) => m.archivedAt === null).length,
     admins: org.members.filter((m) => m.isOrgAdmin && m.archivedAt === null).map((m) => m.name || m.email),
     hasLicense: org.licenseKey !== null,
+    billing: {
+      required: org.billingRequired,
+      offerId: org.billingOfferId,
+      customAmountCents: org.billingCustomAmountCents,
+      customMaxSeats: org.billingCustomMaxSeats,
+      startsAt: org.billingStartsAt?.toISOString() ?? null,
+      plan: resolveOrgPlan(org),
+    },
   }));
 }
 
@@ -135,7 +164,7 @@ export async function attachExistingUser(orgId: string, input: z.infer<typeof at
   try {
     await requireAdmin();
     const data = attachSchema.parse(input);
-    const user = await db.user.findUnique({ where: { email: data.email.toLowerCase() }, select: { id: true, orgId: true, role: true } });
+    const user = await db.user.findUnique({ where: { email: data.email.toLowerCase() }, select: { id: true, orgId: true, role: true, archivedAt: true, billingRequired: true } });
     if (!user) return { success: false, error: "Aucun compte avec cet email" };
     if (user.role === "ADMIN") return { success: false, error: "Un compte super-administrateur ne peut pas rejoindre une structure" };
     if (user.orgId) return { success: false, error: "Ce compte appartient déjà à une structure" };
@@ -143,11 +172,17 @@ export async function attachExistingUser(orgId: string, input: z.infer<typeof at
     if (ownsDossiers && data.orgRole !== "MANDATAIRE") {
       return { success: false, error: "Ce compte a des dossiers : il doit être rattaché comme mandataire" };
     }
+    const overLimit = user.archivedAt === null ? await refuseOverSeatLimit(orgId) : null;
+    if (overLimit) return { success: false, error: overLimit };
     await db.user.update({
       where: { id: user.id },
       data: { orgId, orgRole: data.orgRole, isOrgAdmin: data.isOrgAdmin },
     });
     revalidatePath("/admin/organisations");
+    // The structure's subscription now covers this account; Stripe keeps charging a personal one until it is cancelled.
+    if (user.billingRequired) {
+      return { success: true, message: "Compte rattaché. Il avait un abonnement individuel : pensez à le résilier dans Stripe pour qu'il ne paie pas deux fois." };
+    }
     return { success: true };
   } catch (error) {
     return failure(error);

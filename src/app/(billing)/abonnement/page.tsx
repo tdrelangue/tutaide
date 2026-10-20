@@ -10,12 +10,43 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { CheckoutButton } from "../checkout-button";
+import { OrgPaymentChoice } from "../org-payment-choice";
 import { SignOutLink, RecheckButton } from "./abonnement-client";
 
 type SearchParams = Promise<{ checkout?: string; session_id?: string }>;
 
 /** Header texts: first subscription (signup), or access suspended after the 30-day grace. */
-function headerFor(billing: BillingState, returnedFromStripe: boolean): { step: string; title: string; description: string } {
+type Header = { step: string; title: string; description: string };
+
+/** Structure accounts: the structure pays once for everyone, through its admin. */
+function orgHeaderFor(billing: BillingState): Header | null {
+  if (billing.scope !== "organization") return null;
+  if (!billing.canPay) {
+    const admins = billing.orgAdmins.join(", ") || "l'administrateur de votre structure";
+    return {
+      step: "Accès suspendu",
+      title: `L'abonnement de ${billing.orgName} n'est pas réglé`,
+      description: `Votre compte est couvert par l'abonnement de votre structure. Demandez à son administrateur (${admins}) de le régler : votre accès reviendra aussitôt. Vos dossiers sont conservés.`,
+    };
+  }
+  if (hasPaymentIssue(billing.status) && billing.collection === "invoice") {
+    return {
+      step: "Accès suspendu",
+      title: "La facture de la structure n'est pas réglée",
+      description: "Le délai de règlement est dépassé. Réglez la facture en attente (lien dans l'email de Stripe, ou « Voir les factures » ci-dessous) : l'accès revient dès réception du paiement. Les dossiers sont conservés.",
+    };
+  }
+  if (hasPaymentIssue(billing.status)) return null;
+  return {
+    step: "Abonnement de la structure",
+    title: `Mettre en place l'abonnement de ${billing.orgName}`,
+    description: `Abonnement annuel — ${billing.priceLabel}${billing.planLabel ? ` (${billing.planLabel})` : ""}, un seul pour tous les comptes de la structure. Choisissez la carte bancaire ou le paiement sur facture.`,
+  };
+}
+
+function headerFor(billing: BillingState, returnedFromStripe: boolean): Header {
+  const org = returnedFromStripe ? null : orgHeaderFor(billing);
+  if (org) return org;
   if (returnedFromStripe) {
     return {
       step: "Paiement",
@@ -55,7 +86,7 @@ export default async function AbonnementPage({ searchParams }: { searchParams: S
   const returnedFromStripe = checkout === "success";
   const header = headerFor(billing, returnedFromStripe);
   // A failed renewal is fixed on the existing subscription (Stripe portal), never with a new one.
-  const fixInPortal = hasPaymentIssue(billing.status) && BILLING_PORTAL_URL !== null;
+  const fixInPortal = hasPaymentIssue(billing.status) && BILLING_PORTAL_URL !== null && billing.canPay;
 
   return (
     <div className="w-full max-w-md">
@@ -80,20 +111,22 @@ export default async function AbonnementPage({ searchParams }: { searchParams: S
           ) : fixInPortal ? (
             <div className="space-y-3">
               <a href={BILLING_PORTAL_URL ?? undefined} className={buttonVariants()}>
-                Mettre à jour ma carte
+                {billing.collection === "invoice" ? "Voir les factures" : "Mettre à jour ma carte"}
               </a>
               <p className="text-sm text-muted-foreground">
                 Stripe vous enverra un code par email pour confirmer qu&apos;il s&apos;agit bien de vous.
                 Une fois la facture réglée, relancez Tutellia.
               </p>
             </div>
+          ) : !billing.canPay ? null : billing.scope === "organization" && !hasPaymentIssue(billing.status) ? (
+            <OrgPaymentChoice from="signup" orgName={billing.orgName ?? ""} email={billing.email ?? ""} priceLabel={billing.priceLabel} firstChargeOn={billing.graceUntil} />
           ) : (
             <CheckoutButton from="signup" label="Payer l'abonnement par carte" />
           )}
-          <p className="text-sm text-muted-foreground">
+          {billing.canPay && <p className="text-sm text-muted-foreground">
             Le paiement se fait sur la page sécurisée de Stripe. Tutellia ne voit ni ne stocke vos
             coordonnées bancaires.
-          </p>
+          </p>}
           <SignOutLink />
         </CardContent>
       </Card>

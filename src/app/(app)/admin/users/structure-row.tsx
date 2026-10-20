@@ -9,8 +9,9 @@ import type { OrgListItem } from "../organisations/actions";
 import { setOrganizationArchived } from "../organisations/actions";
 import { useStructureAction } from "../../structure/use-structure-action";
 import { UserRow } from "./user-row";
+import { BillingBadge } from "./structure-billing-badge";
 
-export type OrgDialogKind = "rename" | "attach" | "archive" | "license";
+export type OrgDialogKind = "rename" | "attach" | "archive" | "license" | "billing";
 
 export type UserHandlers = {
   readonly onEdit: (user: AdminUserData) => void;
@@ -51,7 +52,7 @@ export function StructureRow({ org, members, defaultOpen, onOrgAction, handlers 
           onClick={handleToggle}
           aria-expanded={isOpen}
           aria-controls={panelId}
-          className="flex min-w-0 flex-1 items-center gap-3 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="flex min-w-[min(100%,26rem)] flex-1 items-center gap-3 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           {isOpen ? <ChevronDown className="h-4 w-4 shrink-0" aria-hidden="true" /> : <ChevronRight className="h-4 w-4 shrink-0" aria-hidden="true" />}
           <Building2 className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
@@ -90,6 +91,7 @@ function StructureSummary({ org, dossiers }: { org: OrgListItem; dossiers: numbe
         <Badge variant="secondary" className="text-xs">Structure</Badge>
         {org.archived && <Badge variant="outline" className="text-xs">Archivée : aucun accès</Badge>}
         {org.hasLicense && <Badge variant="outline" className="text-xs">Serveur auto-hébergé</Badge>}
+        <BillingBadge org={org} />
       </span>
       <span className="mt-0.5 flex flex-wrap items-center gap-x-3 text-sm text-muted-foreground">
         <span>
@@ -114,6 +116,9 @@ function StructureActions({ org, onOrgAction }: { org: OrgListItem; onOrgAction:
     <div className="flex flex-wrap gap-2">
       <Button variant="outline" size="sm" onClick={() => onOrgAction("attach", org)} disabled={org.archived} aria-label={`Rattacher un compte à ${org.name}`}>
         Rattacher un compte
+      </Button>
+      <Button variant="outline" size="sm" onClick={() => onOrgAction("billing", org)} aria-label={`Abonnement de ${org.name}`}>
+        Abonnement
       </Button>
       <Button variant="outline" size="sm" onClick={() => onOrgAction("rename", org)} aria-label={`Renommer ${org.name}`}>
         Renommer

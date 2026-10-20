@@ -8,6 +8,7 @@ import { requireAdmin, startImpersonation, stopImpersonation } from "@/lib/auth"
 import { z } from "zod";
 import { seedGlobalTemplates } from "@/lib/default-templates";
 import { refuseMemberChange } from "@/lib/organizations/rules";
+import { refuseOverSeatLimit } from "@/lib/organizations/seats";
 import { encrypt, decrypt } from "@/lib/encryption";
 import { systemConfigSchema, type SystemConfigFormData, broadcastEmailSchema, type BroadcastEmailFormData } from "@/lib/validations";
 import { sendEmail } from "@/lib/mailer-client";
@@ -300,6 +301,12 @@ export async function unarchiveUser(
 ): Promise<{ success: boolean; error?: string }> {
   try {
     await requireAdmin();
+
+    const user = await db.user.findUnique({ where: { id: userId }, select: { orgId: true, archivedAt: true } });
+    if (user?.orgId && user.archivedAt !== null) {
+      const overLimit = await refuseOverSeatLimit(user.orgId);
+      if (overLimit) return { success: false, error: overLimit };
+    }
 
     await db.user.update({
       where: { id: userId },

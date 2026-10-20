@@ -1,5 +1,14 @@
 import Stripe from "stripe";
 import { db } from "./db";
+import {
+  createOrgInvoiceSubscription,
+  loadOrgPayer,
+  orgIdOf,
+  orgPriceData,
+  orgQuery,
+  type InvoiceDetails,
+  type OrgPayerError,
+} from "./stripe-org-billing";
 
 /**
  * Server side of billing. Runs only on the Vercel deployment
@@ -27,6 +36,10 @@ export type BillingStatusPayload = {
   currentPeriodStart: string | null;
   currentPeriodEnd: string | null;
   cancelAtPeriodEnd: boolean;
+  /** "invoice" = paid on a yearly invoice (structures), "card" = automatic charge. */
+  collection: "card" | "invoice";
+  /** Due date of the open invoice of an invoice-paid subscription, else null. */
+  paymentDueAt: string | null;
 };
 
 let client: Stripe | null = null;
@@ -54,21 +67,39 @@ function periodBound(sub: Stripe.Subscription, bound: "current_period_start" | "
   return seconds ? new Date(seconds * 1000).toISOString() : null;
 }
 
+/** Needs `latest_invoice` expanded; an unexpanded id gives null. */
+function openInvoiceDue(sub: Stripe.Subscription): string | null {
+  const invoice = sub.latest_invoice;
+  if (typeof invoice !== "object" || invoice === null || invoice.status !== "open" || !invoice.due_date) return null;
+  return new Date(invoice.due_date * 1000).toISOString();
+}
+
 export function toBillingStatus(sub: Stripe.Subscription | null): BillingStatusPayload {
-  if (!sub) return { status: "none", currentPeriodStart: null, currentPeriodEnd: null, cancelAtPeriodEnd: false };
+  if (!sub) {
+    return { status: "none", currentPeriodStart: null, currentPeriodEnd: null, cancelAtPeriodEnd: false, collection: "card", paymentDueAt: null };
+  }
+  const isInvoice = sub.collection_method === "send_invoice";
   return {
     status: sub.status,
     currentPeriodStart: periodBound(sub, "current_period_start"),
     currentPeriodEnd: periodBound(sub, "current_period_end"),
     cancelAtPeriodEnd: sub.cancel_at_period_end,
+    collection: isInvoice ? "invoice" : "card",
+    paymentDueAt: isInvoice ? openInvoiceDue(sub) : null,
   };
 }
 
-/** The user's most relevant subscription: one granting access first, else the latest. */
+/**
+ * The subscription covering this user: their structure's when they belong to
+ * one (one subscription for all members), else their own. One granting access
+ * first, else the latest.
+ */
 export async function findSubscription(stripe: Stripe, userId: string): Promise<Stripe.Subscription | null> {
+  const orgId = await orgIdOf(userId);
   const result = await stripe.subscriptions.search({
-    query: `metadata['tutelliaUserId']:'${userId}'`,
+    query: orgId ? orgQuery(orgId) : `metadata['tutelliaUserId']:'${userId}'`,
     limit: 10,
+    expand: ["data.latest_invoice"],
   });
   const subs = [...result.data].sort((a, b) => b.created - a.created);
   return subs.find((s) => LIVE_STATUSES.has(s.status)) ?? subs[0] ?? null;
@@ -81,7 +112,7 @@ export async function subscriptionFromSession(
   userId: string
 ): Promise<Stripe.Subscription | null> {
   if (!sessionId?.startsWith("cs_")) return null;
-  const session = await stripe.checkout.sessions.retrieve(sessionId, { expand: ["subscription"] });
+  const session = await stripe.checkout.sessions.retrieve(sessionId, { expand: ["subscription", "subscription.latest_invoice"] });
   if (session.client_reference_id !== userId || session.status !== "complete") return null;
   return typeof session.subscription === "object" ? session.subscription : null;
 }
@@ -117,20 +148,61 @@ const MIN_TRIAL_MS = 49 * 60 * 60 * 1000;
  * the subscription is a Stripe trial (card saved, 0 € today); Stripe charges
  * automatically on that date. Too close or past: no trial, charge now.
  */
+function trialEnd(billingStartsAt: Date | null): number | undefined {
+  if (!billingStartsAt || billingStartsAt.getTime() - Date.now() < MIN_TRIAL_MS) return undefined;
+  return Math.floor(billingStartsAt.getTime() / 1000);
+}
+
 function deferredStart(billingStartsAt: Date | null): Stripe.Checkout.SessionCreateParams.SubscriptionData {
-  if (!billingStartsAt || billingStartsAt.getTime() - Date.now() < MIN_TRIAL_MS) return {};
-  return { trial_end: Math.floor(billingStartsAt.getTime() / 1000) };
+  const end = trialEnd(billingStartsAt);
+  return end ? { trial_end: end } : {};
 }
 
 export type CheckoutResult =
   | { url: string }
-  | { error: "not_found" | "not_billable" | "already_subscribed" };
+  | { error: "not_found" | "not_billable" | "already_subscribed" | OrgPayerError };
+
+/** A structure pays by card: its admin goes through Stripe Checkout once, then Stripe charges every year. */
+async function createOrgCheckoutSession(stripe: Stripe, userId: string, returnUrl: string): Promise<CheckoutResult> {
+  const payer = await loadOrgPayer(userId);
+  if ("error" in payer) return payer;
+  const existing = await findSubscription(stripe, userId);
+  if (existing && LIVE_STATUSES.has(existing.status)) return { error: "already_subscribed" };
+
+  const session = await stripe.checkout.sessions.create({
+    mode: "subscription",
+    line_items: [{ quantity: 1, price_data: orgPriceData(payer.plan) }],
+    client_reference_id: userId,
+    subscription_data: { metadata: { tutelliaOrgId: payer.orgId }, ...deferredStart(payer.startsAt) },
+    payment_method_collection: "always",
+    customer_email: payer.email,
+    locale: "fr",
+    billing_address_collection: "required",
+    success_url: withQuery(returnUrl, "checkout=success&session_id={CHECKOUT_SESSION_ID}"),
+    cancel_url: withQuery(returnUrl, "checkout=cancel"),
+  });
+  return session.url ? { url: session.url } : { error: "not_found" };
+}
+
+export type InvoiceResult = { ok: true } | { error: "already_subscribed" | OrgPayerError };
+
+/** A structure pays by invoice: Stripe emails the first invoice now (or on the first charge date). */
+export async function createOrgInvoice(stripe: Stripe, userId: string, details: InvoiceDetails): Promise<InvoiceResult> {
+  const payer = await loadOrgPayer(userId);
+  if ("error" in payer) return payer;
+  const existing = await findSubscription(stripe, userId);
+  if (existing && LIVE_STATUSES.has(existing.status)) return { error: "already_subscribed" };
+  await createOrgInvoiceSubscription(stripe, payer, details, trialEnd(payer.startsAt));
+  return { ok: true };
+}
 
 export async function createCheckoutSession(
   stripe: Stripe,
   userId: string,
   returnUrl: string
 ): Promise<CheckoutResult> {
+  if (await orgIdOf(userId)) return createOrgCheckoutSession(stripe, userId, returnUrl);
+
   const user = await db.user.findUnique({
     where: { id: userId },
     select: {

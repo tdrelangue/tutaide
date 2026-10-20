@@ -24,7 +24,7 @@ export async function POST(request: Request) {
   try {
     const result = await createCheckoutSession(stripe, userId, returnUrl);
     if ("url" in result) return NextResponse.json({ url: result.url });
-    const status = result.error === "already_subscribed" ? 409 : 404;
+    const status = result.error === "already_subscribed" ? 409 : result.error === "not_org_admin" ? 403 : 404;
     return NextResponse.json({ error: result.error }, { status });
   } catch (error) {
     const type = error instanceof Error ? error.name : "unknown";
