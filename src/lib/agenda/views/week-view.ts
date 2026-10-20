@@ -5,7 +5,7 @@ import type { ProposedPeriod } from "../bridge/ops/week";
 import { toIssueViews } from "./issue-messages";
 import { dayLabel, nameIndex, roundKm } from "./labels";
 import { buildProposalMeta } from "./proposal-meta";
-import { blockEntry, pastEntry, proposedEntry, validatedEntry } from "./week-entries";
+import { blockEntry, fixedAppointmentEntry, pastEntry, proposedEntry, validatedEntry } from "./week-entries";
 import type { EntryContext } from "./week-entries";
 import type { DayView, EntryView, WeekView } from "./types";
 
@@ -62,8 +62,19 @@ function ruleSource(day: Day | undefined): DaySource {
   return { blocks: day?.blocks ?? [], items: [], closed: day?.closed ?? null, offDay: day?.offDay ?? true, km: null, finishMin: null, unreachable: false };
 }
 
-function entriesOf(date: IsoDate, source: DaySource, state: PlannerState, ctx: EntryContext): EntryView[] {
+/** Without a proposal, fixed-time appointments not validated yet (with one, the plan already places them). */
+function pendingFixed(date: IsoDate, state: PlannerState, ctx: EntryContext, hasProposal: boolean): EntryView[] {
+  if (hasProposal) return [];
+  const stored = new Set([...state.validated, ...state.past].map((i) => i.apptId).filter((id): id is string => id !== null));
+  return state.appointments
+    .filter((a) => a.when.kind === "FIXED" && a.when.date === date && !stored.has(a.id))
+    .map((a) => fixedAppointmentEntry(a, state, ctx))
+    .filter((e): e is EntryView => e !== null);
+}
+
+function entriesOf(date: IsoDate, source: DaySource, state: PlannerState, ctx: EntryContext, hasProposal: boolean): EntryView[] {
   const entries = [
+    ...pendingFixed(date, state, ctx, hasProposal),
     ...state.validated.filter((v) => v.date === date).map((v) => validatedEntry(v, ctx)),
     ...state.past.filter((p) => p.date === date).map((p) => pastEntry(p, ctx)),
     ...source.blocks.map((b) => blockEntry(date, b, ctx)).filter((e): e is EntryView => e !== null),
@@ -75,7 +86,7 @@ function entriesOf(date: IsoDate, source: DaySource, state: PlannerState, ctx: E
 function buildDay(date: IsoDate, source: DaySource, input: WeekInput, names: ReadonlyMap<string, string>): DayView {
   const { state, proposal } = input;
   const warnings = (proposal?.proposal.plan.pinWarnings ?? []).filter((w) => w.date === date);
-  const entries = entriesOf(date, source, state, { today: state.today, names, warnings });
+  const entries = entriesOf(date, source, state, { today: state.today, names, warnings }, proposal !== null);
   return {
     date,
     label: dayLabel(date),

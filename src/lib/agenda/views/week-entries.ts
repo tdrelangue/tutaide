@@ -1,4 +1,4 @@
-import type { Block, IsoDate, PastItem, PinWarning, PlannedItem, PlannerState, Task, ValidatedItem } from "../../agenda-engine/domain";
+import type { Appointment, Block, IsoDate, PastItem, PinWarning, PlannedItem, PlannerState, Task, ValidatedItem } from "../../agenda-engine/domain";
 import { OCCURRENCE_KEY, nameIndex, participantNames } from "./labels";
 import type { EntrySource, EntryView } from "./types";
 
@@ -127,6 +127,30 @@ export function blockEntry(date: IsoDate, block: Block, ctx: EntryContext): Entr
   if (block.kind === "lunch") return plainBlockEntry(date, block, "LUNCH", null);
   if (block.kind === "busy") return plainBlockEntry(date, block, "BUSY", block.place ? "Au bureau" : "Indisponible");
   return block.task ? eventEntry(date, block, block.task, ctx) : null;
+}
+
+/** Place names a fixed appointment can carry without a proposal (no engine context needed). */
+const PLACE_WORDS: Readonly<Record<string, string>> = { visio: "Visio", office: "Au bureau", home: "Domicile" };
+
+/**
+ * A fixed-time appointment not validated yet, read without a proposal (month
+ * view, week before « Préparer une proposition »): shown « à valider » where
+ * it will be, so the month never looks emptier than it is.
+ */
+export function fixedAppointmentEntry(appt: Appointment, state: PlannerState, ctx: EntryContext): EntryView | null {
+  if (appt.when.kind !== "FIXED") return null;
+  const placeLabel = PLACE_WORDS[appt.placeId] ?? state.places.find((p) => p.id === appt.placeId)?.label ?? "";
+  return entry({
+    source: "FIXED",
+    date: appt.when.date,
+    itemKey: appt.id,
+    kind: "APPT",
+    title: appt.title,
+    subtitle: subtitleOf("APPT", appt.participants, placeLabel, ctx.names),
+    start: appt.when.time,
+    end: appt.when.time + appt.dur,
+    priority: appt.priority,
+  });
 }
 
 /** « Ces rendez-vous ont-ils eu lieu ? »: the validated items, oldest first, each with its day. */

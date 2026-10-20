@@ -15,7 +15,8 @@ export const config = {
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
      * - public folder
+     * - phone install files (manifest, icons/): read before any login
      */
-    "/((?!_next/static|_next/image|favicon.ico|icon\\.png|icon\\.ico|public).*)",
+    "/((?!_next/static|_next/image|favicon.ico|icon\\.png|icon\\.ico|icons/|manifest\\.webmanifest|public).*)",
   ],
 };

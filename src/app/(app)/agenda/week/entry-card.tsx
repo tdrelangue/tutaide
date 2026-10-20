@@ -12,7 +12,7 @@ import type { BindDrag } from "./use-pointer-drag";
  * Each state is told by shape (bar, dashes, hatching, strike) and a word, never by colour alone.
  * DONE: a muted-foreground border, so the card's edge keeps 3:1 against the paper (WCAG 1.4.11).
  */
-const SOURCE_STYLE: Readonly<Record<EntrySource, string>> = {
+export const SOURCE_STYLE: Readonly<Record<EntrySource, string>> = {
   VALIDATED: "border border-agenda-held/40 border-l-4 border-l-agenda-held bg-agenda-held-soft",
   PROPOSED: "border-2 border-dashed border-agenda-proposed/60 bg-background",
   PINNED: "border-2 border-agenda-proposed bg-background",

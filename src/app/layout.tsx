@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
@@ -11,8 +11,18 @@ export const metadata: Metadata = {
   description: "Application de gestion des dossiers pour les mandataires judiciaires à la protection des majeurs",
   icons: {
     icon: "/icon.ico",
-    apple: "/icon.png",
+    apple: "/icons/apple-touch-icon.png",
   },
+  applicationName: "Tutellia",
+  // iPhone: installed from Safari (« Sur l'écran d'accueil »), it opens full screen.
+  appleWebApp: { capable: true, title: "Tutellia", statusBarStyle: "default" },
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: "#ffffff",
 };
 
 export default function RootLayout({

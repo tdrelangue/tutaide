@@ -116,7 +116,7 @@ export function AppSidebar({ userRole, activeModules, worksOnDossiers, isOrgAdmi
     <nav
       aria-label="Navigation principale"
       data-tour="sidebar"
-      className="sticky top-0 h-screen flex w-24 flex-col border-r bg-muted/30"
+      className="sticky top-0 hidden h-screen w-24 flex-col border-r bg-muted/30 sm:flex"
     >
       {/* Logo at top */}
       <div className="flex h-16 items-center justify-center border-b">
@@ -182,6 +182,50 @@ export function AppSidebar({ userRole, activeModules, worksOnDossiers, isOrgAdmi
           />
         </ul>
       </div>
+    </nav>
+  );
+}
+
+/**
+ * Phones: the same destinations as the sidebar, as a bar fixed at the bottom
+ * of the screen (thumb reach). The sidebar is hidden under 640 px.
+ */
+export function MobileNavBar({ userRole, activeModules, worksOnDossiers, isOrgAdmin, showAgenda }: AppSidebarProps) {
+  const pathname = usePathname();
+  const items: NavItem[] = [
+    ...(worksOnDossiers ? [dashboardItem] : []),
+    ...(showAgenda ? [agendaItem] : []),
+    ...(worksOnDossiers ? moduleItems.filter((item) => activeModules.includes(item.activePrefix.replace("/", ""))) : []),
+    ...(isOrgAdmin ? [structureItem] : []),
+    ...(userRole === "ADMIN" ? [adminItem] : []),
+    settingsItem,
+  ];
+  return (
+    <nav aria-label="Navigation principale" className="fixed inset-x-0 bottom-0 z-40 border-t bg-background pb-[env(safe-area-inset-bottom)] sm:hidden">
+      <ul className="m-0 flex list-none overflow-x-auto p-0" role="list">
+        {items.map((item) => {
+          const Icon = item.icon;
+          const isActive = pathname.startsWith(item.activePrefix);
+          return (
+            <li key={item.href} className="min-w-16 flex-1">
+              <Link
+                href={item.href}
+                aria-label={item.label}
+                aria-current={isActive ? "page" : undefined}
+                className={cn(
+                  "flex flex-col items-center gap-1 px-1 py-2 text-xs font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
+                  isActive ? "text-foreground" : "text-muted-foreground",
+                )}
+              >
+                <span className={cn("flex h-7 w-12 items-center justify-center rounded-full", isActive && "bg-accent")}>
+                  <Icon className="h-5 w-5" aria-hidden="true" />
+                </span>
+                {item.shortLabel}
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
     </nav>
   );
 }

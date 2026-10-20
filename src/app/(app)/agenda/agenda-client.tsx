@@ -10,7 +10,7 @@ import type { AgendaPersonView, AgendaSettingsView } from "@/lib/agenda/service"
 import { AppointmentsTab } from "./appointments/appointments-tab";
 import { PersonsTab } from "./persons-tab";
 import { AGENDA_SETTINGS_HREF } from "./fix-links";
-import { WeekTab } from "./week/week-tab";
+import { PlanningTab } from "./calendar/planning-tab";
 
 const TABS = ["planning", "rendez-vous", "personnes"] as const;
 type TabKey = (typeof TABS)[number];
@@ -41,12 +41,12 @@ export function AgendaClient({ data, mandataires, initialTab }: Props) {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="border-b px-6 py-4">
+      <div className="border-b px-4 py-3 sm:px-6 sm:py-4">
         <div className="flex flex-wrap items-center gap-3">
           <CalendarDays className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
           <div>
             <h1 className="text-xl font-semibold tracking-tight">Agenda</h1>
-            <p className="text-sm text-muted-foreground">
+            <p className="hidden text-sm text-muted-foreground sm:block">
               {isAssistant && data ? `Agenda de ${data.ownerName}. ` : ""}
               Vos tournées : la semaine proposée, les rendez-vous et les personnes à visiter.
             </p>
@@ -60,7 +60,7 @@ export function AgendaClient({ data, mandataires, initialTab }: Props) {
       </div>
 
       {/* scroll-pb-28: a focused control scrolled into view never ends up under the sticky « Valider la semaine » bar (WCAG 2.4.11). */}
-      <div className="flex-1 overflow-auto scroll-pb-28 p-6">
+      <div className="flex-1 overflow-auto scroll-pb-28 p-3 sm:p-6">
         {data === null ? (
           <p className="max-w-xl rounded-lg border border-dashed p-6 text-sm">
             L&apos;agenda est propre à chaque mandataire. Choisissez dans la liste ci-dessus le
@@ -69,7 +69,7 @@ export function AgendaClient({ data, mandataires, initialTab }: Props) {
           </p>
         ) : (
           <Tabs defaultValue={defaultTab} className="w-full">
-            <TabsList className="grid h-auto w-full max-w-xl grid-cols-1 sm:grid-cols-3">
+            <TabsList className="grid h-auto w-full max-w-xl grid-cols-3">
               <TabsTrigger value="planning" className="flex items-center gap-2">
                 <CalendarClock className="h-4 w-4" aria-hidden="true" /> Planning
               </TabsTrigger>
@@ -77,13 +77,13 @@ export function AgendaClient({ data, mandataires, initialTab }: Props) {
                 <ListTodo className="h-4 w-4" aria-hidden="true" /> Rendez-vous
               </TabsTrigger>
               <TabsTrigger value="personnes" className="flex items-center gap-2">
-                <Users className="h-4 w-4" aria-hidden="true" /> Personnes à visiter
+                <Users className="h-4 w-4" aria-hidden="true" /> <span className="sm:hidden">Personnes</span><span className="hidden sm:inline">Personnes à visiter</span>
               </TabsTrigger>
             </TabsList>
             {needsSetup && <SetupCard />}
             {/* Panels stay mounted: switching tabs never loses unsaved work (settings, a proposal on screen). */}
             <TabsContent value="planning" forceMount className="mt-6 data-[state=inactive]:hidden">
-              <WeekTab needsSetup={needsSetup} persons={personOptions} />
+              <PlanningTab needsSetup={needsSetup} persons={personOptions} />
             </TabsContent>
             <TabsContent value="rendez-vous" forceMount className="mt-6 data-[state=inactive]:hidden">
               <AppointmentsTab persons={personOptions} />

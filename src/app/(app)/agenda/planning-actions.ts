@@ -38,6 +38,7 @@ import {
   fingerprintSchema,
   flagSchema,
   itemKeySchema,
+  monthPeriod,
   movableKeysSchema,
   planDeps,
   run,
@@ -69,6 +70,11 @@ async function weekResult(ownerId: string, period: Period, deps: PlanDeps, withP
 /** The week starting `from` (snapped to its Monday): validated and past items, no proposal, no road-time request. */
 export async function getWeek(from: IsoDate): Promise<AgendaDataResult<WeekView>> {
   return run("getWeek", async ({ ownerId }) => weekResult(ownerId, weekPeriod(from), planDeps(), false));
+}
+
+/** The calendar month holding `date`, read-only: stored planning and fixed appointments, no proposal, no road-time request. */
+export async function getMonth(date: IsoDate): Promise<AgendaDataResult<WeekView>> {
+  return run("getMonth", async ({ ownerId }) => weekResult(ownerId, monthPeriod(date), planDeps(), false));
 }
 
 /** The same week with a fresh proposal (may take a few seconds: road times). Nothing is stored. */

@@ -33,7 +33,7 @@ export function AppHeader({ user }: AppHeaderProps) {
     : user.email.slice(0, 2).toUpperCase();
 
   return (
-    <header className="flex h-14 items-center justify-between border-b px-6">
+    <header className="flex h-14 items-center justify-between border-b px-4 sm:px-6">
       <div className="flex items-center gap-4">
         <h1 className="sr-only">Tut&apos;aide</h1>
       </div>

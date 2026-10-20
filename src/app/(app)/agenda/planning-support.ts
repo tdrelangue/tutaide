@@ -58,6 +58,14 @@ export function weekPeriod(from: unknown, to?: unknown): Period {
   return { from: start, to: end };
 }
 
+/** The calendar month holding `date`: its first to its last day (31 days at most, a valid period). */
+export function monthPeriod(date: unknown): Period {
+  const day = dateSchema.parse(date);
+  const first = `${day.slice(0, 7)}-01`;
+  const nextMonth = addDays(first, 32).slice(0, 7);
+  return { from: first, to: addDays(`${nextMonth}-01`, -1) };
+}
+
 // ---- running an action ------------------------------------------------------
 
 /** The server clock and `fetch`: today comes from here, never from the page. */

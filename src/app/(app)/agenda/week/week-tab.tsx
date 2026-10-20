@@ -1,12 +1,13 @@
 "use client";
 
-import { useMemo, useRef, type RefObject } from "react";
+import { useEffect, useMemo, useRef, type RefObject } from "react";
+import type { IsoDate } from "@/lib/agenda/views/types";
 
 import type { PersonOption } from "../appointments/shared-contracts";
 import { AppointmentDialog } from "../appointments/appointment-dialog";
 import { MissedDialog } from "../appointments/missed-dialog";
 import { ERROR_TEXT } from "../address-field";
-import { addDays, weekLabel } from "./format";
+import { addDays, mondayOf, weekLabel } from "./format";
 import { IssuesCard } from "./issues-card";
 import { Legend } from "./legend";
 import { MoveDialog } from "./move-dialog";
@@ -25,7 +26,11 @@ export type WeekTabProps = {
   readonly needsSetup: boolean;
   /** For « Nouveau rendez-vous » (participants). */
   readonly persons: readonly PersonOption[];
+  /** A day picked in the month: the week shows it (and opens it on a phone). `seq` makes each pick count. */
+  readonly jumpTo?: DayJump | null;
 };
+
+export type DayJump = { readonly date: IsoDate; readonly seq: number };
 
 /** Focus targets for when the control the user acted on disappears (WCAG 2.4.3). */
 function useFocusTargets() {
@@ -42,8 +47,12 @@ function useFocusTargets() {
   return { headingRef, proposalTitleRef, focus };
 }
 
-export function WeekTab({ needsSetup, persons }: WeekTabProps) {
+export function WeekTab({ needsSetup, persons, jumpTo = null }: WeekTabProps) {
   const data = useWeekData(!needsSetup);
+  const { goTo } = data;
+  useEffect(() => {
+    if (jumpTo) goTo(mondayOf(jumpTo.date));
+  }, [jumpTo, goTo]);
   const targets = useFocusTargets();
   const commands = useWeekCommands(data, targets.focus);
   const ui = useWeekInteractions(data, commands);
@@ -68,7 +77,7 @@ export function WeekTab({ needsSetup, persons }: WeekTabProps) {
       />
       <BusyStatus mode={data.mode} isActing={commands.isActing} isValidating={commands.isValidating} announcement={data.announcement} />
       {commands.stepError && <p role="alert" className={ERROR_TEXT}>{commands.stepError}</p>}
-      <WeekContent data={data} commands={commands} ui={ui} busy={busy} proposalTitleRef={targets.proposalTitleRef} />
+      <WeekContent data={data} commands={commands} ui={ui} busy={busy} proposalTitleRef={targets.proposalTitleRef} jumpTo={jumpTo} />
       {view?.proposal && (
         <ValidateBar proposal={view.proposal} busy={busy} isValidating={commands.isValidating} error={commands.validateError} onValidate={commands.validate} onRecompute={commands.recompute} />
       )}
@@ -83,9 +92,10 @@ type ContentProps = {
   readonly ui: WeekInteractions;
   readonly busy: boolean;
   readonly proposalTitleRef: RefObject<HTMLHeadingElement | null>;
+  readonly jumpTo: DayJump | null;
 };
 
-function WeekContent({ data, commands, ui, busy, proposalTitleRef }: ContentProps) {
+function WeekContent({ data, commands, ui, busy, proposalTitleRef, jumpTo }: ContentProps) {
   const view = data.view;
   function handleRetry() {
     void data.retry();
@@ -105,7 +115,8 @@ function WeekContent({ data, commands, ui, busy, proposalTitleRef }: ContentProp
         <IssuesCard issues={data.issues} title="La proposition ne peut pas être préparée" />
         <IssuesCard issues={view.issues} title="Éléments que l'agenda n'a pas pu utiliser" />
         {isEmptyWeek(view) && <EmptyWeekNote />}
-        <WeekGrid key={view.from} view={view} busy={busy} onEntryAction={ui.handleEntryAction} onDrop={ui.handleDrop} />
+        {/* Re-keyed on a pick from the month, so the picked day opens even within the same week. */}
+        <WeekGrid key={`${view.from}:${jumpTo?.seq ?? 0}`} view={view} busy={busy} onEntryAction={ui.handleEntryAction} onDrop={ui.handleDrop} focusDate={jumpTo?.date ?? null} />
         <Legend grid={view.grid} />
       </div>
       <ProposalPanel proposal={view.proposal} titleRef={proposalTitleRef} busy={busy} onAnswer={commands.answer} onRefuse={commands.refuse} />
