@@ -1,7 +1,6 @@
-import { listOrganizations } from "./actions";
-import { OrganizationsClient } from "./organizations-client";
+import { redirect } from "next/navigation";
 
-export default async function AdminOrganizationsPage() {
-  const organizations = await listOrganizations();
-  return <OrganizationsClient organizations={organizations} />;
+/** Structures are now listed with the other clients (individuals and structures, one list). */
+export default function AdminOrganizationsPage() {
+  redirect("/admin/users");
 }

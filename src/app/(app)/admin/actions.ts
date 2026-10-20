@@ -44,6 +44,10 @@ export type AdminUserData = {
   archivedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
+  /** Structure the account belongs to (null = individual client). */
+  orgId: string | null;
+  orgRole: "MANDATAIRE" | "ASSISTANT" | null;
+  isOrgAdmin: boolean;
   _count: {
     dossiers: number;
     documents: number;
@@ -100,6 +104,9 @@ export async function getUsers(): Promise<AdminUserData[]> {
       archivedAt: true,
       createdAt: true,
       updatedAt: true,
+      orgId: true,
+      orgRole: true,
+      isOrgAdmin: true,
       _count: {
         select: {
           dossiers: true,

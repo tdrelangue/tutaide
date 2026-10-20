@@ -2,6 +2,16 @@
 
 import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -17,7 +27,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { InlineError, useStructureAction } from "../../structure/use-structure-action";
 import { fromRoleChoice, ROLE_LABELS, ROLE_NONE, type RoleChoice } from "../../structure/labels";
-import { attachExistingUser, createOrganization, generateLicenseKey, renameOrganization, type OrgListItem } from "./actions";
+import { attachExistingUser, createOrganization, generateLicenseKey, renameOrganization, setOrganizationArchived, type OrgListItem } from "./actions";
 
 const ROLES: RoleChoice[] = ["MANDATAIRE", "ASSISTANT", ROLE_NONE];
 
@@ -212,5 +222,32 @@ export function LicenseDialog({ org, onClose }: { org: OrgListItem | null; onClo
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** Archiving cuts every member's access at once; nothing is deleted. */
+export function ArchiveDialog({ org, onClose }: { org: OrgListItem | null; onClose: () => void }) {
+  const { run, isBusy } = useStructureAction();
+  async function handleConfirm() {
+    if (org) await run(() => setOrganizationArchived(org.id, true), "Structure archivée");
+    onClose();
+  }
+  return (
+    <AlertDialog open={org !== null} onOpenChange={(open) => !open && onClose()}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Archiver {org?.name} ?</AlertDialogTitle>
+          <AlertDialogDescription>
+            Ses {org?.memberCount ?? 0} compte(s) actif(s) perdent immédiatement l&apos;accès aux
+            dossiers et à l&apos;administration, même s&apos;ils sont connectés. Rien n&apos;est
+            supprimé : vous pourrez la réactiver.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={isBusy}>Annuler</AlertDialogCancel>
+          <AlertDialogAction disabled={isBusy} onClick={handleConfirm}>Archiver</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }
