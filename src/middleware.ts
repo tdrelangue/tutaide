@@ -16,7 +16,8 @@ export const config = {
      * - favicon.ico (favicon file)
      * - public folder
      * - phone install files (manifest, icons/): read before any login
+     * - .well-known/assetlinks.json: proves the Android app is ours (no address bar)
      */
-    "/((?!_next/static|_next/image|favicon.ico|icon\\.png|icon\\.ico|icons/|manifest\\.webmanifest|public).*)",
+    "/((?!_next/static|_next/image|favicon.ico|icon\\.png|icon\\.ico|icons/|manifest\\.webmanifest|\\.well-known/assetlinks\\.json|public).*)",
   ],
 };

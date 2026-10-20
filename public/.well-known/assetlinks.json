@@ -1,0 +1,10 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "fr.origai.tutellia",
+      "sha256_cert_fingerprints": ["91:84:48:75:B6:FF:64:40:AA:C7:DD:A2:96:C6:79:70:9F:95:7F:01:6A:69:D2:40:83:E9:C1:A8:73:18:9D:CB"]
+    }
+  }
+]
