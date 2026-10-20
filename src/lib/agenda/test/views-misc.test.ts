@@ -263,7 +263,7 @@ describe("listAppointments", () => {
 describe("toAppointmentRow", () => {
   const record = (over: Partial<AppointmentRecord>): AppointmentRecord => ({
     id: "a".repeat(25), ownerId: "o", createdById: null, title: "T", placeKind: "OFFICE", placeId: null, durationMin: 30, whenKind: "FIXED",
-    date: new Date("2026-10-20T00:00:00Z"), timeMin: 600, fromDate: null, toDate: null, priority: "NORMAL", version: 0,
+    date: new Date("2026-10-20T00:00:00Z"), timeMin: 600, fromDate: null, toDate: null, priority: "NORMAL", version: 0, notes: null,
     createdAt: NOW, updatedAt: NOW, participants: [], place: null, items: [], ...over,
   });
 

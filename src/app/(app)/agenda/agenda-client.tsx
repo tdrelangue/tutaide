@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { CalendarClock, CalendarDays, ListTodo, Settings2, Users } from "lucide-react";
+import { CalendarClock, CalendarDays, FileSearch, ListTodo, Settings2, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { MandataireSelect } from "@/components/mandataire-select";
@@ -51,11 +51,17 @@ export function AgendaClient({ data, mandataires, initialTab }: Props) {
               Vos tournées : la semaine proposée, les rendez-vous et les personnes à visiter.
             </p>
           </div>
-          {isAssistant && (
-            <div className="ml-auto">
-              <MandataireSelect context={mandataires} />
-            </div>
-          )}
+          <div className="ml-auto flex flex-wrap items-center gap-2">
+            {data && (
+              <Button asChild variant="outline" size="sm">
+                <Link href="/agenda/extraction">
+                  <FileSearch aria-hidden="true" />
+                  Extraction pour un audit
+                </Link>
+              </Button>
+            )}
+            {isAssistant && <MandataireSelect context={mandataires} />}
+          </div>
         </div>
       </div>
 

@@ -116,7 +116,7 @@ export function AppSidebar({ userRole, activeModules, worksOnDossiers, isOrgAdmi
     <nav
       aria-label="Navigation principale"
       data-tour="sidebar"
-      className="sticky top-0 hidden h-screen w-24 flex-col border-r bg-muted/30 sm:flex"
+      className="sticky top-0 hidden h-screen w-24 flex-col border-r bg-muted/30 sm:flex print:hidden"
     >
       {/* Logo at top */}
       <div className="flex h-16 items-center justify-center border-b">
@@ -201,7 +201,7 @@ export function MobileNavBar({ userRole, activeModules, worksOnDossiers, isOrgAd
     settingsItem,
   ];
   return (
-    <nav aria-label="Navigation principale" className="fixed inset-x-0 bottom-0 z-40 border-t bg-background pb-[env(safe-area-inset-bottom)] sm:hidden">
+    <nav aria-label="Navigation principale" className="fixed inset-x-0 bottom-0 z-40 border-t bg-background pb-[env(safe-area-inset-bottom)] sm:hidden print:hidden">
       <ul className="m-0 flex list-none overflow-x-auto p-0" role="list">
         {items.map((item) => {
           const Icon = item.icon;

@@ -49,6 +49,15 @@ export function meetingsOf(day: DayView): readonly EntryView[] {
   return day.entries.filter(isMeeting);
 }
 
+/**
+ * Notes and tasks exist for a rendez-vous with a row behind it: an appointment
+ * (planned or not) or a validated / past visit. A proposed visit has none yet.
+ */
+export function canHaveNotes(entry: EntryView): boolean {
+  if (entry.kind === "BLOCK" || entry.itemKey === null) return false;
+  return !(entry.kind === "VISIT" && (entry.source === "PROPOSED" || entry.source === "PINNED"));
+}
+
 /** « 1 rendez-vous », « 3 rendez-vous », « Aucun rendez-vous ». */
 export function meetingCount(count: number): string {
   if (count === 0) return "Aucun rendez-vous";

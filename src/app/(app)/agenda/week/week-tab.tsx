@@ -11,6 +11,7 @@ import { addDays, mondayOf, weekLabel } from "./format";
 import { IssuesCard } from "./issues-card";
 import { Legend } from "./legend";
 import { MoveDialog } from "./move-dialog";
+import { NotesDialog } from "../notes/notes-dialog";
 import { ProposalPanel } from "./proposal-panel";
 import { useWeekCommands, type FocusTargets, type WeekCommands } from "./use-week-commands";
 import { useWeekData, type WeekData } from "./use-week-data";
@@ -136,6 +137,7 @@ function WeekDialogs({ data, ui, persons }: { data: WeekData; ui: WeekInteractio
         onConfirm={ui.handleMoveConfirm}
       />
       <MissedDialog open={ui.missed !== null} onOpenChange={ui.handleMissedOpenChange} item={ui.missed} onDone={ui.handleDialogDone} />
+      <NotesDialog target={ui.notes} onClose={ui.closeNotes} />
       <AppointmentDialog open={ui.isAppointmentOpen} onOpenChange={ui.setIsAppointmentOpen} persons={persons} onDone={ui.handleDialogDone} />
     </>
   );

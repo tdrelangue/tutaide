@@ -4,13 +4,16 @@ import { cn } from "@/lib/utils";
 import type { DayView } from "@/lib/agenda/views/types";
 import { SOURCE_STYLE } from "../week/entry-card";
 import { SOURCE_WORD, timeRange } from "../week/format";
-import { meetingCount, meetingsOf } from "./calendar-format";
+import { ListChecks } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import type { EntryView } from "@/lib/agenda/views/types";
+import { canHaveNotes, meetingCount, meetingsOf } from "./calendar-format";
 
 /**
  * One day, as a list: « 9 h – 10 h  Jean Bonneau · Domicile  Validé ».
  * Read-only; changes are made from the week (its menus and drag).
  */
-export function DayEntryList({ day }: { day: DayView }) {
+export function DayEntryList({ day, onOpenNotes }: { day: DayView; onOpenNotes?: (entry: EntryView) => void }) {
   const meetings = meetingsOf(day);
   const blocks = day.entries.filter((e) => !meetings.includes(e));
   if (day.entries.length === 0) {
@@ -28,6 +31,12 @@ export function DayEntryList({ day }: { day: DayView }) {
             </p>
             <p className="font-medium">{entry.title}</p>
             {entry.subtitle && <p className="text-xs text-foreground/80">{entry.subtitle}</p>}
+            {onOpenNotes && canHaveNotes(entry) && (
+              <Button type="button" variant="link" size="sm" className="h-auto p-0 text-xs" onClick={() => onOpenNotes(entry)} aria-label={`Notes et tâches : ${entry.title}`}>
+                <ListChecks aria-hidden="true" />
+                Notes et tâches
+              </Button>
+            )}
           </li>
         ))}
       </ol>

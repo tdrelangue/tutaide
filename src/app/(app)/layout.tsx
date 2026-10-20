@@ -96,7 +96,7 @@ export default async function AppLayout({
         <div className="flex flex-1 flex-col">
           <AppHeader user={session.user} />
           {/* pb-20: the phone navigation bar never hides the end of a page. */}
-          <main id="main-content" className="flex-1 overflow-auto pb-20 sm:pb-0">
+          <main id="main-content" className="flex-1 overflow-auto pb-20 sm:pb-0 print:overflow-visible print:pb-0">
             {children}
           </main>
         </div>

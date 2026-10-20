@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { keepNotesOnHistory } from "./notes";
 import { db } from "@/lib/db";
 import { fromIso, isRealDate } from "./bridge/dates";
 import { ownerToday } from "./bridge/load";
@@ -96,6 +97,7 @@ export async function deleteAppointment(ownerId: string, appointmentId: string, 
       if (!found) return false;
       await queuePlanning(tx, ownerId);
       await cancelFutureItems(tx, ownerId, appointmentId, today);
+      await keepNotesOnHistory(tx, ownerId, appointmentId);
       await tx.agendaItem.updateMany({ where: { ownerId, appointmentId }, data: { appointmentId: null } });
       await tx.agendaAppointment.delete({ where: { id_ownerId: { id: appointmentId, ownerId } } });
       return true;

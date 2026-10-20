@@ -17,7 +17,7 @@ export function DemoBanner() {
   }
 
   return (
-    <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 border-b bg-primary px-4 py-2 text-sm text-primary-foreground" role="status">
+    <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 border-b bg-primary px-4 py-2 text-sm text-primary-foreground print:hidden" role="status">
       <span className="flex items-center gap-2">
         <FlaskConical className="h-4 w-4 shrink-0" aria-hidden="true" />
         <strong>Mode démonstration</strong>

@@ -1,7 +1,8 @@
 "use client";
 
-import { useId } from "react";
-import { ChevronDown, Clock, MapPin, Trash2, Users } from "lucide-react";
+import { useId, useState } from "react";
+import { ChevronDown, Clock, ListChecks, MapPin, Trash2, Users } from "lucide-react";
+import { NotesDialog } from "../notes/notes-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -73,6 +74,7 @@ function RowList({ rows, onDelete }: ListProps) {
 function Row({ row, onDelete }: { readonly row: AppointmentRow; readonly onDelete: (row: AppointmentRow) => void }) {
   const isPast = row.status === "FAIT" || row.status === "ANNULE";
   const people = row.participantNames.length > 0 ? `Avec ${row.participantNames.join(", ")}` : "Rendez-vous personnel";
+  const [isNotesOpen, setIsNotesOpen] = useState(false);
   function handleDelete() {
     onDelete(row);
   }
@@ -96,10 +98,17 @@ function Row({ row, onDelete }: { readonly row: AppointmentRow; readonly onDelet
           <span className="inline-flex items-center gap-1"><Clock className="h-3.5 w-3.5" aria-hidden="true" />{formatDuration(row.durationMin)}</span>
         </p>
       </div>
-      <Button variant="ghost" size="sm" onClick={handleDelete} aria-label={`Supprimer « ${row.title} »`}>
-        <Trash2 className="mr-1 h-4 w-4" aria-hidden="true" />
-        Supprimer
-      </Button>
+      <div className="flex flex-wrap gap-1">
+        <Button variant="ghost" size="sm" onClick={() => setIsNotesOpen(true)} aria-label={`Notes et tâches de « ${row.title} »`}>
+          <ListChecks className="mr-1 h-4 w-4" aria-hidden="true" />
+          Notes et tâches
+        </Button>
+        <Button variant="ghost" size="sm" onClick={handleDelete} aria-label={`Supprimer « ${row.title} »`}>
+          <Trash2 className="mr-1 h-4 w-4" aria-hidden="true" />
+          Supprimer
+        </Button>
+      </div>
+      <NotesDialog target={isNotesOpen ? { key: row.id, title: row.title, when: formatWhen(row.when) } : null} onClose={() => setIsNotesOpen(false)} />
     </li>
   );
 }

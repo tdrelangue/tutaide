@@ -3,7 +3,7 @@
 import { CalendarRange } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import type { DayView, IsoDate } from "@/lib/agenda/views/types";
+import type { DayView, EntryView, IsoDate } from "@/lib/agenda/views/types";
 import { DayEntryList } from "./day-entry-list";
 
 type Props = {
@@ -11,10 +11,11 @@ type Props = {
   readonly onClose: () => void;
   /** Opens this day in the week, where the planning is changed. */
   readonly onOpenWeek: (date: IsoDate) => void;
+  readonly onOpenNotes: (entry: EntryView, day: DayView) => void;
 };
 
 /** The detail of one day, from the month: what is planned, hour by hour. */
-export function DayDetailDialog({ day, onClose, onOpenWeek }: Props) {
+export function DayDetailDialog({ day, onClose, onOpenWeek, onOpenNotes }: Props) {
   function handleOpenWeek() {
     if (day) onOpenWeek(day.date);
   }
@@ -28,7 +29,7 @@ export function DayDetailDialog({ day, onClose, onOpenWeek }: Props) {
           <DialogTitle>{day?.label}</DialogTitle>
           <DialogDescription>{day?.isToday ? "Aujourd'hui." : "Le détail de la journée."}</DialogDescription>
         </DialogHeader>
-        {day && <DayEntryList day={day} />}
+        {day && <DayEntryList day={day} onOpenNotes={(entry) => onOpenNotes(entry, day)} />}
         <Button type="button" variant="outline" onClick={handleOpenWeek} className="w-full sm:w-auto">
           <CalendarRange aria-hidden="true" />
           Ouvrir dans la semaine

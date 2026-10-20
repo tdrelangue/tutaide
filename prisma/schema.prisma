@@ -49,6 +49,7 @@ model User {
   agendaRuleAnswers         AgendaRuleAnswer[]
   agendaOccurrenceOverrides AgendaOccurrenceOverride[]
   agendaRouteCache          AgendaRouteCache[]
+  agendaTasks               AgendaTask[]
   notificationReads         NotificationRead[]
   notificationsCreated      AppNotification[]          @relation("NotificationAuthor")
   notificationsTargeted     AppNotification[]          @relation("NotificationTarget")
@@ -653,6 +654,9 @@ model AgendaAppointment {
   updatedAt    DateTime                       @updatedAt
   owner        User                           @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   place        AgendaPlace?                   @relation(fields: [placeId, ownerId], references: [id, ownerId], onDelete: NoAction, onUpdate: NoAction)
+  /// Notes on the rendez-vous (preparation, what was said). Encrypted (src/lib/agenda/sealed.ts).
+  notes        String?
+  tasks        AgendaTask[]
   participants AgendaAppointmentParticipant[]
   items        AgendaItem[]
   pins         AgendaPin[]
@@ -710,6 +714,9 @@ model AgendaItem {
   owner         User                    @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   appointment   AgendaAppointment?      @relation(fields: [appointmentId, ownerId], references: [id, ownerId], onDelete: NoAction, onUpdate: NoAction)
   contact       AgendaContact?          @relation(fields: [contactId, ownerId], references: [id, ownerId], onDelete: NoAction, onUpdate: NoAction)
+  /// Notes of a visit (no appointment behind it), or kept from a deleted appointment. Encrypted.
+  notes         String?
+  tasks         AgendaTask[]
   participants  AgendaItemParticipant[]
 
   @@unique([id, ownerId])
@@ -718,6 +725,31 @@ model AgendaItem {
   @@index([ownerId, status, date])
   @@index([appointmentId])
   @@index([contactId])
+}
+
+/// A task of a rendez-vous checklist (« apporter le relevé », « faire signer »).
+/// Belongs to the appointment, or to the validated item for a visit. When an
+/// appointment is deleted, its tasks move to its remaining item, so an audit
+/// export still finds them.
+model AgendaTask {
+  id            String             @id @default(cuid())
+  ownerId       String
+  appointmentId String?
+  itemId        String?
+  /// Encrypted (src/lib/agenda/sealed.ts).
+  label         String
+  done          Boolean            @default(false)
+  doneAt        DateTime?
+  position      Int                @default(0)
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  owner         User               @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  appointment   AgendaAppointment? @relation(fields: [appointmentId, ownerId], references: [id, ownerId], onDelete: Cascade, onUpdate: NoAction)
+  item          AgendaItem?        @relation(fields: [itemId, ownerId], references: [id, ownerId], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([ownerId])
+  @@index([appointmentId])
+  @@index([itemId])
 }
 
 model AgendaItemParticipant {

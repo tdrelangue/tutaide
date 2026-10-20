@@ -7,7 +7,7 @@ import { addDays, isoDow, nextWeek } from "@/lib/agenda-engine/domain";
 import type { IsoDate, Place, ValidatedItem } from "@/lib/agenda-engine/domain";
 import { fromIso, todayIn } from "@/lib/agenda/bridge/dates";
 import { itemRow } from "@/lib/agenda/bridge/map";
-import { sealPoint } from "@/lib/agenda/sealed";
+import { seal, sealPoint } from "@/lib/agenda/sealed";
 import { seedGlobalTemplates } from "@/lib/default-templates";
 import { getDemoDocumentsDir } from "./state";
 
@@ -329,7 +329,14 @@ async function seedNextWeekAppointments(ownerId: string, today: IsoDate, people:
       fromDate: fromIso(week.from),
       toDate: fromIso(week.to),
       priority: "HIGH",
+      notes: seal("Vente de l'appartement : vérifier que le prix correspond à l'autorisation du juge."),
       participants: { create: alain ? [{ contactId: alain.id }] : [] },
+      tasks: {
+        create: [
+          { label: seal("Apporter l'ordonnance du juge"), position: 0, done: true, doneAt: new Date() },
+          { label: seal("Pièce d'identité d'Alain Térieur"), position: 1 },
+        ],
+      },
     },
   });
   await db.agendaAppointment.create({

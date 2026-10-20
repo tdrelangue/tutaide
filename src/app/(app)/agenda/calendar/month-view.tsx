@@ -3,12 +3,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { DayView, IsoDate, WeekView } from "@/lib/agenda/views/types";
+import type { DayView, EntryView, IsoDate, WeekView } from "@/lib/agenda/views/types";
+import { NotesDialog, type NotesTarget } from "../notes/notes-dialog";
 import { getMonth } from "../planning-actions";
 import { useAgendaQuery } from "../use-agenda-query";
 import { ERROR_TEXT } from "../address-field";
 import { BusyButton } from "../week/busy-button";
-import { hm, localToday } from "../week/format";
+import { hm, localToday, timeRange } from "../week/format";
 import { dayOfMonth, isoWeekday, meetingCount, meetingsOf, monthLabel, shiftMonth } from "./calendar-format";
 import { DayDetailDialog } from "./day-detail-dialog";
 
@@ -51,6 +52,10 @@ function useMonthData() {
 export function MonthView({ onOpenWeek }: { onOpenWeek: (date: IsoDate) => void }) {
   const data = useMonthData();
   const [selected, setSelected] = useState<DayView | null>(null);
+  const [notes, setNotes] = useState<NotesTarget | null>(null);
+  function handleOpenNotes(entry: EntryView, day: DayView) {
+    if (entry.itemKey) setNotes({ key: entry.itemKey, title: entry.title, when: `${day.label}, ${timeRange(entry.start, entry.end)}` });
+  }
   function handleOpenWeek(date: IsoDate) {
     setSelected(null);
     onOpenWeek(date);
@@ -71,7 +76,8 @@ export function MonthView({ onOpenWeek }: { onOpenWeek: (date: IsoDate) => void 
       <p className="text-xs text-muted-foreground">
         Vue indicative : touchez un jour pour voir son détail. Pour préparer ou modifier le planning, ouvrez la semaine.
       </p>
-      <DayDetailDialog day={selected} onClose={handleClose} onOpenWeek={handleOpenWeek} />
+      <DayDetailDialog day={selected} onClose={handleClose} onOpenWeek={handleOpenWeek} onOpenNotes={handleOpenNotes} />
+      <NotesDialog target={notes} onClose={() => setNotes(null)} />
     </div>
   );
 }
