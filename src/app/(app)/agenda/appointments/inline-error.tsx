@@ -5,6 +5,7 @@ import { RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { IssueView } from "@/lib/agenda/views/types";
 import { ERROR_TEXT } from "../address-field";
+import { fixTarget } from "../fix-links";
 
 type InlineErrorProps = {
   readonly message: string | null;
@@ -38,12 +39,6 @@ export function InlineError({ message, issues = [], onRetry, focusOnShow = false
   );
 }
 
-const TAB_LABELS: Record<string, string> = {
-  parametres: "Paramètres",
-  personnes: "Personnes à visiter",
-  "rendez-vous": "Rendez-vous",
-  planning: "Planning",
-};
 
 export function IssueList({ issues }: { readonly issues: readonly IssueView[] }) {
   return (
@@ -51,8 +46,8 @@ export function IssueList({ issues }: { readonly issues: readonly IssueView[] })
       {issues.map((issue, index) => (
         <li key={`${issue.kind}-${index}`}>
           {issue.message}
-          {issue.fixTab && TAB_LABELS[issue.fixTab] && (
-            <span className="text-muted-foreground"> (à corriger dans « {TAB_LABELS[issue.fixTab]} »)</span>
+          {fixTarget(issue.fixTab) && (
+            <span className="text-muted-foreground"> (à corriger dans « {fixTarget(issue.fixTab)?.label} »)</span>
           )}
         </li>
       ))}

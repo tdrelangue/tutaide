@@ -5,6 +5,7 @@ import { BusyButton } from "./busy-button";
 import type { WeekView } from "@/lib/agenda/views/types";
 import { ERROR_TEXT } from "../address-field";
 import type { WeekMode } from "./use-week-data";
+import { AGENDA_SETTINGS_HREF } from "../fix-links";
 
 const SKELETON_DAYS = 7;
 
@@ -78,8 +79,8 @@ export function SetupNotice() {
   return (
     <p className="max-w-xl rounded-lg border border-dashed p-6 text-sm">
       Pour préparer vos tournées, indiquez d&apos;abord votre domicile dans{" "}
-      <a href="/agenda?tab=parametres" className="font-medium underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-        « Paramètres »
+      <a href={AGENDA_SETTINGS_HREF} className="font-medium underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+        « Paramètres › Agenda »
       </a>{" "}
       : c&apos;est le point de départ et d&apos;arrivée de chaque journée.
     </p>

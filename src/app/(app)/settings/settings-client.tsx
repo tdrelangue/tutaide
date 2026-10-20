@@ -7,19 +7,21 @@ import { ModuleConfigTab } from "./module-config-tab";
 import { GeneralSettingsTab } from "./general-settings-tab";
 import { TemplatesManager } from "./templates-manager";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Mail, FileText, Settings, CreditCard } from "lucide-react";
+import { Mail, FileText, Settings, CreditCard, CalendarDays } from "lucide-react";
 import type { SmtpConfigData, ModuleConfigData, TemplateData } from "./actions";
 
-const TAB_VALUES = ["general", "smtp", "apa", "ash", "pch", "dernier", "abonnement"];
+const BASE_TABS = ["general", "smtp", "apa", "ash", "pch", "dernier", "abonnement"];
+/** « Agenda » exists only for accounts that hold the add-on. */
+const WITH_AGENDA = [...BASE_TABS, "agenda"];
 
 /** ?tab=… selects the tab (links, notifications, guided tours), also after mount. */
-function useTabFromUrl(initialTab: string | undefined): [string, (tab: string) => void] {
+function useTabFromUrl(initialTab: string | undefined, tabs: readonly string[]): [string, (tab: string) => void] {
   const searchParams = useSearchParams();
-  const [tab, setTab] = useState(initialTab && TAB_VALUES.includes(initialTab) ? initialTab : "general");
+  const [tab, setTab] = useState(initialTab && tabs.includes(initialTab) ? initialTab : "general");
   const urlTab = searchParams.get("tab");
   useEffect(() => {
-    if (urlTab && TAB_VALUES.includes(urlTab)) setTab(urlTab);
-  }, [urlTab]);
+    if (urlTab && tabs.includes(urlTab)) setTab(urlTab);
+  }, [urlTab, tabs]);
   return [tab, setTab];
 }
 
@@ -40,6 +42,8 @@ interface SettingsPageClientProps {
   billingTab: React.ReactNode;
   /** Set when the user's organisation sends through its shared mailbox. */
   orgMailboxAddress?: string | null;
+  /** « Agenda » settings, null when the account has no agenda. */
+  agendaTab?: React.ReactNode | null;
 }
 
 export function SettingsPageClient({
@@ -54,6 +58,7 @@ export function SettingsPageClient({
   initialTab,
   billingTab,
   orgMailboxAddress = null,
+  agendaTab = null,
 }: SettingsPageClientProps) {
   const [smtpConfig] = useState(initialSmtpConfig);
   const [apaConfig] = useState(initialModuleConfigs.apa);
@@ -64,7 +69,7 @@ export function SettingsPageClient({
   const [pchTemplates, setPchTemplates] = useState(initialPchTemplates);
   const [decesTemplates, setDecesTemplates] = useState(initialDecesTemplates);
   const [dessaisTemplates, setDessaisTemplates] = useState(initialDessaisTemplates);
-  const [tab, setTab] = useTabFromUrl(initialTab);
+  const [tab, setTab] = useTabFromUrl(initialTab, agendaTab ? WITH_AGENDA : BASE_TABS);
 
   return (
     <div className="flex flex-col h-full">
@@ -81,7 +86,7 @@ export function SettingsPageClient({
       {/* Content with Tabs */}
       <div className="flex-1 overflow-auto p-6">
         <Tabs value={tab} onValueChange={setTab} className="w-full">
-          <TabsList className="grid w-full max-w-4xl grid-cols-7" data-tour="settings-tabs">
+          <TabsList className={`grid h-auto w-full max-w-5xl grid-cols-2 sm:grid-cols-4 ${agendaTab ? "lg:grid-cols-8" : "lg:grid-cols-7"}`} data-tour="settings-tabs">
             <TabsTrigger value="general" className="flex items-center gap-2">
               <Settings className="h-4 w-4" />
               Général
@@ -110,6 +115,12 @@ export function SettingsPageClient({
               <CreditCard className="h-4 w-4" />
               Abonnement
             </TabsTrigger>
+            {agendaTab && (
+              <TabsTrigger value="agenda" className="flex items-center gap-2">
+                <CalendarDays className="h-4 w-4" aria-hidden="true" />
+                Agenda
+              </TabsTrigger>
+            )}
           </TabsList>
 
           <TabsContent value="general" className="mt-6">
@@ -187,6 +198,11 @@ export function SettingsPageClient({
           <TabsContent value="abonnement" className="mt-6">
             {billingTab}
           </TabsContent>
+          {agendaTab && (
+            <TabsContent value="agenda" className="mt-6">
+              {agendaTab}
+            </TabsContent>
+          )}
         </Tabs>
       </div>
     </div>

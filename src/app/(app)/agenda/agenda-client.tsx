@@ -1,16 +1,18 @@
 "use client";
 
+import Link from "next/link";
 import { CalendarClock, CalendarDays, ListTodo, Settings2, Users } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { MandataireSelect } from "@/components/mandataire-select";
 import type { MandataireContext } from "@/lib/access/selection-actions";
 import type { AgendaPersonView, AgendaSettingsView } from "@/lib/agenda/service";
 import { AppointmentsTab } from "./appointments/appointments-tab";
 import { PersonsTab } from "./persons-tab";
-import { SettingsTab } from "./settings-tab";
+import { AGENDA_SETTINGS_HREF } from "./fix-links";
 import { WeekTab } from "./week/week-tab";
 
-const TABS = ["planning", "rendez-vous", "personnes", "parametres"] as const;
+const TABS = ["planning", "rendez-vous", "personnes"] as const;
 type TabKey = (typeof TABS)[number];
 
 function isTabKey(value: string | undefined): value is TabKey {
@@ -35,7 +37,7 @@ export function AgendaClient({ data, mandataires, initialTab }: Props) {
   const isAssistant = mandataires.choices.length > 0;
   const needsSetup = data !== null && data.profile.home === null;
   const personOptions = (data?.persons ?? []).filter((p) => p.status !== "ENDED").map((p) => ({ id: p.id, fullName: p.fullName }));
-  const defaultTab: TabKey = isTabKey(initialTab) ? initialTab : needsSetup ? "parametres" : "planning";
+  const defaultTab: TabKey = isTabKey(initialTab) ? initialTab : "planning";
 
   return (
     <div className="flex h-full flex-col">
@@ -67,7 +69,7 @@ export function AgendaClient({ data, mandataires, initialTab }: Props) {
           </p>
         ) : (
           <Tabs defaultValue={defaultTab} className="w-full">
-            <TabsList className="grid h-auto w-full max-w-2xl grid-cols-2 sm:grid-cols-4">
+            <TabsList className="grid h-auto w-full max-w-xl grid-cols-1 sm:grid-cols-3">
               <TabsTrigger value="planning" className="flex items-center gap-2">
                 <CalendarClock className="h-4 w-4" aria-hidden="true" /> Planning
               </TabsTrigger>
@@ -77,16 +79,8 @@ export function AgendaClient({ data, mandataires, initialTab }: Props) {
               <TabsTrigger value="personnes" className="flex items-center gap-2">
                 <Users className="h-4 w-4" aria-hidden="true" /> Personnes à visiter
               </TabsTrigger>
-              <TabsTrigger value="parametres" className="flex items-center gap-2">
-                <Settings2 className="h-4 w-4" aria-hidden="true" /> Paramètres
-              </TabsTrigger>
             </TabsList>
-            {needsSetup && (
-              <p className="mt-4 max-w-3xl rounded-md border border-amber-500/50 bg-amber-500/10 p-3 text-sm text-amber-900">
-                Pour commencer, indiquez votre domicile dans « Paramètres » : c&apos;est le point de
-                départ et d&apos;arrivée de vos tournées.
-              </p>
-            )}
+            {needsSetup && <SetupCard />}
             {/* Panels stay mounted: switching tabs never loses unsaved work (settings, a proposal on screen). */}
             <TabsContent value="planning" forceMount className="mt-6 data-[state=inactive]:hidden">
               <WeekTab needsSetup={needsSetup} persons={personOptions} />
@@ -101,12 +95,33 @@ export function AgendaClient({ data, mandataires, initialTab }: Props) {
                 defaultVisitMinutes={data.profile.defaultVisitMinutes}
               />
             </TabsContent>
-            <TabsContent value="parametres" forceMount className="mt-6 data-[state=inactive]:hidden">
-              <SettingsTab profile={data.profile} />
-            </TabsContent>
           </Tabs>
         )}
       </div>
     </div>
+  );
+}
+
+/**
+ * First visit: the agenda needs the MJPM's home (start and end of every tour)
+ * and working hours. They are set once in Paramètres › Agenda, like every
+ * other setting of Tutellia, not inside the module.
+ */
+function SetupCard() {
+  return (
+    <section aria-labelledby="agenda-setup-title" className="mt-4 max-w-3xl rounded-lg border border-agenda-warn bg-agenda-warn-soft p-4">
+      <h2 id="agenda-setup-title" className="flex items-center gap-2 text-base font-semibold">
+        <Settings2 className="h-4 w-4 shrink-0" aria-hidden="true" />
+        Avant de commencer : configurez votre agenda
+      </h2>
+      <p className="mt-1 text-sm text-foreground/80">
+        Indiquez votre domicile (le point de départ et d&apos;arrivée de vos tournées), vos jours et
+        vos horaires de travail. Cela prend une minute ; vous pourrez les changer à tout moment dans
+        les Paramètres.
+      </p>
+      <Button asChild className="mt-3">
+        <Link href={AGENDA_SETTINGS_HREF}>Configurer l&apos;agenda</Link>
+      </Button>
+    </section>
   );
 }

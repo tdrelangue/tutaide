@@ -45,6 +45,7 @@ export async function saveAgendaSettings(input: unknown): Promise<AgendaActionRe
   try {
     const { ownerId } = await requireAgendaOwner();
     await storeAgendaSettings(ownerId, agendaSettingsSchema.parse(input));
+    revalidatePath("/settings");
     return done("Paramètres de l'agenda enregistrés");
   } catch (error) {
     return failure("saveSettings", error);

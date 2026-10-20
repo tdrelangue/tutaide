@@ -9,6 +9,7 @@ import { SettingsPageClient } from "./settings-client";
 import { BillingTab } from "./billing-tab";
 import { getEffectiveUserId } from "@/lib/auth";
 import { getOrgSmtpFor } from "@/lib/access/org-mail";
+import { loadAgendaSettingsTab } from "./agenda-settings-tab";
 
 type SearchParams = Promise<{ tab?: string; checkout?: string; session_id?: string }>;
 
@@ -16,7 +17,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Sea
   const { tab, checkout, session_id: sessionId } = await searchParams;
   const userId = await getEffectiveUserId();
   const orgMailbox = userId ? await getOrgSmtpFor(userId) : null;
-  const [smtpConfig, moduleConfigs, apaTemplates, ashTemplates, pchTemplates, decesTemplates, dessaisTemplates, signature] =
+  const [smtpConfig, moduleConfigs, apaTemplates, ashTemplates, pchTemplates, decesTemplates, dessaisTemplates, signature, agendaTab] =
     await Promise.all([
       getSmtpConfig(),
       getAllModuleConfigs(),
@@ -26,6 +27,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Sea
       getTemplatesByCategory("DERNIER_DECES"),
       getTemplatesByCategory("DERNIER_DESSAISISSEMENT"),
       getSignature(),
+      loadAgendaSettingsTab(),
     ]);
 
   return (
@@ -41,6 +43,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Sea
         initialSignature={signature}
         initialTab={tab}
         orgMailboxAddress={orgMailbox?.fromEmail ?? null}
+        agendaTab={agendaTab}
         billingTab={
           <Suspense fallback={<p role="status" className="text-sm text-muted-foreground">Chargement de l&apos;abonnement…</p>}>
             <BillingTab checkout={checkout} sessionId={sessionId} fresh={tab === "abonnement"} />
