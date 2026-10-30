@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireAgendaOwner } from "@/lib/agenda/context";
+import { dayRuleSchema, deleteDayRule, ruleIdSchema, saveDayRule } from "@/lib/agenda/day-rules";
 import { searchAddress, type GeocodeResult } from "@/lib/agenda/geocode";
 import {
   createAgendaPerson,
@@ -88,5 +89,32 @@ export async function removeAgendaPerson(personId: string): Promise<AgendaAction
     return done("Personne retirée de l'agenda");
   } catch (error) {
     return failure("removePerson", error);
+  }
+}
+
+/** « Mes indisponibilités » and holidays change the proposals: the planning reads them again. */
+function rulesDone(message: string): AgendaActionResult {
+  revalidatePath("/settings");
+  return done(message);
+}
+
+export async function saveAgendaDayRule(ruleId: string | null, input: unknown): Promise<AgendaActionResult> {
+  try {
+    const { ownerId } = await requireAgendaOwner();
+    const id = ruleIdSchema.nullable().parse(ruleId);
+    if (!(await saveDayRule(ownerId, id, dayRuleSchema.parse(input)))) return { success: false, error: "Créneau introuvable." };
+    return rulesDone(id === null ? "Créneau ajouté" : "Créneau modifié");
+  } catch (error) {
+    return failure("saveDayRule", error);
+  }
+}
+
+export async function removeAgendaDayRule(ruleId: string): Promise<AgendaActionResult> {
+  try {
+    const { ownerId } = await requireAgendaOwner();
+    if (!(await deleteDayRule(ownerId, ruleIdSchema.parse(ruleId)))) return { success: false, error: "Créneau introuvable." };
+    return rulesDone("Créneau supprimé");
+  } catch (error) {
+    return failure("removeDayRule", error);
   }
 }

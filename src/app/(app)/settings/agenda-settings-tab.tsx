@@ -3,7 +3,9 @@ import { MandataireSelect } from "@/components/mandataire-select";
 import { getMandataireContext } from "@/lib/access/selection-actions";
 import { getAgendaAccess } from "@/lib/agenda/context";
 import type { AgendaAccess } from "@/lib/agenda/context";
+import { listDayRules } from "@/lib/agenda/day-rules";
 import { getAgendaSettings } from "@/lib/agenda/service";
+import { DayRulesCard } from "../agenda/day-rules-card";
 import { SettingsTab } from "../agenda/settings-tab";
 
 /** Accounts without the add-on (or admin-only IT accounts) see no « Agenda » tab at all. */
@@ -16,7 +18,8 @@ async function agendaAccess(): Promise<AgendaAccess> {
 }
 
 /**
- * « Paramètres › Agenda »: the MJPM's home and office, working days and hours.
+ * « Paramètres › Agenda »: the MJPM's home and office, working days and hours,
+ * unavailabilities and holidays.
  * Null when the account has no agenda. For an assistant, the settings are those
  * of the MJPM chosen in the picker (the agenda belongs to the MJPM).
  */
@@ -27,8 +30,8 @@ export async function loadAgendaSettingsTab(): Promise<ReactNode | null> {
     <div className="mb-4 max-w-3xl">
       <h3 className="text-lg font-medium">Agenda</h3>
       <p className="text-sm text-muted-foreground">
-        Le point de départ de vos tournées et vos horaires de travail : Tutellia ne propose aucune
-        visite en dehors.
+        Le point de départ de vos tournées, vos horaires de travail, vos indisponibilités et vos
+        vacances : Tutellia ne propose aucune visite en dehors.
       </p>
     </div>
   );
@@ -41,12 +44,19 @@ export async function loadAgendaSettingsTab(): Promise<ReactNode | null> {
       </div>
     );
   }
-  const [profile, mandataires] = await Promise.all([getAgendaSettings(access.ownerId), getMandataireContext()]);
+  const [profile, rules, mandataires] = await Promise.all([
+    getAgendaSettings(access.ownerId),
+    listDayRules(access.ownerId),
+    getMandataireContext(),
+  ]);
   return (
     <div>
       {header}
       {mandataires.choices.length > 0 && <p className="mb-4 text-sm">Agenda de {access.ownerName}.</p>}
       <SettingsTab profile={profile} />
+      <div className="mt-6">
+        <DayRulesCard rules={rules} />
+      </div>
     </div>
   );
 }

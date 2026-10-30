@@ -2,7 +2,8 @@ import { getAllModuleConfigs } from "@/app/(app)/settings/actions";
 import { isCurrentUserAdmin } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { currentUserWorksOnDossiers } from "@/lib/access/context";
-import { FolderOpen, Bell, BookOpen } from "lucide-react";
+import { canSeeAgenda } from "@/lib/agenda/context";
+import { CalendarDays, FolderOpen, Bell, BookOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { UpdateCheckButton } from "./update-check-button";
@@ -36,12 +37,42 @@ const MODULE_META: Record<
   },
 };
 
+/** « Agenda » add-on: its own card, shown only to accounts that hold it (like the sidebar entry). */
+const AGENDA_META = {
+  label: "Agenda",
+  description: "Visites, rendez-vous et tournées",
+  href: "/agenda",
+  accent: "bg-orange-600",
+  badge: "bg-orange-100 text-orange-800",
+};
+
+function AgendaCard() {
+  return (
+    <a
+      href={AGENDA_META.href}
+      className="group flex flex-col gap-3 rounded-lg border bg-card p-5 shadow-sm transition-all hover:shadow-md hover:border-primary/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+    >
+      <div className="flex items-center justify-between">
+        <span className={cn("inline-flex items-center gap-2 px-2.5 py-1 rounded-md text-sm font-semibold", AGENDA_META.badge)}>
+          <span className={cn("h-2 w-2 rounded-full", AGENDA_META.accent)} aria-hidden="true" />
+          {AGENDA_META.label}
+        </span>
+        <CalendarDays className="h-4 w-4 text-muted-foreground group-hover:text-foreground transition-colors" aria-hidden="true" />
+      </div>
+      <p className="text-sm font-medium">{AGENDA_META.description}</p>
+    </a>
+  );
+}
+
 export default async function DashboardPage() {
   // Organisation admin without a working role (e.g. IT): only the admin panel.
   if (!(await currentUserWorksOnDossiers())) redirect("/structure");
 
-  const moduleConfigs = await getAllModuleConfigs();
-  const isAdmin = await isCurrentUserAdmin();
+  const [moduleConfigs, isAdmin, showAgenda] = await Promise.all([
+    getAllModuleConfigs(),
+    isCurrentUserAdmin(),
+    canSeeAgenda().catch(() => false),
+  ]);
 
   const activeModules = (
     Object.entries(moduleConfigs) as [string, { destinationEmail: string } | null][]
@@ -59,7 +90,7 @@ export default async function DashboardPage() {
         <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">
           Modules actifs
         </h2>
-        {activeModules.length === 0 ? (
+        {activeModules.length === 0 && !showAgenda ? (
           <div className="rounded-lg border border-dashed p-6 text-center text-muted-foreground text-sm">
             Aucun module configuré. Rendez-vous dans les{" "}
             <a href="/settings" className="underline underline-offset-2 hover:text-foreground">
@@ -99,6 +130,7 @@ export default async function DashboardPage() {
                 </a>
               );
             })}
+            {showAgenda && <AgendaCard />}
           </div>
         )}
       </section>

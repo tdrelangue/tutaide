@@ -65,6 +65,7 @@ const agendaItem: NavItem = {
   shortLabel: "Agenda",
   description: "Personnes à visiter et tournées",
   activePrefix: "/agenda",
+  accentClass: "bg-orange-600",
 };
 
 const adminItem: NavItem = {
