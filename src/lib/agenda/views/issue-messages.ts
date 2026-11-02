@@ -31,8 +31,8 @@ const TEMPLATES: Readonly<Record<string, Template>> = {
     fixTab: SETTINGS_TAB,
   },
   LAST_VISIT_UNKNOWN: {
-    one: "{n} personne sans date de dernière visite : la visite est proposée dès maintenant.",
-    many: "{n} personnes sans date de dernière visite : la visite est proposée dès maintenant.",
+    one: "{n} personne sans date de dernière visite : sa première visite est répartie, sans urgence, sur la période qui suit son ajout.",
+    many: "{n} personnes sans date de dernière visite : leur première visite est répartie, sans urgence, sur la période qui suit leur ajout.",
     fixTab: PERSONS_TAB,
   },
   BAD_AVAILABILITY: {

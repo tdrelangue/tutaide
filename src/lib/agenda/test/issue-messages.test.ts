@@ -20,12 +20,12 @@ describe("toIssueViews", () => {
     const views = toIssueViews([1, 2, 3].map((n) => makeIssue("contact", `c${n}`, "LAST_VISIT_UNKNOWN")));
     assert.equal(views.length, 1);
     assert.match(views[0].message, /^3 personnes sans date de dernière visite/);
-    assert.match(views[0].message, /proposée dès maintenant/);
+    assert.match(views[0].message, /sans urgence/);
   });
 
   it("uses the singular for one row", () => {
     const [view] = toIssueViews([makeIssue("contact", "c1", "LAST_VISIT_UNKNOWN")]);
-    assert.match(view.message, /^1 personne sans date de dernière visite : la visite est proposée dès maintenant/);
+    assert.match(view.message, /^1 personne sans date de dernière visite : sa première visite est répartie, sans urgence/);
   });
 
   it("never echoes a row id", () => {

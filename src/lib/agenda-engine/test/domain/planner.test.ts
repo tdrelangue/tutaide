@@ -476,3 +476,17 @@ describe("a validated plan never moves", () => {
     expect(run(s)).toEqual(run(s));
   });
 });
+
+describe("a caseload just imported, without last visits (Thomas, 2026-11-02)", () => {
+  it("places what fits this week and postpones the rest quietly: no alarm, nothing late", () => {
+    const towns = [MALEMORT, OBJAT, TULLE];
+    const contacts = Array.from({ length: 30 }, (_, i) => {
+      const p = protege(`p${i}`, `Personne ${i}`, { at: towns[i % 3] ?? MALEMORT, last: MON, period: "QUARTER", priority: "NORMAL" });
+      return { ...p, visits: p.visits && { ...p.visits, startedOn: MON } };
+    });
+    const { plan } = propose(createContext(state({ contacts })), MON, FRI);
+    expect(plan.unplaced).toEqual([]);
+    expect(plan.late).toEqual([]);
+    expect(plan.days.flatMap((d) => d.items).length).toBeGreaterThan(5);
+  });
+});

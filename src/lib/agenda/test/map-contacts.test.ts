@@ -113,16 +113,20 @@ describe("mapContact visits", () => {
     expect(v).toMatchObject({ priority: "NORMAL", minutes: null });
   });
 
-  it("makes an unknown last visit due today and says so", () => {
-    const { value, issues } = mapContact(input(visits), TODAY);
-    // 1 per month = every 30 days (rounded): last visit 30 days ago.
-    expect(value?.visits?.lastVisit).toBe("2026-09-19");
+  it("follows a person without a known last visit from the day they were added, and says so", () => {
+    const { value, issues } = mapContact(input({ ...visits, createdAt: day("2026-10-10") }), TODAY);
+    expect(value?.visits).toMatchObject({ lastVisit: "2026-10-10", startedOn: "2026-10-10" });
     expect(issues).toEqual([{ kind: "contact", id: "c1", reason: "LAST_VISIT_UNKNOWN" }]);
   });
 
-  it("is due today whatever the rhythm", () => {
-    const weekly = mapContact(input({ visitsPerPeriod: 2, visitPeriod: "WEEK" }), TODAY).value?.visits;
-    expect(weekly?.lastVisit).toBe("2026-10-16");
+  it("never starts after today, whatever the stored creation date", () => {
+    const v = mapContact(input({ ...visits, createdAt: day("2026-12-01") }), TODAY).value?.visits;
+    expect(v?.startedOn).toBe(TODAY);
+  });
+
+  it("keeps no start date when the last visit is known", () => {
+    const v = mapContact(input({ ...visits, lastVisitOn: day("2026-09-20") }), TODAY).value?.visits;
+    expect(v?.startedOn).toBeUndefined();
   });
 
   it("has no visits when none is set, without issue", () => {

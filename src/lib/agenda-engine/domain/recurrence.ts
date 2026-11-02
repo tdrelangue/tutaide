@@ -58,7 +58,9 @@ export function lastSeen(ctx: PlannerContext, person: Contact): LastSeen {
     .filter((p) => p.held && p.participants.includes(person.id))
     .map((p) => ({ date: p.date, source: p.title }));
   const done = validatedWith(ctx, person.id).filter((v) => v.date <= today);
-  return latest({ date: person.visits?.lastVisit ?? null, source: null }, [
+  // A made-up start date (last visit unknown) is never a visit.
+  const onFile = person.visits?.startedOn === undefined ? (person.visits?.lastVisit ?? null) : null;
+  return latest({ date: onFile, source: null }, [
     ...held,
     ...done,
   ]);
@@ -80,10 +82,13 @@ function appointmentsWith(ctx: PlannerContext, personId: string): Sighting[] {
  * a quarterly person met at 2 months restarts the 3 months from that meeting.
  */
 export function rhythmAnchor(ctx: PlannerContext, person: Contact): LastSeen {
-  return latest(lastSeen(ctx, person), [
+  const anchor = latest(lastSeen(ctx, person), [
     ...validatedWith(ctx, person.id),
     ...appointmentsWith(ctx, person.id),
   ]);
+  // Never seen, last visit unknown: the rhythm starts the day the person was added.
+  const startedOn = person.visits?.startedOn;
+  return anchor.date === null && startedOn !== undefined ? { date: startedOn, source: null } : anchor;
 }
 
 /** Next regular visit = last « vu », « prévu » or appointment with the person + frequency. */

@@ -196,6 +196,22 @@ describe("buildTasks", () => {
     expect(tasks[0]?.dur).toBe(60);
   });
 
+  it("spreads a person without a known last visit over a whole interval from the day they were added, without urgency", () => {
+    const fresh = protege("anne", "Anne Onyme", { at: MALEMORT, last: MON, priority: "NORMAL" });
+    const contact = { ...fresh, visits: fresh.visits && { ...fresh.visits, startedOn: MON } };
+    const ctx = createContext(state({ contacts: [contact] }));
+    const { tasks } = buildTasks(ctx, MON, SUN4, new Set());
+    expect(tasks[0]).toMatchObject({ earliest: MON, latest: "2026-11-18", priority: "LOW", overdue: false });
+  });
+
+  it("treats a person without a known last visit like any other once that first interval is over", () => {
+    const fresh = protege("anne", "Anne Onyme", { at: MALEMORT, last: "2026-08-01", priority: "NORMAL" });
+    const contact = { ...fresh, visits: fresh.visits && { ...fresh.visits, startedOn: "2026-08-01" } };
+    const ctx = createContext(state({ contacts: [contact] }));
+    const { tasks } = buildTasks(ctx, MON, SUN4, new Set());
+    expect(tasks[0]).toMatchObject({ earliest: MON, priority: "NORMAL", overdue: true });
+  });
+
   it("brings an overdue visit to the very start of the period", () => {
     const ctx = createContext(state({ contacts: [marc] }));
     const { tasks } = buildTasks(ctx, "2026-11-09", "2026-12-06", new Set());

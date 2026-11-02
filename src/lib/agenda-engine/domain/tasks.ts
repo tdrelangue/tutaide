@@ -6,12 +6,14 @@ import type {
   Place,
   Priority,
   ValidatedItem,
+  VisitPlan,
 } from "./model";
 import type { Task, Unplaced } from "./planTypes";
 import { PRIO_RANK } from "./priority";
 import {
   intervalDays,
   isValidVisitPlan,
+  lastSeen,
   nextVisitDue,
   rhythmAnchor,
 } from "./recurrence";
@@ -178,6 +180,32 @@ function visitTask(
   };
 }
 
+/**
+ * Person whose last visit is unknown and not seen since: the first visit is
+ * spread over the whole interval from `startedOn`, at low priority (placed
+ * where it fits best, postponed quietly otherwise). Null once that interval
+ * is over or a later visit is known: the usual rhythm applies.
+ */
+function freshStart(
+  ctx: PlannerContext,
+  person: Contact,
+  visits: VisitPlan,
+  P0: IsoDate,
+  P1: IsoDate,
+): { first: Occurrence; nextDue: IsoDate } | null {
+  const { startedOn } = visits;
+  if (startedOn === undefined) return null;
+  if (lastSeen(ctx, person).date !== null || rhythmAnchor(ctx, person).source !== null) return null;
+  const interval = intervalDays(visits);
+  const latest = addDays(startedOn, interval);
+  if (latest < P0 || startedOn > P1) return null;
+  const due = addDays(startedOn, interval / 2);
+  return {
+    first: { earliest: startedOn < P0 ? P0 : startedOn, latest, due, overdue: false },
+    nextDue: addDays(due, interval),
+  };
+}
+
 /** Regular visits of one protected person in the period. */
 function visitTasks(
   ctx: PlannerContext,
@@ -198,12 +226,17 @@ function visitTasks(
   if (!isValidVisitPlan(visits)) return invalid("INVALID_FREQUENCY");
   const place = person.places[0];
   if (!place) return invalid("NO_ADDRESS");
-  const due = nextVisitDue(ctx, person);
+  const fresh = freshStart(ctx, person, visits, P0, P1);
+  const due = fresh?.nextDue ?? nextVisitDue(ctx, person);
   if (due === null) return [];
   const missed = missedSinceLastSeen(ctx, person);
-  return occurrences(due, intervalDays(visits), P0, P1)
+  const regular = occurrences(due, intervalDays(visits), P0, P1);
+  return (fresh ? [fresh.first, ...regular] : regular)
     .filter((o) => !ctx.state.skips.includes(`${person.id}@${o.due}`))
-    .map((o, i) => visitTask(ctx, person, place, o, missed && i === 0));
+    .map((o, i) => {
+      const task = visitTask(ctx, person, place, o, missed && i === 0);
+      return fresh && i === 0 ? { ...task, priority: "LOW" as const } : task;
+    });
 }
 
 /** Validated items of the period: held in place, unless movable (fixed items never move). */

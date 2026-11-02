@@ -37,6 +37,16 @@ export const agendaSettingsSchema = z
   });
 export type AgendaSettingsInput = z.infer<typeof agendaSettingsSchema>;
 
+/** Digits and the usual separators only (« 06 12 34 56 78 », « +33 6… »). Empty = no phone. */
+export const phoneSchema = z
+  .string()
+  .trim()
+  .max(30, "Numéro de téléphone trop long.")
+  .regex(/^[0-9+().\s-]*$/, "Le numéro de téléphone ne peut contenir que des chiffres.")
+  .nullable()
+  .default(null)
+  .transform((v) => (v ? v : null));
+
 export const agendaPersonSchema = z
   .object({
     fullName: z.string().trim().min(2, "Indiquez le nom de la personne.").max(200),
@@ -45,6 +55,7 @@ export const agendaPersonSchema = z
     visitPeriod: z.enum(["WEEK", "MONTH", "QUARTER", "YEAR"]),
     visitMinutes: minutes.min(15).max(8 * 60).nullable(),
     notes: z.string().trim().max(1000).nullable(),
+    phone: phoneSchema,
     status: z.enum(["ACTIVE", "PAUSED", "ENDED"]),
     endReason: z.enum(["DECES", "DESSAISISSEMENT", "MAINLEVEE", "TRANSFERT", "AUTRE"]).nullable(),
   })

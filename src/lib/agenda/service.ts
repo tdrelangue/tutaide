@@ -38,6 +38,7 @@ export type AgendaPersonView = {
   visitPeriod: AgendaPeriodValue | null;
   visitMinutes: number | null;
   notes: string | null;
+  phone: string | null;
   lastVisitOn: string | null;
   status: "ACTIVE" | "PAUSED" | "ENDED";
   endReason: AgendaEndReasonValue | null;
@@ -122,7 +123,7 @@ const personInclude = { places: { where: { position: 0 }, take: 1 } } as const;
 
 type PersonRow = Awaited<ReturnType<typeof findPersonRows>>[number];
 
-function findPersonRows(ownerId: string) {
+export function findPersonRows(ownerId: string) {
   return db.agendaContact.findMany({ where: { ownerId, category: "PROTEGE" }, include: personInclude });
 }
 
@@ -137,6 +138,7 @@ function toPersonView(r: PersonRow): AgendaPersonView {
     visitPeriod: r.visitPeriod,
     visitMinutes: r.visitMin,
     notes: unseal(r.notes),
+    phone: unseal(r.phone),
     lastVisitOn: r.lastVisitOn?.toISOString().slice(0, 10) ?? null,
     status: r.status,
     endReason: r.endReason,
@@ -187,12 +189,13 @@ function personColumns(input: AgendaPersonInput) {
     visitPeriod: input.visitPeriod,
     visitMin: input.visitMinutes,
     notes: sealOrNull(input.notes),
+    phone: sealOrNull(input.phone),
     status: input.status,
     endReason: input.status === "ENDED" ? input.endReason : null,
   };
 }
 
-function placeColumns(ownerId: string, place: Place) {
+export function placeColumns(ownerId: string, place: Place) {
   return { ownerId, label: HOME_PLACE_LABEL, address: seal(place.label), point: sealPoint(place), precision: place.precision, position: 0 };
 }
 
@@ -212,7 +215,7 @@ function todayUtc(): Date {
 }
 
 /** Checked inside the write transaction, so two simultaneous additions cannot both pass. */
-async function assertRoomFor(tx: Tx, ownerId: string, added: number): Promise<void> {
+export async function assertRoomFor(tx: Tx, ownerId: string, added: number): Promise<void> {
   const count = await tx.agendaContact.count({ where: { ownerId, category: "PROTEGE" } });
   if (count + added > MAX_PERSONS_PER_OWNER) throw new AgendaRefusal(CAP_MESSAGE);
 }
@@ -249,6 +252,15 @@ export async function updateAgendaPerson(ownerId: string, personId: string, inpu
   return true;
 }
 
+/** « Mesure terminée » for several persons at once (selection mode); those already ended keep their reason and date. */
+export async function endAgendaPersons(ownerId: string, personIds: string[], endReason: AgendaPersonInput["endReason"]): Promise<number> {
+  const { count } = await db.agendaContact.updateMany({
+    where: { ownerId, id: { in: personIds }, category: "PROTEGE", status: { not: "ENDED" } },
+    data: { status: "ENDED", endReason, endedOn: todayUtc() },
+  });
+  return count;
+}
+
 /** Appointments held at one of these places (the database refuses to delete such a place). */
 async function placesInUse(tx: Tx, ownerId: string, placeIds: string[]): Promise<boolean> {
   if (placeIds.length === 0) return false;
@@ -256,7 +268,7 @@ async function placesInUse(tx: Tx, ownerId: string, placeIds: string[]): Promise
 }
 
 /** The person's default address (position 0), updated in place so appointments keep pointing at it. */
-async function replaceDefaultPlace(tx: Tx, ownerId: string, contactId: string, address: Place | null): Promise<void> {
+export async function replaceDefaultPlace(tx: Tx, ownerId: string, contactId: string, address: Place | null): Promise<void> {
   const current = await tx.agendaPlace.findFirst({ where: { ownerId, contactId, position: 0 }, select: { id: true } });
   if (address === null) {
     if (!current) return;
@@ -343,4 +355,25 @@ export async function deleteAgendaPerson(ownerId: string, personId: string): Pro
     await tx.agendaContact.delete({ where: { id_ownerId: { id: personId, ownerId } } });
   }, TX_OPTIONS);
   return true;
+}
+
+export type BulkDeleteResult = { deleted: number; refused: string[] };
+
+/**
+ * Removes several persons (selection mode), one transaction each: a person
+ * whose address is the place of an appointment is refused and named, the
+ * others are still removed.
+ */
+export async function deleteAgendaPersons(ownerId: string, personIds: string[]): Promise<BulkDeleteResult> {
+  const result: BulkDeleteResult = { deleted: 0, refused: [] };
+  for (const personId of personIds) {
+    try {
+      if (await deleteAgendaPerson(ownerId, personId)) result.deleted++;
+    } catch (error) {
+      if (!(error instanceof AgendaRefusal)) throw error;
+      const row = await db.agendaContact.findFirst({ where: { id: personId, ownerId }, select: { fullName: true } });
+      result.refused.push(row?.fullName ?? "Une personne");
+    }
+  }
+  return result;
 }

@@ -1,9 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useId, useRef, useState } from "react";
-import { FolderInput, Loader2, Pencil, Plus, Trash2 } from "lucide-react";
+import { FileSpreadsheet, FolderInput, ListChecks, Loader2, Pencil, Plus, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import {
   AlertDialog,
@@ -21,7 +22,9 @@ import type { IsoDate, VisitStatusRow } from "@/lib/agenda/views/types";
 import { formatDayPlain } from "./appointments/format";
 import { InlineError } from "./appointments/inline-error";
 import { ERROR_TEXT, PrecisionBadge } from "./address-field";
+import { ContactsFileDialog } from "./contacts-file-dialog";
 import { PersonDialog } from "./person-dialog";
+import { SelectionBar } from "./selection-bar";
 import { importAgendaPersons, removeAgendaPerson } from "./actions";
 import { getVisitStatus } from "./planning-actions";
 import { useAgendaQuery } from "./use-agenda-query";
@@ -35,6 +38,37 @@ type Props = {
 
 /** Dialog state: closed, a new person, or an existing one. */
 type Editing = { person: AgendaPersonView | null } | null;
+
+/** Selection mode: null = off, else the ids ticked. */
+type Selection = ReadonlySet<string> | null;
+
+/** Ticks / unticks persons; turning selection mode off forgets them. */
+function useSelection() {
+  const [selected, setSelected] = useState<Selection>(null);
+
+  function toggle(ids: string[], isOn: boolean) {
+    setSelected((current) => {
+      if (current === null) return current;
+      const next = new Set(current);
+      for (const id of ids) {
+        if (isOn) next.add(id);
+        else next.delete(id);
+      }
+      return next;
+    });
+  }
+
+  return {
+    selected,
+    start: () => setSelected(new Set()),
+    stop: () => setSelected(null),
+    set: (ids: string[]) => setSelected(new Set(ids)),
+    toggle,
+  };
+}
+
+/** What a table needs to show its checkboxes; null outside selection mode. */
+type RowSelection = { selected: ReadonlySet<string>; onToggle: (ids: string[], isOn: boolean) => void } | null;
 
 /** « Vu le / Prévu le / Prochaine visite » by person id; null while loading. */
 type VisitStatuses = ReadonlyMap<string, VisitStatusRow> | null;
@@ -63,6 +97,7 @@ function useVisitStatuses(persons: AgendaPersonView[]) {
 
 export function PersonsTab({ persons, importableCount, defaultVisitMinutes }: Props) {
   const [editing, setEditing] = useState<Editing>(null);
+  const [isFileOpen, setIsFileOpen] = useState(false);
   const [toDelete, setToDelete] = useState<AgendaPersonView | null>(null);
   /** Kept while the confirmation closes, so its title never reads "undefined". */
   const [deleteName, setDeleteName] = useState("");
@@ -70,6 +105,10 @@ export function PersonsTab({ persons, importableCount, defaultVisitMinutes }: Pr
   const importAction = useAgendaAction();
   const deleteAction = useAgendaAction();
   const visits = useVisitStatuses(persons);
+  const selection = useSelection();
+  // Removed persons disappear from the selection.
+  const selected = selection.selected && new Set([...selection.selected].filter((id) => persons.some((p) => p.id === id)));
+  const rowSelection: RowSelection = selected && { selected, onToggle: selection.toggle };
 
   const active = persons.filter((p) => p.status === "ACTIVE");
   const paused = persons.filter((p) => p.status === "PAUSED");
@@ -132,6 +171,16 @@ export function PersonsTab({ persons, importableCount, defaultVisitMinutes }: Pr
               Importer depuis mes dossiers ({importableCount})
             </Button>
           )}
+          <Button variant="outline" onClick={() => setIsFileOpen(true)}>
+            <FileSpreadsheet className="mr-2 h-4 w-4" aria-hidden="true" />
+            Importer un fichier (Proxima…)
+          </Button>
+          {persons.length > 1 && selected === null && (
+            <Button variant="outline" onClick={selection.start}>
+              <ListChecks className="mr-2 h-4 w-4" aria-hidden="true" />
+              Sélectionner
+            </Button>
+          )}
           <Button ref={addRef} onClick={() => setEditing({ person: null })}>
             <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
             Ajouter une personne
@@ -148,13 +197,23 @@ export function PersonsTab({ persons, importableCount, defaultVisitMinutes }: Pr
         </div>
       )}
 
+      {selected && (
+        <SelectionBar
+          selected={selected}
+          persons={persons}
+          onSelectAll={() => selection.set(persons.map((p) => p.id))}
+          onClear={() => selection.set([])}
+          onExit={selection.stop}
+        />
+      )}
+
       {visits.error && persons.length > 0 && (
         <InlineError message={`Les dates de visite n'ont pas pu être chargées. ${visits.error}`} onRetry={handleVisitsRetry} />
       )}
 
-      <PersonTable title="À visiter" rows={active} statuses={visits.statuses} defaultVisitMinutes={defaultVisitMinutes} onEdit={setEditing} onDelete={askDelete} />
-      <PersonTable title="En pause" rows={paused} statuses={visits.statuses} defaultVisitMinutes={defaultVisitMinutes} onEdit={setEditing} onDelete={askDelete} />
-      <PersonTable title="Mesures terminées" rows={ended} statuses={visits.statuses} defaultVisitMinutes={defaultVisitMinutes} onEdit={setEditing} onDelete={askDelete} />
+      <PersonTable title="À visiter" rows={active} selection={rowSelection} statuses={visits.statuses} defaultVisitMinutes={defaultVisitMinutes} onEdit={setEditing} onDelete={askDelete} />
+      <PersonTable title="En pause" rows={paused} selection={rowSelection} statuses={visits.statuses} defaultVisitMinutes={defaultVisitMinutes} onEdit={setEditing} onDelete={askDelete} />
+      <PersonTable title="Mesures terminées" rows={ended} selection={rowSelection} statuses={visits.statuses} defaultVisitMinutes={defaultVisitMinutes} onEdit={setEditing} onDelete={askDelete} />
 
       {editing && (
         <PersonDialog
@@ -165,6 +224,8 @@ export function PersonsTab({ persons, importableCount, defaultVisitMinutes }: Pr
           defaultVisitMinutes={defaultVisitMinutes}
         />
       )}
+
+      <ContactsFileDialog open={isFileOpen} onOpenChange={setIsFileOpen} />
 
       <AlertDialog open={toDelete !== null} onOpenChange={handleDeleteOpenChange}>
         <AlertDialogContent>
@@ -199,6 +260,7 @@ export function PersonsTab({ persons, importableCount, defaultVisitMinutes }: Pr
 function PersonTable({
   title,
   rows,
+  selection,
   statuses,
   defaultVisitMinutes,
   onEdit,
@@ -206,6 +268,7 @@ function PersonTable({
 }: {
   title: string;
   rows: AgendaPersonView[];
+  selection: RowSelection;
   statuses: VisitStatuses;
   defaultVisitMinutes: number;
   onEdit: (editing: Editing) => void;
@@ -213,6 +276,9 @@ function PersonTable({
 }) {
   const headingId = useId();
   if (rows.length === 0) return null;
+  const ids = rows.map((p) => p.id);
+  const ticked = selection ? ids.filter((id) => selection.selected.has(id)).length : 0;
+  const allState = ticked === 0 ? false : ticked === ids.length ? true : "indeterminate";
   return (
     <section className="space-y-2">
       <h2 id={headingId} className="text-sm font-semibold">{title} ({rows.length})</h2>
@@ -220,6 +286,15 @@ function PersonTable({
         <table className="w-full text-sm" aria-labelledby={headingId}>
           <thead className="bg-muted/50 text-left">
             <tr>
+              {selection && (
+                <th scope="col" className="w-10 px-3 py-2">
+                  <Checkbox
+                    checked={allState}
+                    onCheckedChange={(state) => selection.onToggle(ids, state === true)}
+                    aria-label={`Tout cocher dans « ${title} »`}
+                  />
+                </th>
+              )}
               <th scope="col" className="px-3 py-2 font-medium">Nom</th>
               <th scope="col" className="px-3 py-2 font-medium">Lieu de visite</th>
               <th scope="col" className="px-3 py-2 font-medium">Fréquence</th>
@@ -232,7 +307,7 @@ function PersonTable({
           </thead>
           <tbody>
             {rows.map((person) => (
-              <PersonRow key={person.id} person={person} status={statuses === null ? undefined : (statuses.get(person.id) ?? null)} defaultVisitMinutes={defaultVisitMinutes} onEdit={onEdit} onDelete={onDelete} />
+              <PersonRow key={person.id} person={person} selection={selection} status={statuses === null ? undefined : (statuses.get(person.id) ?? null)} defaultVisitMinutes={defaultVisitMinutes} onEdit={onEdit} onDelete={onDelete} />
             ))}
           </tbody>
         </table>
@@ -243,12 +318,14 @@ function PersonTable({
 
 function PersonRow({
   person,
+  selection,
   status,
   defaultVisitMinutes,
   onEdit,
   onDelete,
 }: {
   person: AgendaPersonView;
+  selection: RowSelection;
   /** undefined while loading, null when the agenda has nothing for this person. */
   status: VisitStatusRow | null | undefined;
   defaultVisitMinutes: number;
@@ -257,10 +334,24 @@ function PersonRow({
 }) {
   const duration = person.visitMinutes ?? defaultVisitMinutes;
   return (
-    <tr className="border-t align-top">
+    <tr className={cn("border-t align-top", selection?.selected.has(person.id) && "bg-primary/5")}>
+      {selection && (
+        <td className="px-3 py-2">
+          <Checkbox
+            checked={selection.selected.has(person.id)}
+            onCheckedChange={(state) => selection.onToggle([person.id], state === true)}
+            aria-label={`Sélectionner ${person.fullName}`}
+          />
+        </td>
+      )}
       <th scope="row" className="px-3 py-2 text-left font-normal">
         <span className="font-medium">{person.fullName}</span>
         {person.fromDossiers && <Badge variant="outline" className="ml-2 text-xs">Issue de vos dossiers</Badge>}
+        {person.phone && (
+          <a href={`tel:${person.phone.replace(/[^0-9+]/g, "")}`} className="block text-xs text-muted-foreground underline-offset-2 hover:underline">
+            {person.phone}
+          </a>
+        )}
         {person.status === "ENDED" && person.endReason && (
           <span className="block text-xs text-muted-foreground">{END_REASON_LABELS[person.endReason]}</span>
         )}

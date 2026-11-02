@@ -63,6 +63,7 @@ export async function addPerson(client: PrismaClient, ownerId: string, fullName:
     visitPeriod: period,
     visitMinutes: null,
     notes: null,
+    phone: null,
     status: "ACTIVE",
     endReason: null,
   });

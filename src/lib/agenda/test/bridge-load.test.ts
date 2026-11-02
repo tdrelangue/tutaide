@@ -180,6 +180,7 @@ describe("issues", () => {
     const jean = await addPerson(client, kim, "Jean Bonneau", { lastVisitOn: null });
     const loaded = await loadOk(kim);
     assert.deepEqual(loaded.issues.map((i) => [i.id, i.reason]), [[jean, "LAST_VISIT_UNKNOWN"]]);
-    assert.equal(loaded.state.contacts[0]?.visits?.lastVisit, "2026-09-19");
+    // Added "now" (after the test's today): followed from today.
+    assert.equal(loaded.state.contacts[0]?.visits?.startedOn, "2026-10-19");
   });
 });

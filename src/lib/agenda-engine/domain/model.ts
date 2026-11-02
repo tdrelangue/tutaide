@@ -42,6 +42,12 @@ export interface VisitPlan {
   readonly period: Period;
   /** Last visit on file before the agenda knew about this person. */
   readonly lastVisit: IsoDate;
+  /**
+   * Last visit unknown: the agenda started following the person on this date
+   * (`lastVisit` is then the same date). The first visit may fall anywhere in
+   * the interval that follows, without urgency (Thomas, 2026-11-02).
+   */
+  readonly startedOn?: IsoDate;
   readonly priority: Priority;
   /** Visit length; null = the default from settings. */
   readonly minutes: number | null;

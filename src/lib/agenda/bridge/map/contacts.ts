@@ -1,5 +1,4 @@
 import type { AgendaAvailability, AgendaContact, AgendaPlace } from "@prisma/client";
-import { addDays, intervalDays } from "../../../agenda-engine/domain";
 import type { Availability, Contact, Place, PrefDayRule, VisitPlan } from "../../../agenda-engine/domain";
 import { isValidVisitPlan } from "../../../agenda-engine/domain/recurrence";
 import { isIsoDow, toIso } from "../dates";
@@ -56,9 +55,11 @@ function mapVisits(row: AgendaContact, today: string): Mapped<VisitPlan> {
   };
   if (!isValidVisitPlan(plan)) return rejected([makeIssue("contact", row.id, "VISITS_INVALID")]);
   if (row.lastVisitOn) return found(plan);
-  // Unknown last visit: made up so that the visit is due today (one interval later).
-  const lastVisit = addDays(today, -intervalDays(plan));
-  return found({ ...plan, lastVisit }, [makeIssue("contact", row.id, "LAST_VISIT_UNKNOWN")]);
+  // Unknown last visit: the person is followed from the day they were added (never later than
+  // today); the first visit is spread over the interval that follows, without urgency.
+  const added = toIso(row.createdAt);
+  const startedOn = added < today ? added : today;
+  return found({ ...plan, lastVisit: startedOn, startedOn }, [makeIssue("contact", row.id, "LAST_VISIT_UNKNOWN")]);
 }
 
 function mapPrefDay(row: AgendaContact): Mapped<PrefDayRule> {

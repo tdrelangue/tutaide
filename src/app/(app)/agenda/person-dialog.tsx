@@ -53,6 +53,7 @@ export function PersonDialog({ open, onOpenChange, person, defaultVisitMinutes }
   const [period, setPeriod] = useState<AgendaPeriodValue>(person?.visitPeriod ?? "QUARTER");
   const [visitMinutes, setVisitMinutes] = useState<number | null>(person?.visitMinutes ?? null);
   const [notes, setNotes] = useState(person?.notes ?? "");
+  const [phone, setPhone] = useState(person?.phone ?? "");
   const [status, setStatus] = useState<Status>(person?.status ?? "ACTIVE");
   const [endReason, setEndReason] = useState<AgendaEndReasonValue | null>(person?.endReason ?? null);
   const [isAddressPending, setIsAddressPending] = useState(false);
@@ -68,6 +69,10 @@ export function PersonDialog({ open, onOpenChange, person, defaultVisitMinutes }
 
   function handleNameChange(event: React.ChangeEvent<HTMLInputElement>) {
     setFullName(event.target.value);
+  }
+
+  function handlePhoneChange(event: React.ChangeEvent<HTMLInputElement>) {
+    setPhone(event.target.value);
   }
 
   function handleVisitsChange(event: React.ChangeEvent<HTMLSelectElement>) {
@@ -116,6 +121,7 @@ export function PersonDialog({ open, onOpenChange, person, defaultVisitMinutes }
       visitPeriod: period,
       visitMinutes,
       notes: notes.trim() || null,
+      phone: phone.trim() || null,
       status,
       endReason: status === "ENDED" ? endReason : null,
     };
@@ -146,6 +152,20 @@ export function PersonDialog({ open, onOpenChange, person, defaultVisitMinutes }
               aria-describedby={fieldErrors.name ? "person-name-error" : undefined}
             />
             {fieldErrors.name && <p id="person-name-error" className={ERROR_TEXT}>{fieldErrors.name}</p>}
+          </div>
+
+          <div className="space-y-1">
+            <Label htmlFor="person-phone">Téléphone (facultatif)</Label>
+            <Input
+              id="person-phone"
+              type="tel"
+              value={phone}
+              onChange={handlePhoneChange}
+              disabled={isBusy}
+              autoComplete="off"
+              inputMode="tel"
+              className="w-56"
+            />
           </div>
 
           <AddressField

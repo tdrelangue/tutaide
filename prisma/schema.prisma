@@ -548,6 +548,8 @@ model AgendaContact {
   notBeforeMin       Int?
   /// Encrypted (may hold health information).
   notes              String?
+  /// Encrypted, like the address.
+  phone              String?
   // Regular visits (protected persons only; all null = no regular visits).
   visitsPerPeriod    Int?
   visitPeriod        AgendaPeriod?

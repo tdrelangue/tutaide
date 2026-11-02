@@ -2,17 +2,21 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { MAX_FILE_CONTACTS } from "@/lib/agenda/contacts-file";
+import { findImportConflicts, importContactsFromFile, type ImportConflict, type ImportReport } from "@/lib/agenda/contacts-import";
 import { requireAgendaOwner } from "@/lib/agenda/context";
 import { dayRuleSchema, deleteDayRule, ruleIdSchema, saveDayRule } from "@/lib/agenda/day-rules";
 import { searchAddress, type GeocodeResult } from "@/lib/agenda/geocode";
 import {
   createAgendaPerson,
   deleteAgendaPerson,
+  deleteAgendaPersons,
+  endAgendaPersons,
   importPersonsFromDossiers,
   saveAgendaSettings as storeAgendaSettings,
   updateAgendaPerson,
 } from "@/lib/agenda/service";
-import { agendaPersonSchema, agendaSettingsSchema, personIdSchema } from "@/lib/agenda/validation";
+import { agendaPersonSchema, agendaSettingsSchema, personIdSchema, phoneSchema } from "@/lib/agenda/validation";
 import { failureMessage } from "./action-errors";
 
 /**
@@ -64,6 +68,48 @@ export async function importAgendaPersons(): Promise<AgendaActionResult> {
   }
 }
 
+const fileContactsSchema = z
+  .array(
+    z.object({
+      firstName: z.string().trim().min(1).max(100),
+      lastName: z.string().trim().min(1).max(100),
+      usageName: z.string().trim().min(1).max(100).nullable(),
+      address: z.string().trim().min(3).max(200).nullable(),
+      phone: phoneSchema,
+    }),
+  )
+  .min(1, "Aucune personne trouvée dans ce fichier.")
+  .max(MAX_FILE_CONTACTS, `Le fichier contient plus de ${MAX_FILE_CONTACTS} personnes.`);
+
+export type FileImportResult = { success: true; report: ImportReport } | { success: false; error: string };
+
+const replaceSchema = z.array(z.number().int().min(0).max(MAX_FILE_CONTACTS)).max(MAX_FILE_CONTACTS);
+
+export type FileConflictsResult = { success: true; conflicts: ImportConflict[] } | { success: false; error: string };
+
+/** Before importing: persons already in the agenda whose address or phone differs from the file. */
+export async function findAgendaFileConflicts(input: unknown): Promise<FileConflictsResult> {
+  try {
+    const { ownerId } = await requireAgendaOwner();
+    return { success: true, conflicts: await findImportConflicts(ownerId, fileContactsSchema.parse(input)) };
+  } catch (error) {
+    return { success: false, error: failureMessage("importFile", error) };
+  }
+}
+
+/** Persons read from a file by the page (name, address, phone only: contacts-file.ts); `replace` = lines whose differences win. */
+export async function importAgendaPersonsFromFile(input: unknown, replace: unknown = []): Promise<FileImportResult> {
+  try {
+    const { ownerId, actorId } = await requireAgendaOwner();
+    const choice = new Set(replaceSchema.parse(replace));
+    const report = await importContactsFromFile(ownerId, actorId, fileContactsSchema.parse(input), choice);
+    revalidatePath("/agenda");
+    return { success: true, report };
+  } catch (error) {
+    return { success: false, error: failureMessage("importFile", error) };
+  }
+}
+
 export async function saveAgendaPerson(personId: string | null, input: unknown): Promise<AgendaActionResult> {
   try {
     const { ownerId, actorId } = await requireAgendaOwner();
@@ -89,6 +135,39 @@ export async function removeAgendaPerson(personId: string): Promise<AgendaAction
     return done("Personne retirée de l'agenda");
   } catch (error) {
     return failure("removePerson", error);
+  }
+}
+
+const personIdsSchema = z.array(personIdSchema).min(1, "Aucune personne sélectionnée.").max(MAX_FILE_CONTACTS);
+const endReasonSchema = z.enum(["DECES", "DESSAISISSEMENT", "MAINLEVEE", "TRANSFERT", "AUTRE"]);
+
+const plural = (n: number, one: string, many: string) => (n > 1 ? `${n} ${many}` : `${n} ${one}`);
+
+/** Selection mode: removes the selected persons; those whose address hosts an appointment are kept and named. */
+export async function removeAgendaPersons(personIds: unknown): Promise<AgendaActionResult> {
+  try {
+    const { ownerId } = await requireAgendaOwner();
+    const { deleted, refused } = await deleteAgendaPersons(ownerId, personIdsSchema.parse(personIds));
+    revalidatePath("/agenda");
+    const removed = `${plural(deleted, "personne retirée", "personnes retirées")} de l'agenda`;
+    if (refused.length === 0) return { success: true, message: removed };
+    return {
+      success: false,
+      error: `${removed}. Non retirées, car leur adresse est le lieu d'un rendez-vous : ${refused.join(", ")}.`,
+    };
+  } catch (error) {
+    return failure("removePersons", error);
+  }
+}
+
+/** Selection mode: « Mesure terminée » for the selected persons, with one reason. */
+export async function endAgendaMeasures(personIds: unknown, endReason: unknown): Promise<AgendaActionResult> {
+  try {
+    const { ownerId } = await requireAgendaOwner();
+    const count = await endAgendaPersons(ownerId, personIdsSchema.parse(personIds), endReasonSchema.parse(endReason));
+    return done(`${plural(count, "mesure terminée", "mesures terminées")}`);
+  } catch (error) {
+    return failure("endMeasures", error);
   }
 }
 

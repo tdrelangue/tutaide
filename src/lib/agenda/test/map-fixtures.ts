@@ -53,6 +53,7 @@ export function contactRow(over: Partial<AgendaContact> = {}): AgendaContact {
     dossierGroupKey: null,
     notBeforeMin: null,
     notes: null,
+    phone: null,
     visitsPerPeriod: null,
     visitPeriod: null,
     visitPriority: null,

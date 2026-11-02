@@ -188,7 +188,7 @@ describe("buildVisitStatus", () => {
     const owner = await seedOwner(client, "vs-unknown@test.invalid");
     const jean = await addPerson(client, owner, "Jean Bonneau", { lastVisitOn: null });
     const [row] = await visitStatusOf(owner);
-    assert.deepEqual(row, { personId: jean, seenOn: null, plannedOn: null, nextDue: "2026-10-19", paused: false });
+    assert.deepEqual(row, { personId: jean, seenOn: null, plannedOn: null, nextDue: "2026-11-18", paused: false });
   });
 });
 
@@ -297,11 +297,11 @@ describe("toAppointmentRow", () => {
 });
 
 describe("buildVisitStatus without the load issues", () => {
-  it("takes the last visit on file at its word", async () => {
+  it("never shows the start date of a person without a known last visit as a visit", async () => {
     const owner = await seedOwner(client, "vs-noissues@test.invalid");
     await addPerson(client, owner, "Jean Bonneau", { lastVisitOn: null });
     const [row] = buildVisitStatus(await stateOf(owner));
-    assert.equal(row.seenOn, "2026-09-19");
+    assert.equal(row.seenOn, null);
   });
 
   it("keeps a real visit even when the person had no last visit on file", async () => {

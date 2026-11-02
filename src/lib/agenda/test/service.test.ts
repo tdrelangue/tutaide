@@ -29,6 +29,7 @@ describe("agenda service (tests run in order: each builds on the previous state)
     visitPeriod: "MONTH" as const,
     visitMinutes: null,
     notes: "Pas avant 10 h.",
+    phone: null,
     status: "ACTIVE" as const,
     endReason: null,
   };

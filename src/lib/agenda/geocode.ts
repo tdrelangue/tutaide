@@ -24,6 +24,7 @@ export type GeocodedAddress = {
   precision: AddressPrecision;
   /** Geocoder confidence, 0–1. */
   score: number;
+  postcode: string | null;
 };
 
 const PRECISIONS = new Set<string>(["housenumber", "street", "locality", "municipality"]);
@@ -41,7 +42,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function toAddress(feature: unknown): GeocodedAddress | null {
   if (!isRecord(feature) || !isRecord(feature.properties) || !isRecord(feature.geometry)) return null;
-  const { label, score, type } = feature.properties;
+  const { label, score, type, postcode } = feature.properties;
   const coordinates = feature.geometry.coordinates;
   if (typeof label !== "string" || typeof type !== "string" || !PRECISIONS.has(type)) return null;
   if (!Array.isArray(coordinates) || coordinates.length < 2) return null;
@@ -53,6 +54,7 @@ function toAddress(feature: unknown): GeocodedAddress | null {
     lon,
     precision: type as AddressPrecision, // checked against PRECISIONS above
     score: typeof score === "number" ? score : 0,
+    postcode: typeof postcode === "string" ? postcode : null,
   };
 }
 
