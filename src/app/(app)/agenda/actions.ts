@@ -9,6 +9,7 @@ import { dayRuleSchema, deleteDayRule, ruleIdSchema, saveDayRule } from "@/lib/a
 import { searchAddress, type GeocodeResult } from "@/lib/agenda/geocode";
 import { createGroup, deleteGroup, moveGroup, setPersonsGroup, updateGroup, type GroupScope } from "@/lib/agenda/groups";
 import { addressBookOf, createPartner, deletePartner, updatePartner } from "@/lib/agenda/partners";
+import { importPartnersFromFile, partnerImportSchema, type PartnerImportReport } from "@/lib/agenda/partners-import";
 import {
   createAgendaPerson,
   deleteAgendaPerson,
@@ -306,5 +307,19 @@ export async function removeAgendaPartner(partnerId: string): Promise<AgendaActi
     return done("Contact supprimé");
   } catch (error) {
     return failure("removePartner", error);
+  }
+}
+
+export type PartnerFileImportResult = { success: true; report: PartnerImportReport } | { success: false; error: string };
+
+/** Contacts read from a file by the page and checked by the user (partners-file.ts), into the shared address book. */
+export async function importAgendaPartnersFromFile(input: unknown): Promise<PartnerFileImportResult> {
+  try {
+    const { ownerId, actorId } = await requireAgendaOwner();
+    const report = await importPartnersFromFile(await addressBookOf(ownerId), actorId, partnerImportSchema.parse(input));
+    revalidatePath("/agenda");
+    return { success: true, report };
+  } catch (error) {
+    return { success: false, error: failureMessage("importPartners", error) };
   }
 }

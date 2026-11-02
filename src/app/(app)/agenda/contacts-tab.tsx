@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { Pencil, Plus, Search, Tags, Trash2 } from "lucide-react";
+import { FileSpreadsheet, Pencil, Plus, Search, Tags, Trash2 } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
   AlertDialog,
@@ -25,6 +25,7 @@ import { GroupBadge, GroupFilter } from "./group-badge";
 import { GroupsDialog } from "./groups-dialog";
 import type { PersonOption } from "./appointments/shared-contracts";
 import { PartnerDialog } from "./partner-dialog";
+import { PartnersFileDialog } from "./partners-file-dialog";
 import { useAgendaAction } from "./use-agenda-action";
 
 type Props = {
@@ -58,6 +59,7 @@ const telHref = (phone: string) => `tel:${phone.replace(/[^0-9+]/g, "")}`;
 export function ContactsTab({ partners, groups, persons }: Props) {
   const [editing, setEditing] = useState<Editing>(null);
   const [isGroupsOpen, setIsGroupsOpen] = useState(false);
+  const [isFileOpen, setIsFileOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [groupFilter, setGroupFilter] = useState<string | null>(null);
   const [toDelete, setToDelete] = useState<AgendaPartnerView | null>(null);
@@ -99,6 +101,10 @@ export function ContactsTab({ partners, groups, persons }: Props) {
             <Tags className="mr-2 h-4 w-4" aria-hidden="true" />
             Groupes
           </Button>
+          <Button variant="outline" onClick={() => setIsFileOpen(true)}>
+            <FileSpreadsheet className="mr-2 h-4 w-4" aria-hidden="true" />
+            Importer un fichier
+          </Button>
           <Button ref={addRef} onClick={() => setEditing({ partner: null })}>
             <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
             Ajouter un contact
@@ -108,8 +114,8 @@ export function ContactsTab({ partners, groups, persons }: Props) {
 
       {partners.length === 0 ? (
         <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
-          Aucun contact pour l&apos;instant. Ajoutez vos avocats, notaires, artisans… avec leurs coordonnées : toute votre structure
-          les retrouvera ici.
+          Aucun contact pour l&apos;instant. Ajoutez vos avocats, notaires, artisans… avec leurs coordonnées, ou importez un
+          fichier (Excel, CSV, carnet d&apos;adresses vCard) : toute votre structure les retrouvera ici.
         </div>
       ) : (
         <>
@@ -141,6 +147,7 @@ export function ContactsTab({ partners, groups, persons }: Props) {
         <PartnerDialog key={editing.partner?.id ?? "new"} open onOpenChange={handleDialogOpenChange} partner={editing.partner} groups={groups} persons={persons} />
       )}
       <GroupsDialog open={isGroupsOpen} onOpenChange={setIsGroupsOpen} groups={groups} kind="PARTNERS" />
+      <PartnersFileDialog open={isFileOpen} onOpenChange={setIsFileOpen} groups={groups} partners={partners} />
 
       <AlertDialog open={toDelete !== null} onOpenChange={handleDeleteOpenChange}>
         <AlertDialogContent>
