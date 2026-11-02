@@ -8,9 +8,11 @@ import { MandataireSelect } from "@/components/mandataire-select";
 import type { MandataireContext } from "@/lib/access/selection-actions";
 import type { AgendaGroupView } from "@/lib/agenda/groups";
 import { groupOf } from "@/lib/agenda/groups-rules";
+import { partnerName } from "@/lib/agenda/rules";
 import type { AgendaPartnerView } from "@/lib/agenda/partners";
 import type { AgendaPersonView, AgendaSettingsView } from "@/lib/agenda/service";
 import { AppointmentsTab } from "./appointments/appointments-tab";
+import type { PersonOption } from "./appointments/shared-contracts";
 import { ContactsTab } from "./contacts-tab";
 import { PersonsTab } from "./persons-tab";
 import { AGENDA_SETTINGS_HREF } from "./fix-links";
@@ -47,7 +49,15 @@ export function AgendaClient({ data, mandataires, initialTab }: Props) {
   const groups = data?.groups ?? [];
   const personOptions = (data?.persons ?? [])
     .filter((p) => p.status !== "ENDED")
-    .map((p) => ({ id: p.id, fullName: p.fullName, group: groupOf(p.groupId, groups) }));
+    .map((p): PersonOption => ({ id: p.id, fullName: p.fullName, group: groupOf(p.groupId, groups) }));
+  const partnerGroups = data?.partnerGroups ?? [];
+  // Contacts of the shared address book can take part too (Thomas, 2026-11-02).
+  const partnerOptions = (data?.partners ?? []).map((p): PersonOption => {
+    const detail = [p.lastName ? p.company : null, p.role].filter((s): s is string => s !== null).join(" · ") || null;
+    const fullName = partnerName(p);
+    return { id: p.id, fullName, kind: "PARTNER", detail, searchText: [fullName, detail].join(" "), group: groupOf(p.groupId, partnerGroups) };
+  });
+  const participantOptions = [...personOptions, ...partnerOptions];
   const defaultTab: TabKey = isTabKey(initialTab) ? initialTab : "planning";
 
   return (
@@ -103,21 +113,22 @@ export function AgendaClient({ data, mandataires, initialTab }: Props) {
             {needsSetup && <SetupCard />}
             {/* Panels stay mounted: switching tabs never loses unsaved work (settings, a proposal on screen). */}
             <TabsContent value="planning" forceMount className="mt-6 data-[state=inactive]:hidden">
-              <PlanningTab needsSetup={needsSetup} persons={personOptions} />
+              <PlanningTab needsSetup={needsSetup} persons={participantOptions} />
             </TabsContent>
             <TabsContent value="rendez-vous" forceMount className="mt-6 data-[state=inactive]:hidden">
-              <AppointmentsTab persons={personOptions} />
+              <AppointmentsTab persons={participantOptions} />
             </TabsContent>
             <TabsContent value="personnes" forceMount className="mt-6 data-[state=inactive]:hidden">
               <PersonsTab
                 persons={data.persons}
                 groups={data.groups}
+                partners={data.partners}
                 importableCount={data.importableCount}
                 defaultVisitMinutes={data.profile.defaultVisitMinutes}
               />
             </TabsContent>
             <TabsContent value="contacts" forceMount className="mt-6 data-[state=inactive]:hidden">
-              <ContactsTab partners={data.partners} groups={data.partnerGroups} />
+              <ContactsTab partners={data.partners} groups={data.partnerGroups} persons={personOptions} />
             </TabsContent>
           </Tabs>
         )}

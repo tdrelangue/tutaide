@@ -12,6 +12,9 @@ type Props = {
   readonly persons: readonly PersonOption[];
   readonly value: readonly string[];
   readonly onChange: (ids: string[]) => void;
+  /** Hint read with the search bar. */
+  readonly describedBy?: string;
+  readonly label?: string;
 };
 
 /** The groups present among the persons, in their first-seen order. */
@@ -28,7 +31,7 @@ const personsLabel = (n: number) => `${n} personne${n > 1 ? "s" : ""}`;
  * filters, instead of a long list to scroll. ARIA combobox: arrows move in the
  * suggestions, Entrée picks, Échap closes; the number of results is announced.
  */
-export function ParticipantPicker({ persons, value, onChange }: Props) {
+export function ParticipantPicker({ persons, value, onChange, describedBy, label = "Rechercher une personne" }: Props) {
   const [query, setQuery] = useState("");
   const [groupId, setGroupId] = useState<string | null>(null);
   const [isOpen, setIsOpen] = useState(false);
@@ -102,12 +105,12 @@ export function ParticipantPicker({ persons, value, onChange }: Props) {
           id={`${baseId}-input`}
           type="text"
           role="combobox"
-          aria-label="Rechercher une personne"
+          aria-label={label}
           aria-autocomplete="list"
           aria-expanded={showList}
           aria-controls={listId}
           aria-activedescendant={activeId}
-          aria-describedby="appt-people-hint"
+          aria-describedby={describedBy}
           value={query}
           onChange={handleQueryChange}
           onKeyDown={handleKeyDown}
@@ -186,7 +189,10 @@ function Suggestions({ listId, baseId, matches, total, activeIndex, onPick, onHo
               onMouseEnter={() => onHover(i)}
               className={cn("flex cursor-pointer items-center justify-between gap-2 rounded px-2 py-1.5 text-sm", i === activeIndex && "bg-muted")}
             >
-              <span className="truncate">{p.fullName}</span>
+              <span className="min-w-0 truncate">
+                {p.fullName}
+                {p.detail && <span className="ml-1.5 text-xs text-muted-foreground">{p.detail}</span>}
+              </span>
               {p.group && <GroupBadge group={p.group} className="shrink-0" />}
             </li>
           ))}

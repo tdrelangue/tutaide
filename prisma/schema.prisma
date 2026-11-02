@@ -550,6 +550,9 @@ model AgendaContact {
   dossierGroupKey    String?
   /// Coloured group (« Mesures », « Ad hoc »…). Null = the owner's first group of the kind.
   groupId            String?
+  /// A contact of the shared address book used in this agenda (category PRO): its name, address
+  /// and hours are copied from the partner, so the planner keeps reading one owner's contacts.
+  partnerId          String?
   /// Not available before this time (minutes), e.g. « pas avant 10 h ».
   notBeforeMin       Int?
   /// Encrypted (may hold health information).
@@ -577,6 +580,8 @@ model AgendaContact {
   linkedContact      AgendaContact?                 @relation("AgendaContactLink", fields: [linkedContactId, ownerId], references: [id, ownerId], onDelete: NoAction, onUpdate: NoAction)
   linkedFrom         AgendaContact[]                @relation("AgendaContactLink")
   group              AgendaGroup?                   @relation(fields: [groupId, ownerId], references: [id, ownerId], onDelete: NoAction, onUpdate: NoAction)
+  partner            AgendaPartner?                 @relation(fields: [partnerId], references: [id], onDelete: SetNull)
+  partnerLinks       AgendaPartnerLink[]
   places             AgendaPlace[]
   availabilities     AgendaAvailability[]
   participations     AgendaAppointmentParticipant[]
@@ -587,6 +592,7 @@ model AgendaContact {
 
   @@unique([id, ownerId])
   @@unique([ownerId, dossierGroupKey])
+  @@unique([ownerId, partnerId])
   @@index([ownerId, category, status])
   @@index([linkedContactId])
   @@index([groupId])
@@ -628,7 +634,7 @@ model AgendaGroup {
 /// (Thomas, 2026-11-02): the structure's (orgId), or the account's own without a structure (userId).
 /// Phones, e-mail, address, point and notes are encrypted like the persons' (sealed.ts).
 model AgendaPartner {
-  id           String        @id @default(cuid())
+  id           String               @id @default(cuid())
   orgId        String?
   userId       String?
   groupId      String?
@@ -646,11 +652,14 @@ model AgendaPartner {
   precision    String?
   notes        String?
   createdById  String?
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
-  organization Organization? @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  user         User?         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  group        AgendaGroup?  @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+  organization Organization?        @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  user         User?                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  group        AgendaGroup?         @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  hours        AgendaPartnerHours[]
+  contacts     AgendaContact[]
+  links        AgendaPartnerLink[]
 
   @@index([orgId])
   @@index([userId])
@@ -975,4 +984,29 @@ enum AgendaItemStatus {
 enum AgendaAnswer {
   BREAK
   RESPECT
+}
+
+/// « Agenda » add-on: opening hours of a partner (« lun.–ven. 9 h–12 h »), copied to its contact in each agenda.
+model AgendaPartnerHours {
+  id        String        @id @default(cuid())
+  partnerId String
+  /// ISO weekdays (1 = Monday … 7 = Sunday).
+  dows      Int[]
+  fromMin   Int
+  toMin     Int
+  partner   AgendaPartner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+
+  @@index([partnerId])
+}
+
+/// « Agenda » add-on: « notaire de Jean Bonneau » — a partner linked to a person of one agenda.
+model AgendaPartnerLink {
+  partnerId String
+  contactId String
+  ownerId   String
+  partner   AgendaPartner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  contact   AgendaContact @relation(fields: [contactId, ownerId], references: [id, ownerId], onDelete: Cascade)
+
+  @@id([partnerId, contactId])
+  @@index([contactId])
 }

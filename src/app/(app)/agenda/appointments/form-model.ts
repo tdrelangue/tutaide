@@ -10,14 +10,19 @@ import { addDays, formatDayShort, mondayOf, parseIso } from "./format";
 
 export type WhenKind = "FIXED" | "WEEK" | "RANGE";
 /** « Chez moi » is gone: almost never used (Thomas, 2026-11-02). */
-export type PlaceKind = "OFFICE" | "PERSON" | "OUTSIDE" | "VISIO";
+export type PlaceKind = "OFFICE" | "PERSON" | "PARTNER" | "OUTSIDE" | "VISIO";
 
 export type FormValues = {
   readonly title: string;
+  /** Persons to visit taking part. */
   readonly participantIds: readonly string[];
+  /** Contacts of the shared address book taking part (lawyer, notary…). */
+  readonly partnerIds: readonly string[];
   readonly place: PlaceKind;
   /** « Chez le majeur protégé »: which participant (null = the first one ticked). */
   readonly placePersonId: string | null;
+  /** « Au cabinet d'un contact »: which contact (null = the first one chosen). */
+  readonly placePartnerId: string | null;
   /** « À l'extérieur »: what the place is (« Cabinet du notaire »…) and its address. */
   readonly outsideLabel: string;
   readonly outsideAddress: Place | null;
@@ -52,6 +57,7 @@ export const FIELD_ORDER: readonly FieldKey[] = ["title", "place", "date", "time
 export const PLACE_CHOICES: readonly { value: PlaceKind; label: string }[] = [
   { value: "OFFICE", label: "Au bureau" },
   { value: "PERSON", label: "Chez le majeur protégé" },
+  { value: "PARTNER", label: "Au cabinet d'un contact" },
   { value: "OUTSIDE", label: "À l'extérieur (à préciser)" },
   { value: "VISIO", label: "En visio" },
 ];
@@ -72,8 +78,10 @@ export function initialValues(today: IsoDate, participantIds: readonly string[])
   return {
     title: "",
     participantIds,
+    partnerIds: [],
     place: "OFFICE",
     placePersonId: null,
+    placePartnerId: null,
     outsideLabel: "",
     outsideAddress: null,
     durationMin: 30,
@@ -120,8 +128,16 @@ export function placePerson(values: FormValues): string | null {
   return values.participantIds[0] ?? null;
 }
 
+/** The contact whose address is the place of « Au cabinet d'un contact ». */
+export function placePartner(values: FormValues): string | null {
+  const chosen = values.placePartnerId;
+  if (chosen !== null && values.partnerIds.includes(chosen)) return chosen;
+  return values.partnerIds[0] ?? null;
+}
+
 function checkPlace(values: FormValues): FieldErrors {
-  if (values.place === "PERSON" && placePerson(values) === null) return { place: "Cochez la personne chez qui a lieu le rendez-vous." };
+  if (values.place === "PERSON" && placePerson(values) === null) return { place: "Choisissez la personne chez qui a lieu le rendez-vous." };
+  if (values.place === "PARTNER" && placePartner(values) === null) return { place: "Choisissez le contact dans « Avec qui ? » : son adresse sera le lieu." };
   if (values.place === "OUTSIDE" && values.outsideAddress === null) return { place: "Indiquez l'adresse du rendez-vous." };
   return {};
 }
@@ -135,6 +151,8 @@ export function checkValues(values: FormValues): FieldErrors {
 function placeInput(values: FormValues): AppointmentInput["place"] {
   const person = placePerson(values);
   if (values.place === "PERSON" && person !== null) return { kind: "PERSON", personId: person };
+  const partner = placePartner(values);
+  if (values.place === "PARTNER" && partner !== null) return { kind: "PARTNER", partnerId: partner };
   if (values.place === "OUTSIDE" && values.outsideAddress !== null) {
     return { kind: "OUTSIDE", label: values.outsideLabel.trim(), address: values.outsideAddress };
   }
@@ -152,6 +170,7 @@ export function toInput(values: FormValues): AppointmentInput {
   return {
     title: values.title.trim(),
     participantIds: [...values.participantIds],
+    partnerIds: [...values.partnerIds],
     place: placeInput(values),
     durationMin: values.durationMin,
     when: whenInput(values),

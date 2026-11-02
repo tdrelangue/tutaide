@@ -17,9 +17,11 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   END_REASON_LABELS,
   formatDuration,
+  partnerName,
   type AgendaEndReasonValue,
 } from "@/lib/agenda/rules";
 import type { AgendaGroupView } from "@/lib/agenda/groups";
+import type { AgendaPartnerView } from "@/lib/agenda/partners";
 import { groupOf } from "@/lib/agenda/groups-rules";
 import type { AgendaPersonView, Place } from "@/lib/agenda/service";
 import { AddressField, ERROR_TEXT, PENDING_ADDRESS_ERROR } from "./address-field";
@@ -36,7 +38,7 @@ const SELECT_CLASS =
 const STATUS_CHOICES: { value: Status; label: string; hint: string }[] = [
   { value: "ACTIVE", label: "À visiter", hint: "Les visites sont planifiées selon la fréquence." },
   { value: "PAUSED", label: "En pause", hint: "Hospitalisation, séjour… aucune visite planifiée pour l'instant." },
-  { value: "ENDED", label: "Mesure terminée", hint: "Plus aucune visite ne sera planifiée." },
+  { value: "ENDED", label: "Inactive (mesure terminée)", hint: "Dessaisissement, mainlevée, décès, transfert… Plus aucune visite planifiée ; l'historique est conservé." },
 ];
 
 /** Today on this computer, "YYYY-MM-DD" (the max of « Dernière visite »). */
@@ -51,10 +53,12 @@ type Props = {
   /** Null = new person. */
   person: AgendaPersonView | null;
   groups: AgendaGroupView[];
+  /** The address book: the contacts linked to this person are listed in the file. */
+  partners?: readonly AgendaPartnerView[];
   defaultVisitMinutes: number;
 };
 
-export function PersonDialog({ open, onOpenChange, person, groups, defaultVisitMinutes }: Props) {
+export function PersonDialog({ open, onOpenChange, person, groups, partners = [], defaultVisitMinutes }: Props) {
   const [fullName, setFullName] = useState(person?.fullName ?? "");
   const [groupId, setGroupId] = useState<string | null>(() => groupOf(person?.groupId ?? null, groups)?.id ?? null);
   const [address, setAddress] = useState<Place | null>(person?.address ?? null);
@@ -226,6 +230,8 @@ export function PersonDialog({ open, onOpenChange, person, groups, defaultVisitM
             />
           </div>
 
+          {person && <LinkedContacts partners={partners.filter((p) => p.linkedPersonIds.includes(person.id))} />}
+
           <fieldset className="space-y-2" disabled={isBusy}>
             <legend className="text-sm font-medium">Situation</legend>
             {STATUS_CHOICES.map((choice) => (
@@ -286,5 +292,30 @@ export function PersonDialog({ open, onOpenChange, person, groups, defaultVisitM
         </form>
       </DialogContent>
     </Dialog>
+  );
+}
+
+const telHref = (phone: string) => `tel:${phone.replace(/[^0-9+]/g, "")}`;
+
+/** « Son notaire, son avocat… »: the contacts linked to the person, set from the « Contacts » tab. */
+function LinkedContacts({ partners }: { partners: readonly AgendaPartnerView[] }) {
+  if (partners.length === 0) return null;
+  return (
+    <section aria-labelledby="person-contacts-title" className="space-y-1">
+      <h3 id="person-contacts-title" className="text-sm font-medium">Contacts liés</h3>
+      <ul className="space-y-1 rounded-md border p-2 text-sm">
+        {partners.map((p) => {
+          const phone = p.phone ?? p.mobile;
+          return (
+            <li key={p.id} className="flex flex-wrap items-baseline gap-x-2">
+              <span className="font-medium">{partnerName(p)}</span>
+              {p.role && <span className="text-xs text-muted-foreground">{p.role}</span>}
+              {phone && <a href={telHref(phone)} className="ml-auto underline-offset-2 hover:underline">{phone}</a>}
+            </li>
+          );
+        })}
+      </ul>
+      <p className="text-xs text-muted-foreground">Ces liens se modifient depuis l&apos;onglet « Contacts ».</p>
+    </section>
   );
 }

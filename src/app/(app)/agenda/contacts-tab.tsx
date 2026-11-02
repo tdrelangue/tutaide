@@ -23,12 +23,15 @@ import { ERROR_TEXT } from "./address-field";
 import { removeAgendaPartner } from "./actions";
 import { GroupBadge, GroupFilter } from "./group-badge";
 import { GroupsDialog } from "./groups-dialog";
+import type { PersonOption } from "./appointments/shared-contracts";
 import { PartnerDialog } from "./partner-dialog";
 import { useAgendaAction } from "./use-agenda-action";
 
 type Props = {
   partners: AgendaPartnerView[];
   groups: AgendaGroupView[];
+  /** Persons of this agenda, for « notaire de Jean Bonneau ». */
+  persons: readonly PersonOption[];
 };
 
 /** Dialog state: closed, a new contact, or an existing one. */
@@ -52,7 +55,7 @@ const telHref = (phone: string) => `tel:${phone.replace(/[^0-9+]/g, "")}`;
  * « Contacts » (Thomas, 2026-11-02): the partners' address book — lawyers,
  * notaries, craftsmen… — shared by the whole structure, sorted into coloured groups.
  */
-export function ContactsTab({ partners, groups }: Props) {
+export function ContactsTab({ partners, groups, persons }: Props) {
   const [editing, setEditing] = useState<Editing>(null);
   const [isGroupsOpen, setIsGroupsOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -135,7 +138,7 @@ export function ContactsTab({ partners, groups }: Props) {
       )}
 
       {editing && (
-        <PartnerDialog key={editing.partner?.id ?? "new"} open onOpenChange={handleDialogOpenChange} partner={editing.partner} groups={groups} />
+        <PartnerDialog key={editing.partner?.id ?? "new"} open onOpenChange={handleDialogOpenChange} partner={editing.partner} groups={groups} persons={persons} />
       )}
       <GroupsDialog open={isGroupsOpen} onOpenChange={setIsGroupsOpen} groups={groups} kind="PARTNERS" />
 

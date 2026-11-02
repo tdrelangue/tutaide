@@ -10,7 +10,7 @@ import { validatePeriod } from "@/lib/agenda/bridge/ops/plan";
 import type { Period } from "@/lib/agenda/bridge/period";
 import { readConfirmations, readWeek } from "@/lib/agenda/bridge/ops/week";
 import { deleteAppointment, listAppointments as loadAppointments } from "@/lib/agenda/appointments";
-import { contactGroupTags } from "@/lib/agenda/groups";
+import { agendaGroupTags } from "@/lib/agenda/partners";
 import type { AppointmentInput } from "@/lib/agenda/appointments";
 import { buildInsertView, buildMovesPreview } from "@/lib/agenda/views/insert-view";
 import { buildVisitStatus } from "@/lib/agenda/views/visit-status";
@@ -64,7 +64,7 @@ const INVALID_PERIOD_ERROR = "Période invalide : indiquez deux dates, la fin ap
 async function weekResult(ownerId: string, period: Period, deps: PlanDeps, withProposal: boolean): Promise<AgendaDataResult<WeekView>> {
   const read = await readWeek(ownerId, period, deps, withProposal);
   if (!read.ok) return read.reason === "INVALID_INPUT" ? fail(INVALID_PERIOD_ERROR) : fail(NOT_PLANNABLE_ERROR, read.issues);
-  const groups = await contactGroupTags(ownerId);
+  const groups = await agendaGroupTags(ownerId);
   const data = buildWeekView({ state: read.state, from: period.from, to: period.to, proposal: read.proposal, issues: read.issues, groups });
   return { success: true, data };
 }
@@ -142,7 +142,7 @@ export async function getItemsToConfirm(): Promise<AgendaDataResult<readonly Ent
   return run("getItemsToConfirm", async ({ ownerId }) => {
     const read = await readConfirmations(ownerId, new Date());
     if (!read.ok) return fail(NOT_PLANNABLE_ERROR, read.issues);
-    return { success: true, data: confirmationEntries(read.state, read.items, await contactGroupTags(ownerId)) };
+    return { success: true, data: confirmationEntries(read.state, read.items, await agendaGroupTags(ownerId)) };
   });
 }
 

@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { END_REASON_LABELS, formatDuration, formatFrequency } from "@/lib/agenda/rules";
 import type { AgendaGroupView } from "@/lib/agenda/groups";
+import type { AgendaPartnerView } from "@/lib/agenda/partners";
 import { groupOf, type GroupTag } from "@/lib/agenda/groups-rules";
 import type { AgendaPersonView } from "@/lib/agenda/service";
 import type { IsoDate, VisitStatusRow } from "@/lib/agenda/views/types";
@@ -37,9 +38,44 @@ import { useAgendaAction } from "./use-agenda-action";
 type Props = {
   persons: AgendaPersonView[];
   groups: AgendaGroupView[];
+  /** The address book: a person's file lists the contacts linked to them. */
+  partners?: readonly AgendaPartnerView[];
   importableCount: number;
   defaultVisitMinutes: number;
 };
+
+type StatusFilter = "ACTIVE" | "ENDED" | "ALL";
+
+const STATUS_FILTERS: Readonly<Record<StatusFilter, readonly AgendaPersonView["status"][]>> = {
+  ACTIVE: ["ACTIVE", "PAUSED"],
+  ENDED: ["ENDED"],
+  ALL: ["ACTIVE", "PAUSED", "ENDED"],
+};
+
+const STATUS_FILTER_LABELS: Readonly<Record<StatusFilter, string>> = { ACTIVE: "Actives", ENDED: "Inactives", ALL: "Toutes" };
+
+function StatusFilterButtons({ persons, value, onChange }: { persons: AgendaPersonView[]; value: StatusFilter; onChange: (filter: StatusFilter) => void }) {
+  const keys: StatusFilter[] = ["ACTIVE", "ENDED", "ALL"];
+  return (
+    <div role="group" aria-label="Afficher les personnes" className="flex flex-wrap gap-2">
+      {keys.map((key) => {
+        const count = persons.filter((p) => STATUS_FILTERS[key].includes(p.status)).length;
+        const isOn = value === key;
+        return (
+          <button
+            key={key}
+            type="button"
+            aria-pressed={isOn}
+            onClick={() => onChange(key)}
+            className={cn("rounded-full border px-3 py-1 text-sm", isOn ? "border-foreground bg-foreground text-background" : "border-border hover:bg-muted")}
+          >
+            {STATUS_FILTER_LABELS[key]} ({count})
+          </button>
+        );
+      })}
+    </div>
+  );
+}
 
 /** Dialog state: closed, a new person, or an existing one. */
 type Editing = { person: AgendaPersonView | null } | null;
@@ -100,13 +136,16 @@ function useVisitStatuses(persons: AgendaPersonView[]) {
   return { statuses, error, reload: load };
 }
 
-export function PersonsTab({ persons: allPersons, groups, importableCount, defaultVisitMinutes }: Props) {
+export function PersonsTab({ persons: allPersons, groups, partners = [], importableCount, defaultVisitMinutes }: Props) {
   const [editing, setEditing] = useState<Editing>(null);
   const [isGroupsOpen, setIsGroupsOpen] = useState(false);
   /** Null = every group. */
   const [groupFilter, setGroupFilter] = useState<string | null>(null);
   const filterGroup = groups.find((g) => g.id === groupFilter) ?? null;
-  const persons = filterGroup ? allPersons.filter((p) => groupOf(p.groupId, groups)?.id === filterGroup.id) : allPersons;
+  const inGroup = filterGroup ? allPersons.filter((p) => groupOf(p.groupId, groups)?.id === filterGroup.id) : allPersons;
+  /** Like « Actifs / Clôturés » in APA and ASH: inactive persons (dessaisissement…) are kept, out of the way. */
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("ACTIVE");
+  const persons = inGroup.filter((p) => STATUS_FILTERS[statusFilter].includes(p.status));
   const [isFileOpen, setIsFileOpen] = useState(false);
   const [toDelete, setToDelete] = useState<AgendaPersonView | null>(null);
   /** Kept while the confirmation closes, so its title never reads "undefined". */
@@ -123,7 +162,10 @@ export function PersonsTab({ persons: allPersons, groups, importableCount, defau
   const active = persons.filter((p) => p.status === "ACTIVE");
   const paused = persons.filter((p) => p.status === "PAUSED");
   const ended = persons.filter((p) => p.status === "ENDED");
-  const withoutAddress = active.filter((p) => p.address === null).length;
+  // The summary counts the whole group, whatever the « Actives / Inactives » filter.
+  const toVisitCount = inGroup.filter((p) => p.status === "ACTIVE").length;
+  const pausedCount = inGroup.filter((p) => p.status === "PAUSED").length;
+  const withoutAddress = inGroup.filter((p) => p.status === "ACTIVE" && p.address === null).length;
 
   async function handleImport() {
     await importAction.run(importAgendaPersons);
@@ -161,8 +203,8 @@ export function PersonsTab({ persons: allPersons, groups, importableCount, defau
       <div className="flex flex-wrap items-center gap-3">
         <div className="space-y-1">
           <p className="text-sm text-muted-foreground">
-            {active.length} personne{active.length > 1 ? "s" : ""} à visiter
-            {paused.length > 0 && ` (sans compter ${paused.length} en pause)`}
+            {toVisitCount} personne{toVisitCount > 1 ? "s" : ""} à visiter
+            {pausedCount > 0 && ` (sans compter ${pausedCount} en pause)`}
           </p>
           {withoutAddress > 0 && (
             <p className="rounded-md border border-amber-500/50 bg-amber-500/10 px-3 py-1.5 text-sm text-amber-900">
@@ -202,8 +244,11 @@ export function PersonsTab({ persons: allPersons, groups, importableCount, defau
         </div>
       </div>
 
-      {groups.length > 1 && allPersons.length > 0 && (
-        <GroupFilter groups={groups} value={filterGroup?.id ?? null} total={allPersons.length} onChange={setGroupFilter} />
+      {allPersons.length > 0 && (
+        <div className="space-y-2">
+          <StatusFilterButtons persons={inGroup} value={statusFilter} onChange={setStatusFilter} />
+          {groups.length > 1 && <GroupFilter groups={groups} value={filterGroup?.id ?? null} total={allPersons.length} onChange={setGroupFilter} />}
+        </div>
       )}
 
       {allPersons.length === 0 && (
@@ -232,7 +277,7 @@ export function PersonsTab({ persons: allPersons, groups, importableCount, defau
 
       <PersonTable title="À visiter" rows={active} selection={rowSelection} groups={groups} statuses={visits.statuses} defaultVisitMinutes={defaultVisitMinutes} onEdit={setEditing} onDelete={askDelete} />
       <PersonTable title="En pause" rows={paused} selection={rowSelection} groups={groups} statuses={visits.statuses} defaultVisitMinutes={defaultVisitMinutes} onEdit={setEditing} onDelete={askDelete} />
-      <PersonTable title="Mesures terminées" rows={ended} selection={rowSelection} groups={groups} statuses={visits.statuses} defaultVisitMinutes={defaultVisitMinutes} onEdit={setEditing} onDelete={askDelete} />
+      <PersonTable title="Inactives (mesures terminées)" rows={ended} selection={rowSelection} groups={groups} statuses={visits.statuses} defaultVisitMinutes={defaultVisitMinutes} onEdit={setEditing} onDelete={askDelete} />
 
       {editing && (
         <PersonDialog
@@ -241,6 +286,7 @@ export function PersonsTab({ persons: allPersons, groups, importableCount, defau
           onOpenChange={handleDialogOpenChange}
           person={editing.person}
           groups={groups}
+          partners={partners}
           defaultVisitMinutes={defaultVisitMinutes}
         />
       )}
@@ -255,7 +301,7 @@ export function PersonsTab({ persons: allPersons, groups, importableCount, defau
             <AlertDialogDescription>
               Son adresse et sa fréquence de visite seront effacées. Ses dossiers ne sont pas modifiés.
               {toDelete?.fromDossiers && " Elle pourra être réimportée depuis vos dossiers."}
-              {" "}Si la mesure a pris fin, préférez « Mesure terminée » dans sa fiche : l&apos;historique est conservé.
+              {" "}Si la mesure a pris fin, préférez « Inactive » dans sa fiche : l&apos;historique est conservé.
             </AlertDialogDescription>
           </AlertDialogHeader>
           {deleteAction.error && <p role="alert" className={ERROR_TEXT}>{deleteAction.error}</p>}

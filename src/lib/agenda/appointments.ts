@@ -10,6 +10,8 @@ import type { AppointmentRow } from "./views/types";
 import { AgendaRefusal, rethrowAsConflict } from "./bridge/errors";
 import { queuePlanning, TX_OPTIONS } from "./bridge/lock";
 import type { Tx } from "./bridge/lock";
+import { addressBookOf } from "./partners";
+import { ensurePartnerContact, partnerOfficePlace } from "./partner-contacts";
 
 /**
  * « Rendez-vous »: appointments to place (in a week, between two dates) or at a
@@ -32,6 +34,8 @@ const placeChoice = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("PLACE"), placeId: id }),
   /** « Chez le majeur protégé »: the address on that person's file. */
   z.object({ kind: z.literal("PERSON"), personId: id }),
+  /** « Au cabinet du contact »: the address of a contact of the shared address book. */
+  z.object({ kind: z.literal("PARTNER"), partnerId: id }),
   /** « À l'extérieur »: an address typed for this appointment (kept as a free place). */
   z.object({ kind: z.literal("OUTSIDE"), label: z.string().trim().max(120), address: placeSchema }),
 ]);
@@ -48,21 +52,25 @@ export const appointmentSchema = z
   .object({
     title: z.string().trim().min(2, "Indiquez l'objet du rendez-vous.").max(200),
     participantIds: z.array(id).max(20),
+    /** Contacts of the shared address book (lawyer, notary…): they get a contact in this agenda. */
+    partnerIds: z.array(id).max(20).default([]),
     place: placeChoice,
     durationMin: z.number().int().min(5, "Un rendez-vous dure au moins 5 minutes.").max(10 * 60),
     when: whenSchema,
     priority: z.enum(["LOW", "NORMAL", "HIGH", "MUST"]),
   })
   .refine((a) => windowIsValid(a.when), { message: "Période invalide : la fin doit suivre le début, sur un an au plus.", path: ["when"] });
-export type AppointmentInput = z.infer<typeof appointmentSchema>;
+/** What callers send (`partnerIds` may be left out); functions parse it before use. */
+export type AppointmentInput = z.input<typeof appointmentSchema>;
+type ParsedAppointment = z.infer<typeof appointmentSchema>;
 
-function whenColumns(when: AppointmentInput["when"]) {
+function whenColumns(when: ParsedAppointment["when"]) {
   if (when.kind === "FIXED") return { whenKind: when.kind, date: fromIso(when.date), timeMin: when.timeMin, fromDate: null, toDate: null };
   return { whenKind: when.kind, date: null, timeMin: null, fromDate: fromIso(when.from), toDate: fromIso(when.to) };
 }
 
 /** Participants and place must be this owner's: checked for a clear message (the composite keys enforce it anyway). */
-async function assertOwned(ownerId: string, input: AppointmentInput): Promise<void> {
+async function assertOwned(ownerId: string, input: ParsedAppointment): Promise<void> {
   const unique = [...new Set(input.participantIds)];
   const found = await db.agendaContact.count({ where: { ownerId, id: { in: unique } } });
   if (found !== unique.length) throw new AgendaRefusal("Un des participants n'existe plus.");
@@ -73,9 +81,19 @@ async function assertOwned(ownerId: string, input: AppointmentInput): Promise<vo
 
 const OUTSIDE_LABEL = "À l'extérieur";
 
-/** The stored place kind and id: a person's address and an outside address are both places (PLACE). */
-async function resolvePlace(tx: Tx, ownerId: string, place: AppointmentInput["place"]): Promise<{ placeKind: "HOME" | "OFFICE" | "VISIO" | "PLACE"; placeId: string | null }> {
+/** The stored place kind and id: a person's, a contact's and an outside address are all places (PLACE). */
+async function resolvePlace(
+  tx: Tx,
+  ownerId: string,
+  place: AppointmentInput["place"],
+  partnerContacts: ReadonlyMap<string, string>,
+): Promise<{ placeKind: "HOME" | "OFFICE" | "VISIO" | "PLACE"; placeId: string | null }> {
   if (place.kind === "PLACE") return { placeKind: "PLACE", placeId: place.placeId };
+  if (place.kind === "PARTNER") {
+    const contactId = partnerContacts.get(place.partnerId);
+    if (contactId === undefined) throw new AgendaRefusal("Ajoutez ce contact aux participants pour aller à son cabinet.");
+    return { placeKind: "PLACE", placeId: await partnerOfficePlace(tx, ownerId, contactId) };
+  }
   if (place.kind === "PERSON") {
     const home = await tx.agendaPlace.findFirst({ where: { ownerId, contactId: place.personId, position: 0 }, select: { id: true } });
     if (!home) throw new AgendaRefusal("Cette personne n'a pas d'adresse : renseignez-la dans sa fiche, ou choisissez un autre lieu.");
@@ -95,8 +113,14 @@ async function resolvePlace(tx: Tx, ownerId: string, place: AppointmentInput["pl
 export async function createAppointment(ownerId: string, actorId: string, rawInput: AppointmentInput): Promise<string> {
   const input = appointmentSchema.parse(rawInput);
   await assertOwned(ownerId, input);
+  const book = input.partnerIds.length > 0 ? await addressBookOf(ownerId) : null;
   return db.$transaction(async (tx) => {
-    const where = await resolvePlace(tx, ownerId, input.place);
+    const partnerContacts = new Map<string, string>();
+    for (const partnerId of new Set(input.partnerIds)) {
+      if (book) partnerContacts.set(partnerId, await ensurePartnerContact(tx, ownerId, book, partnerId));
+    }
+    const where = await resolvePlace(tx, ownerId, input.place, partnerContacts);
+    const contactIds = [...new Set([...input.participantIds, ...partnerContacts.values()])];
     const created = await tx.agendaAppointment.create({
     data: {
       ownerId,
@@ -106,7 +130,7 @@ export async function createAppointment(ownerId: string, actorId: string, rawInp
       durationMin: input.durationMin,
       priority: input.priority,
       ...whenColumns(input.when),
-      participants: { create: [...new Set(input.participantIds)].map((contactId) => ({ contactId })) },
+      participants: { create: contactIds.map((contactId) => ({ contactId })) },
     },
     select: { id: true },
     });

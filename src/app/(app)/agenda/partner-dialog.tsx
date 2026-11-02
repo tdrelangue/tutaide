@@ -13,6 +13,9 @@ import type { AgendaPartnerView } from "@/lib/agenda/partners";
 import { partnerName } from "@/lib/agenda/rules";
 import type { Place } from "@/lib/agenda/service";
 import { AddressField, ERROR_TEXT, PENDING_ADDRESS_ERROR } from "./address-field";
+import { ParticipantPicker } from "./appointments/participant-picker";
+import type { PersonOption } from "./appointments/shared-contracts";
+import { PartnerHoursField, draftsToHours, hoursToDrafts, type HoursDraft } from "./partner-hours-field";
 import { saveAgendaPartner } from "./actions";
 import { useAgendaAction } from "./use-agenda-action";
 
@@ -22,6 +25,8 @@ type Props = {
   /** Null = new contact. */
   partner: AgendaPartnerView | null;
   groups: AgendaGroupView[];
+  /** Persons of this agenda the contact may be linked to (« notaire de Jean Bonneau »). */
+  persons: readonly PersonOption[];
 };
 
 type TextKey = "civility" | "lastName" | "firstName" | "company" | "role" | "phone" | "mobile" | "email" | "notes";
@@ -47,12 +52,14 @@ function initialTexts(p: AgendaPartnerView | null): Texts {
 const orNull = (text: string) => text.trim() || null;
 
 /** A contact of the structure's address book: lawyer, notary, craftsman… (Thomas, 2026-11-02). */
-export function PartnerDialog({ open, onOpenChange, partner, groups }: Props) {
+export function PartnerDialog({ open, onOpenChange, partner, groups, persons }: Props) {
   const [texts, setTexts] = useState<Texts>(() => initialTexts(partner));
   const [groupId, setGroupId] = useState<string | null>(() => groupOf(partner?.groupId ?? null, groups)?.id ?? null);
   const [address, setAddress] = useState<Place | null>(partner?.address ?? null);
+  const [hours, setHours] = useState<HoursDraft[]>(() => hoursToDrafts(partner?.hours ?? []));
+  const [linkedPersonIds, setLinkedPersonIds] = useState<string[]>(() => partner?.linkedPersonIds ?? []);
   const [isAddressPending, setIsAddressPending] = useState(false);
-  const [errors, setErrors] = useState<{ name?: string; email?: string; address?: string }>({});
+  const [errors, setErrors] = useState<{ name?: string; email?: string; address?: string; hours?: string }>({});
   const nameRef = useRef<HTMLInputElement>(null);
   const emailRef = useRef<HTMLInputElement>(null);
   const { run, isBusy, error } = useAgendaAction();
@@ -73,6 +80,8 @@ export function PartnerDialog({ open, onOpenChange, partner, groups }: Props) {
     if (!orNull(texts.lastName) && !orNull(texts.company)) found.name = "Indiquez un nom ou une structure.";
     if (orNull(texts.email) && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(texts.email.trim())) found.email = "Adresse e-mail invalide.";
     if (isAddressPending) found.address = PENDING_ADDRESS_ERROR;
+    const checkedHours = draftsToHours(hours);
+    if ("error" in checkedHours) found.hours = checkedHours.error;
     setErrors(found);
     if (found.name) nameRef.current?.focus();
     else if (found.email) emailRef.current?.focus();
@@ -82,7 +91,10 @@ export function PartnerDialog({ open, onOpenChange, partner, groups }: Props) {
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!checkFields()) return;
+    const checkedHours = draftsToHours(hours);
     const payload = {
+      hours: "hours" in checkedHours ? checkedHours.hours : [],
+      linkedPersonIds,
       groupId,
       civility: orNull(texts.civility),
       lastName: orNull(texts.lastName),
@@ -150,6 +162,24 @@ export function PartnerDialog({ open, onOpenChange, partner, groups }: Props) {
               disabled={isBusy}
             />
             {errors.address && <p role="alert" className={ERROR_TEXT}>{errors.address}</p>}
+
+            <PartnerHoursField value={hours} onChange={setHours} error={errors.hours} disabled={isBusy} />
+
+            {persons.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-sm font-medium" id="partner-persons-label">Personnes suivies concernées <span className="font-normal text-muted-foreground">(facultatif)</span></p>
+                <p id="partner-persons-hint" className="text-xs text-muted-foreground">
+                  ex. le notaire de Jean Bonneau : vous le retrouverez dans la fiche de la personne. Ce lien ne concerne que votre agenda.
+                </p>
+                <ParticipantPicker
+                  persons={persons}
+                  value={linkedPersonIds}
+                  onChange={setLinkedPersonIds}
+                  describedBy="partner-persons-hint"
+                  label="Rechercher une personne suivie"
+                />
+              </div>
+            )}
 
             <div className="space-y-1">
               <Label htmlFor="partner-notes">Notes pratiques (facultatif)</Label>

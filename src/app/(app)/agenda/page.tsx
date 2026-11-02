@@ -22,7 +22,7 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
     getAgendaSettings(access.ownerId),
     listAgendaPersons(access.ownerId),
     listImportablePersons(access.ownerId),
-    listPartners(book),
+    listPartners(book, access.ownerId),
   ]);
   return (
     <AgendaClient

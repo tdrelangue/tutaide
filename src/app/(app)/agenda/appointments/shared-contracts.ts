@@ -6,8 +6,21 @@
 import type { GroupTag } from "@/lib/agenda/groups-rules";
 import type { IsoDate } from "@/lib/agenda/views/types";
 
-/** A person who can take part in an appointment; `group` colours and filters the search. */
-export type PersonOption = { readonly id: string; readonly fullName: string; readonly group?: GroupTag | null };
+/**
+ * Someone who can take part in an appointment: a person to visit, or a contact
+ * of the shared address book (`kind: "PARTNER"`, Thomas 2026-11-02). `group`
+ * colours and filters the search; `detail` (structure, function) is shown and searched.
+ */
+export type PersonOption = {
+  readonly id: string;
+  readonly fullName: string;
+  readonly group?: GroupTag | null;
+  readonly kind?: "PERSON" | "PARTNER";
+  readonly detail?: string | null;
+  readonly searchText?: string;
+};
+
+export const isPartnerOption = (option: PersonOption): boolean => option.kind === "PARTNER";
 
 /** appointments/appointment-dialog.tsx — « Nouveau rendez-vous », including the rule 12 insertion flow. */
 export type AppointmentDialogProps = {

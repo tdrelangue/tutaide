@@ -19,13 +19,14 @@ import {
   FIELD_ORDER,
   initialValues,
   PLACE_CHOICES,
+  placePartner,
   placePerson,
   toInput,
   weekOptions,
   WHEN_CHOICES,
 } from "./form-model";
 import type { FieldErrors, FieldKey, FieldProps, FormValues } from "./form-model";
-import type { PersonOption } from "./shared-contracts";
+import { isPartnerOption, type PersonOption } from "./shared-contracts";
 import { ParticipantPicker } from "./participant-picker";
 import { WhenFields } from "./when-fields";
 
@@ -118,18 +119,21 @@ function TitleField({ values, update, errors, register }: FieldProps) {
 }
 
 function ParticipantsField({ values, update, persons }: FieldProps & { readonly persons: readonly PersonOption[] }) {
+  /** One search for persons and contacts; the form keeps them apart (they are stored differently). */
   function handleChange(ids: string[]) {
-    update({ participantIds: ids });
+    const partners = new Set(persons.filter(isPartnerOption).map((p) => p.id));
+    update({ participantIds: ids.filter((id) => !partners.has(id)), partnerIds: ids.filter((id) => partners.has(id)) });
   }
-  const count = values.participantIds.length;
+  const chosen = [...values.participantIds, ...values.partnerIds];
+  const count = chosen.length;
   return (
     <fieldset className="space-y-2">
       <legend className="text-sm font-medium">Avec qui ? <span className="font-normal text-muted-foreground">(facultatif)</span></legend>
       <p id="appt-people-hint" className="text-xs text-muted-foreground">
-        Tapez quelques lettres du nom. Sans personne choisie, c&apos;est un rendez-vous personnel.
+        Tapez quelques lettres du nom : personnes suivies et contacts (avocat, notaire…). Sans personne choisie, c&apos;est un rendez-vous personnel.
         {count > 0 && ` ${count} personne${count > 1 ? "s" : ""} choisie${count > 1 ? "s" : ""}.`}
       </p>
-      <ParticipantPicker persons={persons} value={values.participantIds} onChange={handleChange} />
+      <ParticipantPicker persons={persons} value={chosen} onChange={handleChange} describedBy="appt-people-hint" />
     </fieldset>
   );
 }
@@ -159,6 +163,7 @@ function PlaceField({ values, update, errors, register, persons }: FieldProps & 
         ))}
       </div>
       {values.place === "PERSON" && <PersonPlace values={values} update={update} persons={persons} />}
+      {values.place === "PARTNER" && <PartnerPlace values={values} update={update} persons={persons} />}
       {values.place === "OUTSIDE" && <OutsidePlace values={values} update={update} />}
       {errors.place && <p id="appt-place-error" className={ERROR_TEXT}>{errors.place}</p>}
     </fieldset>
@@ -169,17 +174,37 @@ type PlacePartProps = Pick<FieldProps, "values" | "update">;
 
 /** Which participant receives: only asked when several are ticked. */
 function PersonPlace({ values, update, persons }: PlacePartProps & { readonly persons: readonly PersonOption[] }) {
-  const ticked = persons.filter((p) => values.participantIds.includes(p.id));
+  const ticked = persons.filter((p) => !isPartnerOption(p) && values.participantIds.includes(p.id));
   function handleChange(event: React.ChangeEvent<HTMLSelectElement>) {
     update({ placePersonId: event.target.value });
   }
-  if (ticked.length === 0) return <p className="text-xs text-muted-foreground">Cochez la personne dans « Avec qui ? » : son adresse sera le lieu.</p>;
+  if (ticked.length === 0) return <p className="text-xs text-muted-foreground">Choisissez la personne dans « Avec qui ? » : son adresse sera le lieu.</p>;
   if (ticked.length === 1) return <p className="text-xs text-muted-foreground">À l&apos;adresse de {ticked[0]?.fullName}.</p>;
   return (
     <div className="space-y-1">
       <Label htmlFor="appt-place-person">Chez qui ?</Label>
       <select id="appt-place-person" value={placePerson(values) ?? ""} onChange={handleChange} className={`${SELECT_CLASS} w-64`}>
         {ticked.map((p) => (
+          <option key={p.id} value={p.id}>{p.fullName}</option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
+/** « Au cabinet d'un contact »: which contact, when several are chosen. */
+function PartnerPlace({ values, update, persons }: PlacePartProps & { readonly persons: readonly PersonOption[] }) {
+  const chosen = persons.filter((p) => isPartnerOption(p) && values.partnerIds.includes(p.id));
+  function handleChange(event: React.ChangeEvent<HTMLSelectElement>) {
+    update({ placePartnerId: event.target.value });
+  }
+  if (chosen.length === 0) return <p className="text-xs text-muted-foreground">Choisissez le contact dans « Avec qui ? » : l&apos;adresse de sa fiche sera le lieu.</p>;
+  if (chosen.length === 1) return <p className="text-xs text-muted-foreground">À l&apos;adresse de {chosen[0]?.fullName}.</p>;
+  return (
+    <div className="space-y-1">
+      <Label htmlFor="appt-place-partner">Chez quel contact ?</Label>
+      <select id="appt-place-partner" value={placePartner(values) ?? ""} onChange={handleChange} className={`${SELECT_CLASS} w-64`}>
+        {chosen.map((p) => (
           <option key={p.id} value={p.id}>{p.fullName}</option>
         ))}
       </select>

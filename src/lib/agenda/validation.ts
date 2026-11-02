@@ -107,6 +107,15 @@ const optionalText = (max: number, label: string) =>
     .default(null)
     .transform((v) => (v ? v : null));
 
+/** One opening slot: days of the week and hours (minutes after midnight). */
+export const partnerHoursSchema = z
+  .object({
+    dows: z.array(z.number().int().min(1).max(7)).min(1, "Cochez au moins un jour pour chaque plage horaire.").max(7),
+    fromMin: dayMinute("Heure d'ouverture"),
+    toMin: dayMinute("Heure de fermeture"),
+  })
+  .refine((h) => h.toMin > h.fromMin, { message: "Une plage horaire doit finir après son début.", path: ["toMin"] });
+
 /** A partner of the shared address book (Thomas, 2026-11-02): a name or a structure, at least. */
 export const agendaPartnerSchema = z
   .object({
@@ -122,6 +131,10 @@ export const agendaPartnerSchema = z
     email: optionalText(200, "E-mail").refine((v) => v === null || z.string().email().safeParse(v).success, "Adresse e-mail invalide."),
     address: placeSchema.nullable().default(null),
     notes: optionalText(1000, "Notes"),
+    /** Opening hours (« lun.–ven. 9 h–12 h »): appointments with this contact are placed inside them. */
+    hours: z.array(partnerHoursSchema).max(7, "7 plages horaires au plus.").default([]),
+    /** Persons of the current agenda this contact works for (« notaire de Jean Bonneau »). */
+    linkedPersonIds: z.array(personIdSchema).max(200).default([]),
   })
   .refine((p) => p.lastName !== null || p.company !== null, {
     message: "Indiquez un nom ou une structure.",

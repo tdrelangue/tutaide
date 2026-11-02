@@ -176,7 +176,7 @@ export async function endAgendaMeasures(personIds: unknown, endReason: unknown):
   try {
     const { ownerId } = await requireAgendaOwner();
     const count = await endAgendaPersons(ownerId, personIdsSchema.parse(personIds), endReasonSchema.parse(endReason));
-    return done(`${plural(count, "mesure terminée", "mesures terminées")}`);
+    return done(`${plural(count, "personne rendue inactive", "personnes rendues inactives")}`);
   } catch (error) {
     return failure("endMeasures", error);
   }
@@ -287,10 +287,10 @@ export async function saveAgendaPartner(partnerId: string | null, input: unknown
     const data = agendaPartnerSchema.parse(input);
     const id = partnerIdSchema.nullable().parse(partnerId);
     if (id === null) {
-      await createPartner(book, actorId, data);
+      await createPartner(book, ownerId, actorId, data);
       return done("Contact ajouté");
     }
-    if (!(await updatePartner(book, id, data))) return { success: false, error: "Contact introuvable." };
+    if (!(await updatePartner(book, ownerId, id, data))) return { success: false, error: "Contact introuvable." };
     return done("Modifications enregistrées");
   } catch (error) {
     return failure("savePartner", error);

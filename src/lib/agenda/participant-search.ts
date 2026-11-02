@@ -4,7 +4,8 @@
  * group. Pure, no I/O.
  */
 
-export type SearchablePerson = { readonly id: string; readonly fullName: string; readonly group?: { readonly id: string } | null };
+/** `searchText`: what the search reads instead of the name (a contact's structure and function too). */
+export type SearchablePerson = { readonly id: string; readonly fullName: string; readonly searchText?: string; readonly group?: { readonly id: string } | null };
 
 export type SearchResult<T> = { readonly matches: readonly T[]; readonly total: number };
 
@@ -42,7 +43,7 @@ export function searchPersons<T extends SearchablePerson>(
   const { groupId = null, exclude, limit = MAX_SUGGESTIONS } = options;
   const found = persons
     .filter((p) => !exclude?.has(p.id) && (groupId === null || p.group?.id === groupId))
-    .map((p) => ({ person: p, name: words(p.fullName) }))
+    .map((p) => ({ person: p, name: words(p.searchText ?? p.fullName) }))
     .filter(({ name }) => matchesAll(name, typed))
     .sort((a, b) => rank(a.name, typed) - rank(b.name, typed) || a.person.fullName.localeCompare(b.person.fullName, "fr"));
   return { matches: found.slice(0, limit).map((f) => f.person), total: found.length };

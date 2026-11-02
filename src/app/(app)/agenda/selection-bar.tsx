@@ -46,7 +46,7 @@ export function SelectionBar({ selected, persons, groups, onSelectAll, onClear, 
   const [dialog, setDialog] = useState<"end" | "remove" | "group" | null>(null);
   const [targetGroup, setTargetGroup] = useState(groups[0]?.id ?? "");
   const groupSelectId = useId();
-  const [reason, setReason] = useState<EndReason>("AUTRE");
+  const [reason, setReason] = useState<EndReason>("DESSAISISSEMENT");
   const reasonId = useId();
   const action = useAgendaAction();
   const ids = [...selected];
@@ -109,7 +109,7 @@ export function SelectionBar({ selected, persons, groups, onSelectAll, onClear, 
         )}
         <Button variant="outline" size="sm" disabled={notEnded === 0} onClick={() => setDialog("end")}>
           <Flag className="mr-2 h-4 w-4" aria-hidden="true" />
-          Mesure terminée…
+          Rendre inactive…
         </Button>
         <Button variant="outline" size="sm" disabled={count === 0} onClick={() => setDialog("remove")} className="border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive">
           <Trash2 className="mr-2 h-4 w-4" aria-hidden="true" />
@@ -124,10 +124,10 @@ export function SelectionBar({ selected, persons, groups, onSelectAll, onClear, 
       <AlertDialog open={dialog === "end"} onOpenChange={handleDialogChange}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Mesure terminée pour {personsLabel(notEnded)} ?</AlertDialogTitle>
+            <AlertDialogTitle>Rendre inactive{notEnded > 1 ? "s" : ""} {personsLabel(notEnded)} ?</AlertDialogTitle>
             <AlertDialogDescription>
-              Leurs visites à venir ne seront plus proposées. Leur historique est conservé : elles restent dans
-              « Mesures terminées ».{count > notEnded && " Celles dont la mesure est déjà terminée ne changent pas."}
+              Mesure terminée (dessaisissement, mainlevée…) : leurs visites à venir ne seront plus proposées. Leur
+              historique est conservé : elles restent dans « Inactives ».{count > notEnded && " Celles déjà inactives ne changent pas."}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="space-y-1">
@@ -145,7 +145,7 @@ export function SelectionBar({ selected, persons, groups, onSelectAll, onClear, 
           <AlertDialogFooter>
             <AlertDialogCancel disabled={action.isBusy}>Annuler</AlertDialogCancel>
             <AlertDialogAction onClick={handleConfirmEnd} disabled={action.isBusy}>
-              Terminer {notEnded > 1 ? "ces mesures" : "cette mesure"}
+              Rendre inactive{notEnded > 1 ? "s" : ""}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -184,7 +184,7 @@ export function SelectionBar({ selected, persons, groups, onSelectAll, onClear, 
             <AlertDialogTitle>Retirer {personsLabel(count)} de l&apos;agenda ?</AlertDialogTitle>
             <AlertDialogDescription>
               Leurs adresses et fréquences de visite seront effacées. Leurs dossiers ne sont pas modifiés. Si leur
-              mesure a pris fin, préférez « Mesure terminée » : l&apos;historique est conservé.
+              mesure a pris fin, préférez « Rendre inactive » : l&apos;historique est conservé.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
