@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { seal, sealPoint } from "./sealed";
+import { placeSchema } from "./validation";
 import { keepNotesOnHistory } from "./notes";
 import { db } from "@/lib/db";
 import { fromIso, isRealDate } from "./bridge/dates";
@@ -28,6 +30,10 @@ const whenSchema = z.discriminatedUnion("kind", [
 const placeChoice = z.discriminatedUnion("kind", [
   z.object({ kind: z.enum(["HOME", "OFFICE", "VISIO"]) }),
   z.object({ kind: z.literal("PLACE"), placeId: id }),
+  /** « Chez le majeur protégé »: the address on that person's file. */
+  z.object({ kind: z.literal("PERSON"), personId: id }),
+  /** « À l'extérieur »: an address typed for this appointment (kept as a free place). */
+  z.object({ kind: z.literal("OUTSIDE"), label: z.string().trim().max(120), address: placeSchema }),
 ]);
 
 function windowIsValid(when: z.infer<typeof whenSchema>): boolean {
@@ -65,24 +71,47 @@ async function assertOwned(ownerId: string, input: AppointmentInput): Promise<vo
   if (place === 0) throw new AgendaRefusal("Ce lieu n'existe plus.");
 }
 
+const OUTSIDE_LABEL = "À l'extérieur";
+
+/** The stored place kind and id: a person's address and an outside address are both places (PLACE). */
+async function resolvePlace(tx: Tx, ownerId: string, place: AppointmentInput["place"]): Promise<{ placeKind: "HOME" | "OFFICE" | "VISIO" | "PLACE"; placeId: string | null }> {
+  if (place.kind === "PLACE") return { placeKind: "PLACE", placeId: place.placeId };
+  if (place.kind === "PERSON") {
+    const home = await tx.agendaPlace.findFirst({ where: { ownerId, contactId: place.personId, position: 0 }, select: { id: true } });
+    if (!home) throw new AgendaRefusal("Cette personne n'a pas d'adresse : renseignez-la dans sa fiche, ou choisissez un autre lieu.");
+    return { placeKind: "PLACE", placeId: home.id };
+  }
+  if (place.kind === "OUTSIDE") {
+    const label = place.label === "" ? OUTSIDE_LABEL : place.label;
+    const created = await tx.agendaPlace.create({
+      data: { ownerId, label, address: seal(place.address.label), point: sealPoint(place.address), precision: place.address.precision },
+      select: { id: true },
+    });
+    return { placeKind: "PLACE", placeId: created.id };
+  }
+  return { placeKind: place.kind, placeId: null };
+}
+
 export async function createAppointment(ownerId: string, actorId: string, rawInput: AppointmentInput): Promise<string> {
   const input = appointmentSchema.parse(rawInput);
   await assertOwned(ownerId, input);
-  const created = await db.agendaAppointment.create({
+  return db.$transaction(async (tx) => {
+    const where = await resolvePlace(tx, ownerId, input.place);
+    const created = await tx.agendaAppointment.create({
     data: {
       ownerId,
       createdById: actorId,
       title: input.title,
-      placeKind: input.place.kind,
-      placeId: input.place.kind === "PLACE" ? input.place.placeId : null,
+      ...where,
       durationMin: input.durationMin,
       priority: input.priority,
       ...whenColumns(input.when),
       participants: { create: [...new Set(input.participantIds)].map((contactId) => ({ contactId })) },
     },
     select: { id: true },
-  });
-  return created.id;
+    });
+    return created.id;
+  }, TX_OPTIONS);
 }
 
 /**
@@ -93,18 +122,26 @@ export async function createAppointment(ownerId: string, actorId: string, rawInp
 export async function deleteAppointment(ownerId: string, appointmentId: string, today: Date): Promise<boolean> {
   try {
     return await db.$transaction(async (tx) => {
-      const found = await tx.agendaAppointment.findFirst({ where: { id: appointmentId, ownerId }, select: { id: true } });
+      const found = await tx.agendaAppointment.findFirst({ where: { id: appointmentId, ownerId }, select: { id: true, placeId: true, place: { select: { contactId: true } } } });
       if (!found) return false;
       await queuePlanning(tx, ownerId);
       await cancelFutureItems(tx, ownerId, appointmentId, today);
       await keepNotesOnHistory(tx, ownerId, appointmentId);
       await tx.agendaItem.updateMany({ where: { ownerId, appointmentId }, data: { appointmentId: null } });
       await tx.agendaAppointment.delete({ where: { id_ownerId: { id: appointmentId, ownerId } } });
+      await dropUnusedOutsidePlace(tx, ownerId, found.placeId, found.place?.contactId ?? null);
       return true;
     }, TX_OPTIONS);
   } catch (error) {
     return rethrowAsConflict(error, "Ce rendez-vous vient d'être modifié par ailleurs. Rechargez la page.");
   }
+}
+
+/** An « À l'extérieur » address belongs to its appointment: removed with it when nothing else uses it. */
+async function dropUnusedOutsidePlace(tx: Tx, ownerId: string, placeId: string | null, contactId: string | null): Promise<void> {
+  if (placeId === null || contactId !== null) return;
+  const users = await tx.agendaAppointment.count({ where: { ownerId, placeId } });
+  if (users === 0) await tx.agendaPlace.deleteMany({ where: { ownerId, id: placeId, contactId: null } });
 }
 
 async function cancelFutureItems(tx: Tx, ownerId: string, appointmentId: string, today: Date): Promise<void> {

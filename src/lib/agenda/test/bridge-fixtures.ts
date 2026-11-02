@@ -61,7 +61,7 @@ export async function addPerson(client: PrismaClient, ownerId: string, fullName:
     address,
     visitsPerPeriod: 1,
     visitPeriod: period,
-    visitMinutes: null,
+    visitMinutes: null, visitEvery: 1, lastVisitOn: null, inEhpad: null,
     notes: null,
     phone: null,
     status: "ACTIVE",

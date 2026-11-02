@@ -51,13 +51,33 @@ export const agendaPersonSchema = z
   .object({
     fullName: z.string().trim().min(2, "Indiquez le nom de la personne.").max(200),
     address: placeSchema.nullable(),
-    visitsPerPeriod: z.number().int().min(1).max(10),
-    visitPeriod: z.enum(["WEEK", "MONTH", "QUARTER", "YEAR"]),
+    /** Both null = « Pas de visite régulière ». */
+    visitsPerPeriod: z.number().int().min(1).max(10).nullable(),
+    visitPeriod: z.enum(["WEEK", "MONTH", "QUARTER", "YEAR"]).nullable(),
+    /** « Tous les N » périodes. */
+    visitEvery: z.number().int().min(1, "Indiquez un nombre d'au moins 1.").max(52, "52 au plus.").default(1),
+    /** Last visit before the agenda knew about the person (« Dernière visite le »); null = unknown. */
+    lastVisitOn: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, "Date de dernière visite invalide.")
+      .refine((d) => !Number.isNaN(Date.parse(`${d}T00:00:00Z`)), "Date de dernière visite invalide.")
+      .nullable()
+      .default(null),
+    /** Null = decided from the address (src/lib/agenda/ehpad.ts). */
+    inEhpad: z.boolean().nullable().default(null),
     visitMinutes: minutes.min(15).max(8 * 60).nullable(),
     notes: z.string().trim().max(1000).nullable(),
     phone: phoneSchema,
     status: z.enum(["ACTIVE", "PAUSED", "ENDED"]),
     endReason: z.enum(["DECES", "DESSAISISSEMENT", "MAINLEVEE", "TRANSFERT", "AUTRE"]).nullable(),
+  })
+  .refine((p) => (p.visitsPerPeriod === null) === (p.visitPeriod === null), {
+    message: "Fréquence des visites incomplète.",
+    path: ["visitPeriod"],
+  })
+  .refine((p) => p.lastVisitOn === null || p.lastVisitOn <= new Date().toISOString().slice(0, 10), {
+    message: "La dernière visite ne peut pas être dans le futur.",
+    path: ["lastVisitOn"],
   })
   .refine((p) => p.status !== "ENDED" || p.endReason !== null, {
     message: "Indiquez la raison de la fin de mesure.",

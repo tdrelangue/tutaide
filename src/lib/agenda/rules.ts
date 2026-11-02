@@ -5,12 +5,15 @@
 export type AgendaPeriodValue = "WEEK" | "MONTH" | "QUARTER" | "YEAR";
 export type AgendaEndReasonValue = "DECES" | "DESSAISISSEMENT" | "MAINLEVEE" | "TRANSFERT" | "AUTRE";
 
-export const PERIOD_LABELS: Record<AgendaPeriodValue, { singular: string; per: string }> = {
-  WEEK: { singular: "semaine", per: "par semaine" },
-  MONTH: { singular: "mois", per: "par mois" },
-  QUARTER: { singular: "trimestre", per: "par trimestre" },
-  YEAR: { singular: "an", per: "par an" },
+export const PERIOD_LABELS: Record<AgendaPeriodValue, { singular: string; plural: string; per: string; every: string }> = {
+  WEEK: { singular: "semaine", plural: "semaines", per: "par semaine", every: "Toutes les" },
+  MONTH: { singular: "mois", plural: "mois", per: "par mois", every: "Tous les" },
+  QUARTER: { singular: "trimestre", plural: "trimestres", per: "par trimestre", every: "Tous les" },
+  YEAR: { singular: "an", plural: "ans", per: "par an", every: "Tous les" },
 };
+
+/** Average days per period, as the planner counts them. */
+const PERIOD_DAYS: Record<AgendaPeriodValue, number> = { WEEK: 7, MONTH: 30.4, QUARTER: 91.3, YEAR: 365 };
 
 export const END_REASON_LABELS: Record<AgendaEndReasonValue, string> = {
   DECES: "Décès",
@@ -20,9 +23,26 @@ export const END_REASON_LABELS: Record<AgendaEndReasonValue, string> = {
   AUTRE: "Autre fin de mesure",
 };
 
-/** "1 visite par trimestre", "2 visites par mois". */
-export function formatFrequency(count: number, period: AgendaPeriodValue): string {
-  return `${count} visite${count > 1 ? "s" : ""} ${PERIOD_LABELS[period].per}`;
+/** "Tous les trimestres", "Toutes les 2 semaines"; older plans: "2 visites par mois". */
+export function formatFrequency(count: number, period: AgendaPeriodValue, every = 1): string {
+  const label = PERIOD_LABELS[period];
+  if (count > 1) {
+    const per = every === 1 ? label.per : `${label.every.toLowerCase()} ${every} ${label.plural}`;
+    return `${count} visites ${per}`;
+  }
+  return every === 1 ? `${label.every} ${label.plural}` : `${label.every} ${every} ${label.plural}`;
+}
+
+/**
+ * The form asks « tous les N <unité> »: an older « 2 visites par mois » is shown
+ * as the same rhythm in weeks or months (2 par mois -> toutes les 2 semaines).
+ */
+export function toEveryForm(count: number, period: AgendaPeriodValue, every: number): { every: number; period: AgendaPeriodValue } {
+  if (count <= 1) return { every, period };
+  const days = (PERIOD_DAYS[period] * every) / count;
+  const months = days / PERIOD_DAYS.MONTH;
+  if (months >= 1 && Math.abs(months - Math.round(months)) < 0.05) return { every: Math.round(months), period: "MONTH" };
+  return { every: Math.max(1, Math.round(days / 7)), period: "WEEK" };
 }
 
 /** 90 -> "1 h 30", 45 -> "45 min". */

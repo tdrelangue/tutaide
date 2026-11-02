@@ -36,6 +36,10 @@ export type AgendaPersonView = {
   /** Null = no regular visits. */
   visitsPerPeriod: number | null;
   visitPeriod: AgendaPeriodValue | null;
+  /** « Tous les N » périodes (1 = every period). */
+  visitEvery: number;
+  /** The checkbox « Réside en EHPAD »; null = not chosen, decided from the address. */
+  inEhpad: boolean | null;
   visitMinutes: number | null;
   notes: string | null;
   phone: string | null;
@@ -52,7 +56,7 @@ const DEFAULT_SETTINGS: AgendaSettingsView = {
   dayStartMinutes: 510,
   dayEndMinutes: 1080,
   dayEndLimitMinutes: 1140,
-  defaultVisitMinutes: 60,
+  defaultVisitMinutes: 30,
 };
 
 /** Label shown for the address of a protected person (position 0 = default place). */
@@ -136,6 +140,8 @@ function toPersonView(r: PersonRow): AgendaPersonView {
     address: place ? toPlace(place.address, place.point, place.precision) : null,
     visitsPerPeriod: r.visitsPerPeriod,
     visitPeriod: r.visitPeriod,
+    visitEvery: r.visitEvery ?? 1,
+    inEhpad: r.inEhpad,
     visitMinutes: r.visitMin,
     notes: unseal(r.notes),
     phone: unseal(r.phone),
@@ -187,6 +193,9 @@ function personColumns(input: AgendaPersonInput) {
     fullName: input.fullName,
     visitsPerPeriod: input.visitsPerPeriod,
     visitPeriod: input.visitPeriod,
+    visitEvery: input.visitEvery === 1 || input.visitPeriod === null ? null : input.visitEvery,
+    lastVisitOn: input.lastVisitOn === null ? null : new Date(`${input.lastVisitOn}T00:00:00.000Z`),
+    inEhpad: input.inEhpad,
     visitMin: input.visitMinutes,
     notes: sealOrNull(input.notes),
     phone: sealOrNull(input.phone),

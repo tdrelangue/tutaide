@@ -66,7 +66,8 @@ check("group key: groupId, else the dossier itself", () => {
 // --- formatting -------------------------------------------------------------
 
 check("frequency and duration labels", () => {
-  assert.equal(formatFrequency(1, "QUARTER"), "1 visite par trimestre");
+  assert.equal(formatFrequency(1, "QUARTER"), "Tous les trimestres");
+  assert.equal(formatFrequency(1, "WEEK", 2), "Toutes les 2 semaines");
   assert.equal(formatFrequency(2, "MONTH"), "2 visites par mois");
   assert.equal(formatDuration(45), "45 min");
   assert.equal(formatDuration(60), "1 h");

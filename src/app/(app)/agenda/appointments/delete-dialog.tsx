@@ -21,7 +21,7 @@ type DeleteAppointmentDialogProps = {
   readonly open: boolean;
   readonly onOpenChange: (open: boolean) => void;
   /** Kept while the dialog closes, so its title never goes blank. */
-  readonly row: AppointmentRow | null;
+  readonly row: Pick<AppointmentRow, "id" | "title"> | null;
   readonly onDone: () => void;
 };
 

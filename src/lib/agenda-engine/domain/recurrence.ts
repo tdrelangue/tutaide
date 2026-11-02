@@ -9,18 +9,23 @@ const PERIOD_DAYS: Readonly<Record<Period, number>> = {
   YEAR: 365,
 };
 
-/** Visits per period: a whole number, at most one a day. Anything else cannot be planned. */
+const everyOf = (visits: VisitPlan) => visits.every ?? 1;
+
+/** Whole numbers of visits and periods, at most one visit a day. Anything else cannot be planned. */
 export function isValidVisitPlan(visits: VisitPlan): boolean {
+  const every = everyOf(visits);
   return (
     Number.isInteger(visits.count) &&
     visits.count >= 1 &&
-    PERIOD_DAYS[visits.period] / visits.count >= 1
+    Number.isInteger(every) &&
+    every >= 1 &&
+    intervalDays(visits) >= 1
   );
 }
 
 /** Days between two regular visits. */
 export function intervalDays(visits: VisitPlan): number {
-  return PERIOD_DAYS[visits.period] / visits.count;
+  return (PERIOD_DAYS[visits.period] * everyOf(visits)) / visits.count;
 }
 
 export interface LastSeen {

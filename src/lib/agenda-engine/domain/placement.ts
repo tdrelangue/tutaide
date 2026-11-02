@@ -1,6 +1,7 @@
 import { availWindows } from "./availability";
 import type { PlannerContext } from "./context";
 import { binds } from "./days";
+import { groupingCost } from "./grouping";
 import type { IsoDate, PrefDayRule, SlotRule } from "./model";
 import type {
   BentRule,
@@ -216,9 +217,10 @@ function bestDay(
   for (const day of days) {
     const load = loadOf(s, day);
     if (!hasRoom(day, s.task, allowMedium, load - busyCount(day))) continue;
-    const ins = tryInsert(s.ctx, day, s.routes.get(day.date) ?? [], s.task);
+    const route = s.routes.get(day.date) ?? [];
+    const ins = tryInsert(s.ctx, day, route, s.task);
     if (!ins) continue;
-    const cost = ins.delta + softCost(s.task, day, s.opts, load);
+    const cost = ins.delta + softCost(s.task, day, s.opts, load) + groupingCost(s.task, route);
     if (!best || cost < best.cost) best = { day, order: ins.order, cost };
   }
   return best;

@@ -7,10 +7,11 @@ import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { formatDuration, minutesToTime, timeToMinutes } from "@/lib/agenda/rules";
+import { minutesToTime, timeToMinutes } from "@/lib/agenda/rules";
 import type { AgendaSettingsView, Place } from "@/lib/agenda/service";
 import { AddressField, ERROR_TEXT, PENDING_ADDRESS_ERROR } from "./address-field";
 import { saveAgendaSettings } from "./actions";
+import { DurationField } from "./duration-field";
 import { useAgendaAction } from "./use-agenda-action";
 
 const WEEKDAYS: { value: number; label: string }[] = [
@@ -22,8 +23,6 @@ const WEEKDAYS: { value: number; label: string }[] = [
   { value: 6, label: "Samedi" },
   { value: 7, label: "Dimanche" },
 ];
-
-export const VISIT_DURATIONS = [30, 45, 60, 90, 120];
 
 /** Where the MJPM starts and ends their rounds, and when they work. */
 export function SettingsTab({ profile }: { profile: AgendaSettingsView }) {
@@ -72,8 +71,8 @@ export function SettingsTab({ profile }: { profile: AgendaSettingsView }) {
     setDayEndLimit(event.target.value);
   }
 
-  function handleVisitMinutesChange(event: React.ChangeEvent<HTMLSelectElement>) {
-    setVisitMinutes(Number(event.target.value));
+  function handleVisitMinutesChange(minutes: number | null) {
+    if (minutes !== null) setVisitMinutes(minutes);
   }
 
   /** Same rules as the server, checked first so the message appears at once. */
@@ -164,20 +163,14 @@ export function SettingsTab({ profile }: { profile: AgendaSettingsView }) {
               <Label htmlFor="agenda-day-end-limit">Limite stricte</Label>
               <Input id="agenda-day-end-limit" type="time" value={dayEndLimit} onChange={handleDayEndLimitChange} disabled={isBusy} className="w-32" aria-describedby="agenda-day-end-hint" />
             </div>
-            <div className="space-y-1">
-              <Label htmlFor="agenda-visit-minutes">Durée d&apos;une visite (par défaut)</Label>
-              <select
-                id="agenda-visit-minutes"
-                value={visitMinutes}
-                onChange={handleVisitMinutesChange}
-                disabled={isBusy}
-                className="flex h-10 w-40 rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                {VISIT_DURATIONS.map((m) => (
-                  <option key={m} value={m}>{formatDuration(m)}</option>
-                ))}
-              </select>
-            </div>
+            <DurationField
+              id="agenda-visit-minutes"
+              label="Durée d'une visite (par défaut)"
+              value={visitMinutes}
+              onChange={handleVisitMinutesChange}
+              disabled={isBusy}
+              min={15}
+            />
           </div>
         </CardContent>
       </Card>

@@ -76,6 +76,11 @@ export const EntryCard = memo(function EntryCard({ entry, day, box, busy, isDrag
   function openMenu() {
     setMenuOpen(true);
   }
+  /** Right-click opens the same menu as a click. */
+  function handleContextMenu(event: React.MouseEvent<HTMLButtonElement>) {
+    event.preventDefault();
+    setMenuOpen(true);
+  }
   function handleAction(action: EntryAction) {
     onAction(action, entry, day);
   }
@@ -97,6 +102,7 @@ export const EntryCard = memo(function EntryCard({ entry, day, box, busy, isDrag
           type="button"
           aria-label={entryAccessibleName(entry, day.label)}
           className={cardClass(entry, draggable, isDragged)}
+          onContextMenu={handleContextMenu}
         >
           <CardBody entry={entry} />
         </button>

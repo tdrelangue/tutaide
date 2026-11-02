@@ -37,6 +37,7 @@ export { apptTask, buildTasks, itemToTask } from "./tasks";
 export { buildDays } from "./days";
 export { simulate } from "./simulate";
 export { allowedDay, placeTasks, sortTasks } from "./placement";
+export { cityKey, groupingCost } from "./grouping";
 export { solve, stateRuleOptions, trouble } from "./plan";
 export { STRONG_ASK_KM, propose } from "./propose";
 export {

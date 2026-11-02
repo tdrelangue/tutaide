@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { CalendarX2, ListChecks, Move, SkipForward, Undo2 } from "lucide-react";
+import { CalendarX2, ListChecks, Move, SkipForward, Trash2, Undo2 } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,7 +15,7 @@ import { canHaveNotes } from "../calendar/calendar-format";
 import { PRIORITY_LABEL, SOURCE_WORD, WARNING_LABEL, timeRange } from "./format";
 import type { DragHandlers } from "./use-pointer-drag";
 
-export type EntryAction = "move" | "unpin" | "skip" | "missed" | "notes";
+export type EntryAction = "move" | "unpin" | "skip" | "missed" | "notes" | "delete";
 
 type EntryMenuProps = {
   readonly entry: EntryView;
@@ -73,7 +73,9 @@ function EntryActions({ entry, disabled, onAction }: { entry: EntryView; disable
   const canSkip = entry.canSkip && entry.occurrenceKey !== null;
   const canMiss = entry.canMarkMissed && entry.itemKey !== null;
   const hasNotes = canHaveNotes(entry);
-  const hasAny = entry.canMove || canUnpin || canSkip || canMiss || hasNotes;
+  // Deleting it here spares a trip to « Rendez-vous » (Thomas, 2026-11-02).
+  const canDelete = entry.kind === "APPT" && (entry.appointmentId ?? null) !== null;
+  const hasAny = entry.canMove || canUnpin || canSkip || canMiss || hasNotes || canDelete;
   if (!hasAny) {
     return <DropdownMenuItem disabled>Aucune action pour ce bloc</DropdownMenuItem>;
   }
@@ -84,6 +86,12 @@ function EntryActions({ entry, disabled, onAction }: { entry: EntryView; disable
       {canSkip && <ActionItem action="skip" icon={<SkipForward aria-hidden="true" />} label="Pas cette fois" disabled={disabled} onAction={onAction} />}
       {hasNotes && <ActionItem action="notes" icon={<ListChecks aria-hidden="true" />} label="Notes et tâches…" disabled={false} onAction={onAction} />}
       {canMiss && <ActionItem action="missed" icon={<CalendarX2 aria-hidden="true" />} label="N'a pas eu lieu…" disabled={disabled} onAction={onAction} />}
+      {canDelete && (
+        <>
+          <DropdownMenuSeparator />
+          <ActionItem action="delete" icon={<Trash2 aria-hidden="true" />} label="Supprimer le rendez-vous…" disabled={disabled} onAction={onAction} />
+        </>
+      )}
     </>
   );
 }

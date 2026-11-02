@@ -3,17 +3,24 @@
  * addAppointment input (lib/agenda/appointments.ts appointmentSchema). Pure.
  */
 import type { AppointmentInput } from "@/lib/agenda/appointments";
+import type { Place } from "@/lib/agenda/service";
 import { timeToMinutes } from "@/lib/agenda/rules";
 import type { IsoDate, PriorityValue } from "@/lib/agenda/views/types";
 import { addDays, formatDayShort, mondayOf, parseIso } from "./format";
 
 export type WhenKind = "FIXED" | "WEEK" | "RANGE";
-export type PlaceKind = "HOME" | "OFFICE" | "VISIO";
+/** « Chez moi » is gone: almost never used (Thomas, 2026-11-02). */
+export type PlaceKind = "OFFICE" | "PERSON" | "OUTSIDE" | "VISIO";
 
 export type FormValues = {
   readonly title: string;
   readonly participantIds: readonly string[];
   readonly place: PlaceKind;
+  /** « Chez le majeur protégé »: which participant (null = the first one ticked). */
+  readonly placePersonId: string | null;
+  /** « À l'extérieur »: what the place is (« Cabinet du notaire »…) and its address. */
+  readonly outsideLabel: string;
+  readonly outsideAddress: Place | null;
   readonly durationMin: number;
   readonly whenKind: WhenKind;
   readonly date: IsoDate;
@@ -28,7 +35,7 @@ export type FormValues = {
 export const SELECT_CLASS =
   "flex h-10 rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50";
 
-export type FieldKey = "title" | "date" | "time" | "from" | "to";
+export type FieldKey = "title" | "place" | "date" | "time" | "from" | "to";
 export type FieldErrors = Partial<Record<FieldKey, string>>;
 
 /** Shared by the field groups of the form. */
@@ -40,13 +47,12 @@ export type FieldProps = {
 };
 
 /** Order in which the first error gets the focus. */
-export const FIELD_ORDER: readonly FieldKey[] = ["title", "date", "time", "from", "to"];
-
-export const DURATIONS: readonly number[] = [15, 30, 45, 60, 90, 120, 150, 180];
+export const FIELD_ORDER: readonly FieldKey[] = ["title", "place", "date", "time", "from", "to"];
 
 export const PLACE_CHOICES: readonly { value: PlaceKind; label: string }[] = [
-  { value: "HOME", label: "Chez moi" },
   { value: "OFFICE", label: "Au bureau" },
+  { value: "PERSON", label: "Chez le majeur protégé" },
+  { value: "OUTSIDE", label: "À l'extérieur (à préciser)" },
   { value: "VISIO", label: "En visio" },
 ];
 
@@ -67,7 +73,10 @@ export function initialValues(today: IsoDate, participantIds: readonly string[])
     title: "",
     participantIds,
     place: "OFFICE",
-    durationMin: 60,
+    placePersonId: null,
+    outsideLabel: "",
+    outsideAddress: null,
+    durationMin: 30,
     whenKind: "WEEK",
     date: today,
     time: "09:00",
@@ -104,10 +113,32 @@ function checkWhen(values: FormValues): FieldErrors {
   return {};
 }
 
+/** The participant whose address is the place of « Chez le majeur protégé ». */
+export function placePerson(values: FormValues): string | null {
+  const chosen = values.placePersonId;
+  if (chosen !== null && values.participantIds.includes(chosen)) return chosen;
+  return values.participantIds[0] ?? null;
+}
+
+function checkPlace(values: FormValues): FieldErrors {
+  if (values.place === "PERSON" && placePerson(values) === null) return { place: "Cochez la personne chez qui a lieu le rendez-vous." };
+  if (values.place === "OUTSIDE" && values.outsideAddress === null) return { place: "Indiquez l'adresse du rendez-vous." };
+  return {};
+}
+
 /** Same rules as the server, with messages next to each field. */
 export function checkValues(values: FormValues): FieldErrors {
   const errors: FieldErrors = values.title.trim().length < 2 ? { title: "Indiquez l'objet du rendez-vous." } : {};
-  return { ...errors, ...checkWhen(values) };
+  return { ...errors, ...checkPlace(values), ...checkWhen(values) };
+}
+
+function placeInput(values: FormValues): AppointmentInput["place"] {
+  const person = placePerson(values);
+  if (values.place === "PERSON" && person !== null) return { kind: "PERSON", personId: person };
+  if (values.place === "OUTSIDE" && values.outsideAddress !== null) {
+    return { kind: "OUTSIDE", label: values.outsideLabel.trim(), address: values.outsideAddress };
+  }
+  return { kind: values.place === "VISIO" ? "VISIO" : "OFFICE" };
 }
 
 function whenInput(values: FormValues): AppointmentInput["when"] {
@@ -121,7 +152,7 @@ export function toInput(values: FormValues): AppointmentInput {
   return {
     title: values.title.trim(),
     participantIds: [...values.participantIds],
-    place: { kind: values.place },
+    place: placeInput(values),
     durationMin: values.durationMin,
     when: whenInput(values),
     priority: values.priority,

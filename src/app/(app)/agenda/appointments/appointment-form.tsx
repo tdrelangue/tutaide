@@ -7,18 +7,19 @@ import { DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { AppointmentInput } from "@/lib/agenda/appointments";
-import { formatDuration } from "@/lib/agenda/rules";
 import type { PriorityValue } from "@/lib/agenda/views/types";
-import { ERROR_TEXT } from "../address-field";
+import type { Place } from "@/lib/agenda/service";
+import { AddressField, ERROR_TEXT } from "../address-field";
+import { DurationField as DurationSelect } from "../duration-field";
 import { BusyButton } from "../week/busy-button";
 import { localToday, PRIORITY_LABELS } from "./format";
 import {
   checkValues,
-  DURATIONS,
   SELECT_CLASS,
   FIELD_ORDER,
   initialValues,
   PLACE_CHOICES,
+  placePerson,
   toInput,
   weekOptions,
   WHEN_CHOICES,
@@ -72,7 +73,7 @@ export function AppointmentForm({ persons, defaultParticipantIds, isBusy, onSubm
         <TitleField {...props} />
         <ParticipantsField {...props} persons={persons} />
         <div className="grid gap-5 sm:grid-cols-[1fr_auto]">
-          <PlaceField {...props} />
+          <PlaceField {...props} persons={persons} />
           <DurationField {...props} />
         </div>
         <WhenFields {...props} weeks={weekOptions(localToday())} choices={WHEN_CHOICES} />
@@ -146,40 +147,83 @@ function ParticipantsField({ values, update, persons }: FieldProps & { readonly 
   );
 }
 
-function PlaceField({ values, update }: FieldProps) {
+function PlaceField({ values, update, errors, register, persons }: FieldProps & { readonly persons: readonly PersonOption[] }) {
   function handlePlaceChange(event: React.ChangeEvent<HTMLInputElement>) {
     const choice = PLACE_CHOICES.find((c) => c.value === event.target.value);
     if (choice) update({ place: choice.value });
   }
   return (
-    <fieldset className="space-y-2">
+    <fieldset className="space-y-2" aria-describedby={errors.place ? "appt-place-error" : undefined}>
       <legend className="text-sm font-medium">Où ?</legend>
       <div className="flex flex-wrap gap-x-4 gap-y-2">
-        {PLACE_CHOICES.map((choice) => (
+        {PLACE_CHOICES.map((choice, i) => (
           <label key={choice.value} className="flex items-center gap-2 text-sm">
-            <input type="radio" name="appt-place" value={choice.value} checked={values.place === choice.value} onChange={handlePlaceChange} className="h-4 w-4 accent-primary" />
+            <input
+              ref={i === 0 ? register("place") : undefined}
+              type="radio"
+              name="appt-place"
+              value={choice.value}
+              checked={values.place === choice.value}
+              onChange={handlePlaceChange}
+              className="h-4 w-4 accent-primary"
+            />
             {choice.label}
           </label>
         ))}
       </div>
+      {values.place === "PERSON" && <PersonPlace values={values} update={update} persons={persons} />}
+      {values.place === "OUTSIDE" && <OutsidePlace values={values} update={update} />}
+      {errors.place && <p id="appt-place-error" className={ERROR_TEXT}>{errors.place}</p>}
     </fieldset>
   );
 }
 
-function DurationField({ values, update }: FieldProps) {
-  function handleDurationChange(event: React.ChangeEvent<HTMLSelectElement>) {
-    update({ durationMin: Number(event.target.value) });
+type PlacePartProps = Pick<FieldProps, "values" | "update">;
+
+/** Which participant receives: only asked when several are ticked. */
+function PersonPlace({ values, update, persons }: PlacePartProps & { readonly persons: readonly PersonOption[] }) {
+  const ticked = persons.filter((p) => values.participantIds.includes(p.id));
+  function handleChange(event: React.ChangeEvent<HTMLSelectElement>) {
+    update({ placePersonId: event.target.value });
   }
+  if (ticked.length === 0) return <p className="text-xs text-muted-foreground">Cochez la personne dans « Avec qui ? » : son adresse sera le lieu.</p>;
+  if (ticked.length === 1) return <p className="text-xs text-muted-foreground">À l&apos;adresse de {ticked[0]?.fullName}.</p>;
   return (
     <div className="space-y-1">
-      <Label htmlFor="appt-duration">Durée</Label>
-      <select id="appt-duration" value={values.durationMin} onChange={handleDurationChange} className={`${SELECT_CLASS} w-36`}>
-        {DURATIONS.map((m) => (
-          <option key={m} value={m}>{formatDuration(m)}</option>
+      <Label htmlFor="appt-place-person">Chez qui ?</Label>
+      <select id="appt-place-person" value={placePerson(values) ?? ""} onChange={handleChange} className={`${SELECT_CLASS} w-64`}>
+        {ticked.map((p) => (
+          <option key={p.id} value={p.id}>{p.fullName}</option>
         ))}
       </select>
     </div>
   );
+}
+
+/** « À l'extérieur »: what the place is, and its address (found by the geocoder). */
+function OutsidePlace({ values, update }: PlacePartProps) {
+  function handleLabelChange(event: React.ChangeEvent<HTMLInputElement>) {
+    update({ outsideLabel: event.target.value });
+  }
+  function handleAddressChange(place: Place | null) {
+    update({ outsideAddress: place });
+  }
+  return (
+    <div className="space-y-3 rounded-md border p-3">
+      <div className="space-y-1">
+        <Label htmlFor="appt-outside-label">Lieu <span className="font-normal text-muted-foreground">(facultatif)</span></Label>
+        <Input id="appt-outside-label" value={values.outsideLabel} onChange={handleLabelChange} placeholder="ex. Étude du notaire, tribunal, banque…" maxLength={120} autoComplete="off" />
+      </div>
+      <AddressField label="Adresse" value={values.outsideAddress} onChange={handleAddressChange} />
+    </div>
+  );
+}
+
+function DurationField({ values, update }: FieldProps) {
+  function handleDurationChange(minutes: number | null) {
+    if (minutes !== null) update({ durationMin: minutes });
+  }
+  return <DurationSelect id="appt-duration" label="Durée" value={values.durationMin} onChange={handleDurationChange} choices={[15, 30, 45, 60, 90, 120, 180]} />;
 }
 
 const PRIORITIES: readonly PriorityValue[] = ["LOW", "NORMAL", "HIGH", "MUST"];

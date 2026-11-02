@@ -368,7 +368,7 @@ function PersonRow({
       </td>
       <td className="px-3 py-2">
         {person.visitsPerPeriod !== null && person.visitPeriod !== null
-          ? formatFrequency(person.visitsPerPeriod, person.visitPeriod)
+          ? formatFrequency(person.visitsPerPeriod, person.visitPeriod, person.visitEvery)
           : "Pas de visites régulières"}
       </td>
       <td className="px-3 py-2">

@@ -17,14 +17,13 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   END_REASON_LABELS,
   formatDuration,
-  PERIOD_LABELS,
   type AgendaEndReasonValue,
-  type AgendaPeriodValue,
 } from "@/lib/agenda/rules";
 import type { AgendaPersonView, Place } from "@/lib/agenda/service";
 import { AddressField, ERROR_TEXT, PENDING_ADDRESS_ERROR } from "./address-field";
 import { saveAgendaPerson } from "./actions";
-import { VISIT_DURATIONS } from "./settings-tab";
+import { DurationField } from "./duration-field";
+import { EhpadField, FrequencyField, LastVisitField, frequencyPayload, initialFrequency, type Frequency } from "./person-visit-fields";
 import { useAgendaAction } from "./use-agenda-action";
 
 type Status = AgendaPersonView["status"];
@@ -38,6 +37,12 @@ const STATUS_CHOICES: { value: Status; label: string; hint: string }[] = [
   { value: "ENDED", label: "Mesure terminée", hint: "Plus aucune visite ne sera planifiée." },
 ];
 
+/** Today on this computer, "YYYY-MM-DD" (the max of « Dernière visite »). */
+function todayIso(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+}
+
 type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -49,15 +54,16 @@ type Props = {
 export function PersonDialog({ open, onOpenChange, person, defaultVisitMinutes }: Props) {
   const [fullName, setFullName] = useState(person?.fullName ?? "");
   const [address, setAddress] = useState<Place | null>(person?.address ?? null);
-  const [visits, setVisits] = useState(person?.visitsPerPeriod ?? 1);
-  const [period, setPeriod] = useState<AgendaPeriodValue>(person?.visitPeriod ?? "QUARTER");
+  const [frequency, setFrequency] = useState<Frequency>(() => initialFrequency(person));
+  const [lastVisitOn, setLastVisitOn] = useState(person?.lastVisitOn ?? "");
+  const [inEhpad, setInEhpad] = useState<boolean | null>(person?.inEhpad ?? null);
   const [visitMinutes, setVisitMinutes] = useState<number | null>(person?.visitMinutes ?? null);
   const [notes, setNotes] = useState(person?.notes ?? "");
   const [phone, setPhone] = useState(person?.phone ?? "");
   const [status, setStatus] = useState<Status>(person?.status ?? "ACTIVE");
   const [endReason, setEndReason] = useState<AgendaEndReasonValue | null>(person?.endReason ?? null);
   const [isAddressPending, setIsAddressPending] = useState(false);
-  const [fieldErrors, setFieldErrors] = useState<{ name?: string; reason?: string; address?: string }>({});
+  const [fieldErrors, setFieldErrors] = useState<{ name?: string; reason?: string; address?: string; frequency?: string; lastVisit?: string }>({});
   const nameRef = useRef<HTMLInputElement>(null);
   const reasonRef = useRef<HTMLSelectElement>(null);
   const { run, isBusy, error } = useAgendaAction();
@@ -75,17 +81,6 @@ export function PersonDialog({ open, onOpenChange, person, defaultVisitMinutes }
     setPhone(event.target.value);
   }
 
-  function handleVisitsChange(event: React.ChangeEvent<HTMLSelectElement>) {
-    setVisits(Number(event.target.value));
-  }
-
-  function handlePeriodChange(event: React.ChangeEvent<HTMLSelectElement>) {
-    setPeriod(event.target.value as AgendaPeriodValue); // options are the PERIOD_LABELS keys
-  }
-
-  function handleMinutesChange(event: React.ChangeEvent<HTMLSelectElement>) {
-    setVisitMinutes(event.target.value === "" ? null : Number(event.target.value));
-  }
 
   function handleNotesChange(event: React.ChangeEvent<HTMLTextAreaElement>) {
     setNotes(event.target.value);
@@ -104,6 +99,8 @@ export function PersonDialog({ open, onOpenChange, person, defaultVisitMinutes }
     const errors: typeof fieldErrors = {};
     if (fullName.trim().length < 2) errors.name = "Indiquez le nom de la personne.";
     if (isAddressPending) errors.address = PENDING_ADDRESS_ERROR;
+    if (!frequency.isNone && frequency.every === null) errors.frequency = "Indiquez tous les combien (un nombre entre 1 et 52).";
+    if (lastVisitOn !== "" && lastVisitOn > todayIso()) errors.lastVisit = "La dernière visite ne peut pas être dans le futur.";
     if (status === "ENDED" && endReason === null) errors.reason = "Indiquez la raison de la fin de mesure.";
     setFieldErrors(errors);
     if (errors.name) nameRef.current?.focus();
@@ -117,8 +114,9 @@ export function PersonDialog({ open, onOpenChange, person, defaultVisitMinutes }
     const payload = {
       fullName,
       address,
-      visitsPerPeriod: visits,
-      visitPeriod: period,
+      ...frequencyPayload(frequency),
+      lastVisitOn: lastVisitOn === "" ? null : lastVisitOn,
+      inEhpad,
       visitMinutes,
       notes: notes.trim() || null,
       phone: phone.trim() || null,
@@ -178,34 +176,21 @@ export function PersonDialog({ open, onOpenChange, person, defaultVisitMinutes }
           />
           {fieldErrors.address && <p role="alert" className={ERROR_TEXT}>{fieldErrors.address}</p>}
 
-          <fieldset className="space-y-2" disabled={isBusy}>
-            <legend className="text-sm font-medium">Fréquence des visites</legend>
-            <div className="flex flex-wrap items-center gap-2">
-              <label htmlFor="person-visits" className="sr-only">Nombre de visites</label>
-              <select id="person-visits" value={visits} onChange={handleVisitsChange} className={`${SELECT_CLASS} w-20`}>
-                {[1, 2, 3, 4, 5, 6].map((n) => (
-                  <option key={n} value={n}>{n}</option>
-                ))}
-              </select>
-              <span className="text-sm">visite{visits > 1 ? "s" : ""} par</span>
-              <label htmlFor="person-period" className="sr-only">Période</label>
-              <select id="person-period" value={period} onChange={handlePeriodChange} className={`${SELECT_CLASS} w-36`}>
-                {(Object.keys(PERIOD_LABELS) as AgendaPeriodValue[]).map((p) => (
-                  <option key={p} value={p}>{PERIOD_LABELS[p].singular}</option>
-                ))}
-              </select>
-            </div>
-          </fieldset>
+          <EhpadField address={address} choice={inEhpad} onChange={setInEhpad} disabled={isBusy} />
 
-          <div className="space-y-1">
-            <Label htmlFor="person-minutes">Durée d&apos;une visite</Label>
-            <select id="person-minutes" value={visitMinutes ?? ""} onChange={handleMinutesChange} disabled={isBusy} className={`${SELECT_CLASS} w-56`}>
-              <option value="">Par défaut ({formatDuration(defaultVisitMinutes)})</option>
-              {VISIT_DURATIONS.map((m) => (
-                <option key={m} value={m}>{formatDuration(m)}</option>
-              ))}
-            </select>
-          </div>
+          <FrequencyField value={frequency} onChange={setFrequency} error={fieldErrors.frequency} disabled={isBusy} />
+
+          <LastVisitField value={lastVisitOn} onChange={setLastVisitOn} max={todayIso()} error={fieldErrors.lastVisit} disabled={isBusy} />
+
+          <DurationField
+            id="person-minutes"
+            label="Durée d'une visite"
+            value={visitMinutes}
+            onChange={setVisitMinutes}
+            defaultLabel={`Par défaut (${formatDuration(defaultVisitMinutes)})`}
+            disabled={isBusy}
+            min={15}
+          />
 
           <div className="space-y-1">
             <Label htmlFor="person-notes">Contraintes pratiques (facultatif)</Label>

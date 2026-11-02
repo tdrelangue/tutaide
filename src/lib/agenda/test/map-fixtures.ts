@@ -56,6 +56,8 @@ export function contactRow(over: Partial<AgendaContact> = {}): AgendaContact {
     phone: null,
     visitsPerPeriod: null,
     visitPeriod: null,
+    visitEvery: null,
+    inEhpad: null,
     visitPriority: null,
     visitMin: null,
     lastVisitOn: null,

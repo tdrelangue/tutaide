@@ -522,7 +522,7 @@ model AgendaSettings {
   /// Null = no lunch break.
   lunchStartMin   Int?     @default(750)
   lunchEndMin     Int?     @default(810)
-  defaultVisitMin Int      @default(60)
+  defaultVisitMin Int      @default(30)
   timezone        String   @default("Europe/Paris")
   /// Optimistic locking: the MJPM and an assistant may edit at the same time.
   version         Int      @default(0)
@@ -553,6 +553,10 @@ model AgendaContact {
   // Regular visits (protected persons only; all null = no regular visits).
   visitsPerPeriod    Int?
   visitPeriod        AgendaPeriod?
+  /// « Tous les N » périodes (2 + WEEK = every second week). Null = 1.
+  visitEvery         Int?
+  /// Lives in an EHPAD: visits in the afternoon only, grouped. Null = decided from the address.
+  inEhpad            Boolean?
   visitPriority      AgendaPriority?
   visitMin           Int?
   lastVisitOn        DateTime?                      @db.Date

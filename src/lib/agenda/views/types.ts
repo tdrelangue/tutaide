@@ -70,6 +70,8 @@ export type EntryView = {
   readonly canMarkMissed: boolean;
   /** Proposed visit: « Pas cette fois » is offered. */
   readonly canSkip: boolean;
+  /** The appointment behind the block (« Supprimer le rendez-vous… »); null for a visit or a past block. */
+  readonly appointmentId?: string | null;
 };
 
 export type DayView = {

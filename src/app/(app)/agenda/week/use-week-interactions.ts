@@ -18,6 +18,9 @@ function useWeekDialogState(data: WeekData) {
   const [missed, setMissed] = useState<MissedItem | null>(null);
   const [isAppointmentOpen, setIsAppointmentOpen] = useState(false);
   const [notes, setNotes] = useState<NotesTarget | null>(null);
+  /** « Supprimer le rendez-vous… »: kept while the dialog closes, so its title never goes blank. */
+  const [deleting, setDeleting] = useState<{ id: string; title: string } | null>(null);
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
 
   function closeMove() {
     setMoving(null);
@@ -37,7 +40,12 @@ function useWeekDialogState(data: WeekData) {
     setNotes(null);
   }
 
-  return { moving, setMoving, missed, setMissed, isAppointmentOpen, setIsAppointmentOpen, notes, setNotes, closeNotes, closeMove, handleMissedOpenChange, handleDialogDone, openAppointment };
+  function askDelete(target: { id: string; title: string }) {
+    setDeleting(target);
+    setIsDeleteOpen(true);
+  }
+
+  return { moving, setMoving, missed, setMissed, isAppointmentOpen, setIsAppointmentOpen, notes, setNotes, closeNotes, closeMove, handleMissedOpenChange, handleDialogDone, openAppointment, deleting, isDeleteOpen, setIsDeleteOpen, askDelete };
 }
 
 /** Week navigation: previous, next, and the server's « today ». */
@@ -58,12 +66,13 @@ function useWeekNavigation(data: WeekData) {
 export function useWeekInteractions(data: WeekData, commands: WeekCommands) {
   const dialogs = useWeekDialogState(data);
   const navigation = useWeekNavigation(data);
-  const { setMoving, setMissed, setNotes } = dialogs;
+  const { setMoving, setMissed, setNotes, askDelete } = dialogs;
 
   function handleEntryAction(action: EntryAction, entry: EntryView, day: DayView) {
     if (action === "move") setMoving({ entry, date: day.date });
     else if (action === "unpin") void commands.unpin(entry);
     else if (action === "skip") void commands.skip(entry);
+    else if (action === "delete" && entry.appointmentId) askDelete({ id: entry.appointmentId, title: entry.title });
     else if (action === "notes" && entry.itemKey !== null) setNotes({ key: entry.itemKey, title: entry.title, when: `${day.label}, ${timeRange(entry.start, entry.end)}` });
     else if (action === "missed" && entry.itemKey !== null) {
       setMissed({ itemKey: entry.itemKey, title: entry.title, date: day.date, kind: entry.kind });

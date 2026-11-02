@@ -24,6 +24,11 @@ export interface Place {
   readonly lon: number;
   /** A video call: no travel, the tour stays where it is. */
   readonly remote?: boolean;
+  /**
+   * Establishment shared by several persons (an EHPAD): their visits are
+   * grouped on the same day (Thomas, 2026-11-02).
+   */
+  readonly site?: string;
 }
 
 /** A recurring availability window, e.g. "weekdays after 17:00". */
@@ -40,6 +45,8 @@ export type ContactStatus = "ACTIVE" | "PAUSED" | "ENDED";
 export interface VisitPlan {
   readonly count: number;
   readonly period: Period;
+  /** « Tous les N » (2 = every second week…); absent = 1. `count` visits in every N periods. */
+  readonly every?: number;
   /** Last visit on file before the agenda knew about this person. */
   readonly lastVisit: IsoDate;
   /**
