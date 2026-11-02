@@ -48,6 +48,7 @@ export function contactRow(over: Partial<AgendaContact> = {}): AgendaContact {
     createdById: null,
     category: "PROTEGE",
     fullName: "Jean Bonneau",
+    groupId: null,
     role: null,
     linkedContactId: null,
     dossierGroupKey: null,

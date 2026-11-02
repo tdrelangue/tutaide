@@ -93,6 +93,7 @@ afterAll(() => close());
 
 const person = {
   fullName: "Jean Bonneau",
+  groupId: null,
   address: LILLE,
   visitsPerPeriod: 1,
   visitPeriod: "WEEK" as const,

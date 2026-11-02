@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { GROUP_COLORS } from "./groups-rules";
 
 /** A place chosen from the geocoder's suggestions (never free text: it must have coordinates). */
 export const placeSchema = z.object({
@@ -47,9 +48,20 @@ export const phoneSchema = z
   .default(null)
   .transform((v) => (v ? v : null));
 
+/** A coloured group (Thomas, 2026-11-02): a short name and a colour of the fixed palette. */
+export const agendaGroupSchema = z.object({
+  name: z.string().trim().min(1, "Indiquez le nom du groupe.").max(40, "40 caractères au plus.").transform((s) => s.replace(/\s+/g, " ")),
+  color: z.enum(GROUP_COLORS),
+});
+export type AgendaGroupInput = z.infer<typeof agendaGroupSchema>;
+
+export const groupIdSchema = z.string().regex(/^[a-z0-9]{20,40}$/, "Groupe introuvable.");
+
 export const agendaPersonSchema = z
   .object({
     fullName: z.string().trim().min(2, "Indiquez le nom de la personne.").max(200),
+    /** Null = the first group. */
+    groupId: groupIdSchema.nullable().default(null),
     address: placeSchema.nullable(),
     /** Both null = « Pas de visite régulière ». */
     visitsPerPeriod: z.number().int().min(1).max(10).nullable(),

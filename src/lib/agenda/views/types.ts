@@ -5,6 +5,8 @@
  * Dates are "YYYY-MM-DD", times are minutes after midnight.
  */
 
+import type { GroupTag } from "../groups-rules";
+
 export type IsoDate = string;
 export type Minutes = number;
 export type PriorityValue = "LOW" | "NORMAL" | "HIGH" | "MUST";
@@ -72,6 +74,8 @@ export type EntryView = {
   readonly canSkip: boolean;
   /** The appointment behind the block (« Supprimer le rendez-vous… »); null for a visit or a past block. */
   readonly appointmentId?: string | null;
+  /** Group of the first participant that has one (colour + name); null for a block. */
+  readonly group?: GroupTag | null;
 };
 
 export type DayView = {

@@ -62,6 +62,18 @@ export default {
           busy: "hsl(var(--agenda-busy))",
           paper: "hsl(var(--agenda-paper))",
         },
+        group: {
+          blue: "hsl(var(--group-blue))",
+          teal: "hsl(var(--group-teal))",
+          green: "hsl(var(--group-green))",
+          lime: "hsl(var(--group-lime))",
+          amber: "hsl(var(--group-amber))",
+          orange: "hsl(var(--group-orange))",
+          red: "hsl(var(--group-red))",
+          pink: "hsl(var(--group-pink))",
+          purple: "hsl(var(--group-purple))",
+          slate: "hsl(var(--group-slate))",
+        },
       },
       borderRadius: {
         lg: "var(--radius)",

@@ -5,6 +5,7 @@ import { AlertTriangle, Ban, CalendarCheck, Check, CircleDashed, CircleSlash, Lo
 import { cn } from "@/lib/utils";
 import type { DayView, EntrySource, EntryView } from "@/lib/agenda/views/types";
 import { PRIORITY_LABEL, SOURCE_WORD, WARNING_LABEL, entryAccessibleName, timeRange } from "./format";
+import { GroupBadge } from "../group-badge";
 import { EntryMenu, type EntryAction } from "./entry-menu";
 import type { BindDrag } from "./use-pointer-drag";
 
@@ -138,6 +139,7 @@ function CardTags({ entry }: { entry: EntryView }) {
   return (
     <span className="mt-0.5 flex flex-wrap items-center gap-1 text-xs leading-tight">
       <span className="font-medium">{SOURCE_WORD[entry.source]}</span>
+      {entry.group && <GroupBadge group={entry.group} />}
       {entry.priority && <PriorityTag priority={entry.priority} />}
       {entry.moved && <span className="rounded border border-agenda-warn px-1">Décalé</span>}
       {entry.rescheduled && <span className="rounded border border-agenda-warn px-1">À reprogrammer</span>}

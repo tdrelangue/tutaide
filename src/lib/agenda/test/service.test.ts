@@ -24,6 +24,7 @@ describe("agenda service (tests run in order: each builds on the previous state)
   const roubaix = { label: "Résidence Les Tilleuls, 59100 Roubaix", lat: 50.6907, lon: 3.1746, precision: "housenumber" as const };
   const person = {
     fullName: "Jean Bonneau",
+    groupId: null,
     address: roubaix,
     visitsPerPeriod: 1,
     visitPeriod: "MONTH" as const,

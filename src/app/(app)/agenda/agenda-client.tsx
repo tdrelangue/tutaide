@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { MandataireSelect } from "@/components/mandataire-select";
 import type { MandataireContext } from "@/lib/access/selection-actions";
+import type { AgendaGroupView } from "@/lib/agenda/groups";
 import type { AgendaPersonView, AgendaSettingsView } from "@/lib/agenda/service";
 import { AppointmentsTab } from "./appointments/appointments-tab";
 import { PersonsTab } from "./persons-tab";
@@ -23,6 +24,7 @@ type AgendaData = {
   ownerName: string;
   profile: AgendaSettingsView;
   persons: AgendaPersonView[];
+  groups: AgendaGroupView[];
   importableCount: number;
 };
 
@@ -97,6 +99,7 @@ export function AgendaClient({ data, mandataires, initialTab }: Props) {
             <TabsContent value="personnes" forceMount className="mt-6 data-[state=inactive]:hidden">
               <PersonsTab
                 persons={data.persons}
+                groups={data.groups}
                 importableCount={data.importableCount}
                 defaultVisitMinutes={data.profile.defaultVisitMinutes}
               />

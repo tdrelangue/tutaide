@@ -2,7 +2,7 @@
 
 import { useId, useState } from "react";
 import { useRouter } from "next/navigation";
-import { CheckCheck, Flag, Trash2, X } from "lucide-react";
+import { CheckCheck, Flag, Tags, Trash2, X } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import {
@@ -16,9 +16,10 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { END_REASON_LABELS } from "@/lib/agenda/rules";
+import type { AgendaGroupView } from "@/lib/agenda/groups";
 import type { AgendaPersonView } from "@/lib/agenda/service";
 import { ERROR_TEXT } from "./address-field";
-import { endAgendaMeasures, removeAgendaPersons } from "./actions";
+import { endAgendaMeasures, moveAgendaPersonsToGroup, removeAgendaPersons } from "./actions";
 import { useAgendaAction } from "./use-agenda-action";
 
 type EndReason = keyof typeof END_REASON_LABELS;
@@ -27,6 +28,7 @@ const END_REASONS = Object.keys(END_REASON_LABELS) as EndReason[]; // keys of a 
 type Props = {
   selected: ReadonlySet<string>;
   persons: AgendaPersonView[];
+  groups: AgendaGroupView[];
   onSelectAll: () => void;
   onClear: () => void;
   onExit: () => void;
@@ -39,9 +41,11 @@ const personsLabel = (n: number) => `${n} personne${n > 1 ? "s" : ""}`;
  * persons at once — the yearly clean-up would otherwise take one click per
  * person (Thomas, 2026-11-02). Both ask for confirmation first.
  */
-export function SelectionBar({ selected, persons, onSelectAll, onClear, onExit }: Props) {
+export function SelectionBar({ selected, persons, groups, onSelectAll, onClear, onExit }: Props) {
   const router = useRouter();
-  const [dialog, setDialog] = useState<"end" | "remove" | null>(null);
+  const [dialog, setDialog] = useState<"end" | "remove" | "group" | null>(null);
+  const [targetGroup, setTargetGroup] = useState(groups[0]?.id ?? "");
+  const groupSelectId = useId();
   const [reason, setReason] = useState<EndReason>("AUTRE");
   const reasonId = useId();
   const action = useAgendaAction();
@@ -54,6 +58,17 @@ export function SelectionBar({ selected, persons, onSelectAll, onClear, onExit }
       setDialog(null);
       onClear();
     }
+  }
+
+  async function handleConfirmGroup() {
+    if (await action.run(() => moveAgendaPersonsToGroup(ids, targetGroup))) {
+      setDialog(null);
+      onClear();
+    }
+  }
+
+  function handleTargetGroupChange(event: React.ChangeEvent<HTMLSelectElement>) {
+    setTargetGroup(event.target.value);
   }
 
   async function handleConfirmRemove() {
@@ -86,6 +101,12 @@ export function SelectionBar({ selected, persons, onSelectAll, onClear, onExit }
         Tout sélectionner
       </Button>
       <div className="ml-auto flex flex-wrap gap-2">
+        {groups.length > 1 && (
+          <Button variant="outline" size="sm" disabled={count === 0} onClick={() => setDialog("group")}>
+            <Tags className="mr-2 h-4 w-4" aria-hidden="true" />
+            Changer de groupe…
+          </Button>
+        )}
         <Button variant="outline" size="sm" disabled={notEnded === 0} onClick={() => setDialog("end")}>
           <Flag className="mr-2 h-4 w-4" aria-hidden="true" />
           Mesure terminée…
@@ -125,6 +146,33 @@ export function SelectionBar({ selected, persons, onSelectAll, onClear, onExit }
             <AlertDialogCancel disabled={action.isBusy}>Annuler</AlertDialogCancel>
             <AlertDialogAction onClick={handleConfirmEnd} disabled={action.isBusy}>
               Terminer {notEnded > 1 ? "ces mesures" : "cette mesure"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={dialog === "group"} onOpenChange={handleDialogChange}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Changer le groupe de {personsLabel(count)}</AlertDialogTitle>
+            <AlertDialogDescription>Elles passent toutes dans le groupe choisi.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-1">
+            <label htmlFor={groupSelectId} className="text-sm font-medium">Nouveau groupe</label>
+            <select
+              id={groupSelectId}
+              value={targetGroup}
+              onChange={handleTargetGroupChange}
+              className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              {groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+            </select>
+          </div>
+          {action.error && <p role="alert" className={ERROR_TEXT}>{action.error}</p>}
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={action.isBusy}>Annuler</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmGroup} disabled={action.isBusy || targetGroup === ""}>
+              Changer de groupe
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

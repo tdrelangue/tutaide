@@ -3,6 +3,7 @@
 import { cn } from "@/lib/utils";
 import type { DayView } from "@/lib/agenda/views/types";
 import { SOURCE_STYLE } from "../week/entry-card";
+import { GroupBadge } from "../group-badge";
 import { SOURCE_WORD, timeRange } from "../week/format";
 import { ListChecks } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -30,6 +31,7 @@ export function DayEntryList({ day, onOpenNotes }: { day: DayView; onOpenNotes?:
               {SOURCE_WORD[entry.source] !== entry.title && <span className="text-xs font-medium text-foreground/80">{SOURCE_WORD[entry.source]}</span>}
             </p>
             <p className="font-medium">{entry.title}</p>
+            {entry.group && <GroupBadge group={entry.group} className="mt-0.5" />}
             {entry.subtitle && <p className="text-xs text-foreground/80">{entry.subtitle}</p>}
             {onOpenNotes && canHaveNotes(entry) && (
               <Button type="button" variant="link" size="sm" className="h-auto p-0 text-xs" onClick={() => onOpenNotes(entry)} aria-label={`Notes et tâches : ${entry.title}`}>

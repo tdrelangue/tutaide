@@ -19,6 +19,8 @@ import {
   formatDuration,
   type AgendaEndReasonValue,
 } from "@/lib/agenda/rules";
+import type { AgendaGroupView } from "@/lib/agenda/groups";
+import { groupOf } from "@/lib/agenda/groups-rules";
 import type { AgendaPersonView, Place } from "@/lib/agenda/service";
 import { AddressField, ERROR_TEXT, PENDING_ADDRESS_ERROR } from "./address-field";
 import { saveAgendaPerson } from "./actions";
@@ -48,11 +50,13 @@ type Props = {
   onOpenChange: (open: boolean) => void;
   /** Null = new person. */
   person: AgendaPersonView | null;
+  groups: AgendaGroupView[];
   defaultVisitMinutes: number;
 };
 
-export function PersonDialog({ open, onOpenChange, person, defaultVisitMinutes }: Props) {
+export function PersonDialog({ open, onOpenChange, person, groups, defaultVisitMinutes }: Props) {
   const [fullName, setFullName] = useState(person?.fullName ?? "");
+  const [groupId, setGroupId] = useState<string | null>(() => groupOf(person?.groupId ?? null, groups)?.id ?? null);
   const [address, setAddress] = useState<Place | null>(person?.address ?? null);
   const [frequency, setFrequency] = useState<Frequency>(() => initialFrequency(person));
   const [lastVisitOn, setLastVisitOn] = useState(person?.lastVisitOn ?? "");
@@ -75,6 +79,10 @@ export function PersonDialog({ open, onOpenChange, person, defaultVisitMinutes }
 
   function handleNameChange(event: React.ChangeEvent<HTMLInputElement>) {
     setFullName(event.target.value);
+  }
+
+  function handleGroupChange(event: React.ChangeEvent<HTMLSelectElement>) {
+    setGroupId(event.target.value);
   }
 
   function handlePhoneChange(event: React.ChangeEvent<HTMLInputElement>) {
@@ -113,6 +121,7 @@ export function PersonDialog({ open, onOpenChange, person, defaultVisitMinutes }
     if (!checkFields()) return;
     const payload = {
       fullName,
+      groupId,
       address,
       ...frequencyPayload(frequency),
       lastVisitOn: lastVisitOn === "" ? null : lastVisitOn,
@@ -151,6 +160,15 @@ export function PersonDialog({ open, onOpenChange, person, defaultVisitMinutes }
             />
             {fieldErrors.name && <p id="person-name-error" className={ERROR_TEXT}>{fieldErrors.name}</p>}
           </div>
+
+          {groups.length > 1 && (
+            <div className="space-y-1">
+              <Label htmlFor="person-group">Groupe</Label>
+              <select id="person-group" value={groupId ?? ""} onChange={handleGroupChange} disabled={isBusy} className={`${SELECT_CLASS} w-72`}>
+                {groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+              </select>
+            </div>
+          )}
 
           <div className="space-y-1">
             <Label htmlFor="person-phone">Téléphone (facultatif)</Label>

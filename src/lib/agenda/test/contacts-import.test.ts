@@ -120,14 +120,14 @@ describe("importContactsFromFile", () => {
     ({ client, close } = await createTestDb());
     owner = await createUser(client, "mjpm@test.invalid");
     // Already in the agenda: one without address, one with an address typed by hand.
-    await service.createAgendaPerson(owner, owner, { fullName: "Jean Bonneau", address: null, visitsPerPeriod: 1, visitPeriod: "MONTH", visitMinutes: null, visitEvery: 1, lastVisitOn: null, inEhpad: null, notes: null, phone: null, status: "ACTIVE", endReason: null });
-    await service.createAgendaPerson(owner, owner, { fullName: "Sarah Croche", address: { label: "Adresse saisie", lat: 50, lon: 3, precision: "housenumber" }, visitsPerPeriod: 1, visitPeriod: "MONTH", visitMinutes: null, visitEvery: 1, lastVisitOn: null, inEhpad: null, notes: null, phone: "03 20 00 00 00", status: "ACTIVE", endReason: null });
+    await service.createAgendaPerson(owner, owner, { fullName: "Jean Bonneau", groupId: null, address: null, visitsPerPeriod: 1, visitPeriod: "MONTH", visitMinutes: null, visitEvery: 1, lastVisitOn: null, inEhpad: null, notes: null, phone: null, status: "ACTIVE", endReason: null });
+    await service.createAgendaPerson(owner, owner, { fullName: "Sarah Croche", groupId: null, address: { label: "Adresse saisie", lat: 50, lon: 3, precision: "housenumber" }, visitsPerPeriod: 1, visitPeriod: "MONTH", visitMinutes: null, visitEvery: 1, lastVisitOn: null, inEhpad: null, notes: null, phone: "03 20 00 00 00", status: "ACTIVE", endReason: null });
     // In the dossiers only (APA + ASH of the same person).
     const apa = await client.dossier.create({ data: { fullName: "PROVISTE Anne", userId: owner, moduleType: "APA", groupId: "g-anne" } });
     await client.dossier.create({ data: { fullName: "PROVISTE Anne", userId: owner, moduleType: "ASH", groupId: apa.groupId } });
     // Two agenda persons with the same name.
     for (let i = 0; i < 2; i++) {
-      await service.createAgendaPerson(owner, owner, { fullName: "Paul Ochon", address: null, visitsPerPeriod: 1, visitPeriod: "MONTH", visitMinutes: null, visitEvery: 1, lastVisitOn: null, inEhpad: null, notes: null, phone: null, status: "ACTIVE", endReason: null });
+      await service.createAgendaPerson(owner, owner, { fullName: "Paul Ochon", groupId: null, address: null, visitsPerPeriod: 1, visitPeriod: "MONTH", visitMinutes: null, visitEvery: 1, lastVisitOn: null, inEhpad: null, notes: null, phone: null, status: "ACTIVE", endReason: null });
     }
   });
   afterAll(() => close());
@@ -217,7 +217,7 @@ describe("selection mode: many persons at once", () => {
   let client: PrismaClient;
   let close: () => Promise<void>;
   let owner: string;
-  const person = (fullName: string) => ({ fullName, address: null, visitsPerPeriod: 1, visitPeriod: "MONTH" as const, visitMinutes: null, visitEvery: 1, lastVisitOn: null, inEhpad: null, notes: null, phone: null, status: "ACTIVE" as const, endReason: null });
+  const person = (fullName: string) => ({ fullName, groupId: null, address: null, visitsPerPeriod: 1, visitPeriod: "MONTH" as const, visitMinutes: null, visitEvery: 1, lastVisitOn: null, inEhpad: null, notes: null, phone: null, status: "ACTIVE" as const, endReason: null });
 
   beforeAll(async () => {
     ({ client, close } = await createTestDb());

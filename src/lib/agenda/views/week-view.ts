@@ -1,6 +1,7 @@
 import { buildDays, createContext, eachDay, stateRuleOptions } from "../../agenda-engine/domain";
 import type { Block, Day, IsoDate, PlannedDay, PlannedItem, PlannerState, Settings, SlotRule } from "../../agenda-engine/domain";
 import type { BridgeIssue } from "../bridge/issues";
+import type { GroupTag } from "../groups-rules";
 import type { ProposedPeriod } from "../bridge/ops/week";
 import { toIssueViews } from "./issue-messages";
 import { dayLabel, nameIndex, roundKm } from "./labels";
@@ -24,6 +25,8 @@ export type WeekInput = {
   /** Null: the stored planning only. */
   readonly proposal: ProposedPeriod | null;
   readonly issues: readonly BridgeIssue[];
+  /** Contact id -> group, for the colour of the blocks (none: no colour). */
+  readonly groups?: ReadonlyMap<string, GroupTag>;
 };
 
 /** What one day holds besides the stored items, from the proposal or, without one, from the rules alone. */
@@ -86,7 +89,8 @@ function entriesOf(date: IsoDate, source: DaySource, state: PlannerState, ctx: E
 function buildDay(date: IsoDate, source: DaySource, input: WeekInput, names: ReadonlyMap<string, string>): DayView {
   const { state, proposal } = input;
   const warnings = (proposal?.proposal.plan.pinWarnings ?? []).filter((w) => w.date === date);
-  const entries = entriesOf(date, source, state, { today: state.today, names, warnings }, proposal !== null);
+  const ctx = { today: state.today, names, warnings, groups: input.groups ?? new Map<string, GroupTag>() };
+  const entries = entriesOf(date, source, state, ctx, proposal !== null);
   return {
     date,
     label: dayLabel(date),

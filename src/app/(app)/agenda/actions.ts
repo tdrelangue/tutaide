@@ -7,6 +7,7 @@ import { findImportConflicts, importContactsFromFile, type ImportConflict, type 
 import { requireAgendaOwner } from "@/lib/agenda/context";
 import { dayRuleSchema, deleteDayRule, ruleIdSchema, saveDayRule } from "@/lib/agenda/day-rules";
 import { searchAddress, type GeocodeResult } from "@/lib/agenda/geocode";
+import { createAgendaGroup, deleteAgendaGroup, moveAgendaGroup, setPersonsGroup, updateAgendaGroup } from "@/lib/agenda/groups";
 import {
   createAgendaPerson,
   deleteAgendaPerson,
@@ -16,7 +17,7 @@ import {
   saveAgendaSettings as storeAgendaSettings,
   updateAgendaPerson,
 } from "@/lib/agenda/service";
-import { agendaPersonSchema, agendaSettingsSchema, personIdSchema, phoneSchema } from "@/lib/agenda/validation";
+import { agendaGroupSchema, agendaPersonSchema, agendaSettingsSchema, groupIdSchema, personIdSchema, phoneSchema } from "@/lib/agenda/validation";
 import { failureMessage } from "./action-errors";
 
 /**
@@ -195,5 +196,62 @@ export async function removeAgendaDayRule(ruleId: string): Promise<AgendaActionR
     return rulesDone("Créneau supprimé");
   } catch (error) {
     return failure("removeDayRule", error);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Groups (Thomas, 2026-11-02)
+// ---------------------------------------------------------------------------
+
+export async function saveAgendaGroup(groupId: string | null, input: unknown): Promise<AgendaActionResult> {
+  try {
+    const { ownerId } = await requireAgendaOwner();
+    const data = agendaGroupSchema.parse(input);
+    const id = groupIdSchema.nullable().parse(groupId);
+    if (id === null) {
+      await createAgendaGroup(ownerId, data);
+      return done(`Groupe « ${data.name} » créé`);
+    }
+    if (!(await updateAgendaGroup(ownerId, id, data))) return { success: false, error: "Groupe introuvable." };
+    return done("Groupe modifié");
+  } catch (error) {
+    return failure("saveGroup", error);
+  }
+}
+
+const directionSchema = z.enum(["up", "down"]);
+
+export async function moveAgendaGroupAction(groupId: string, direction: unknown): Promise<AgendaActionResult> {
+  try {
+    const { ownerId } = await requireAgendaOwner();
+    if (!(await moveAgendaGroup(ownerId, groupIdSchema.parse(groupId), directionSchema.parse(direction)))) {
+      return { success: false, error: "Groupe introuvable." };
+    }
+    return done("Ordre des groupes modifié");
+  } catch (error) {
+    return failure("moveGroup", error);
+  }
+}
+
+export async function removeAgendaGroup(groupId: string): Promise<AgendaActionResult> {
+  try {
+    const { ownerId } = await requireAgendaOwner();
+    const result = await deleteAgendaGroup(ownerId, groupIdSchema.parse(groupId));
+    if (result === null) return { success: false, error: "Groupe introuvable." };
+    if (result.moved === 0) return done("Groupe supprimé");
+    return done(`Groupe supprimé : ${plural(result.moved, "personne passée", "personnes passées")} dans « ${result.into} »`);
+  } catch (error) {
+    return failure("removeGroup", error);
+  }
+}
+
+/** Selection mode: puts the selected persons in one group. */
+export async function moveAgendaPersonsToGroup(personIds: unknown, groupId: unknown): Promise<AgendaActionResult> {
+  try {
+    const { ownerId } = await requireAgendaOwner();
+    const count = await setPersonsGroup(ownerId, personIdsSchema.parse(personIds), groupIdSchema.parse(groupId));
+    return done(`${plural(count, "personne déplacée", "personnes déplacées")}`);
+  } catch (error) {
+    return failure("movePersonsToGroup", error);
   }
 }

@@ -41,6 +41,7 @@ model User {
   agendaGranted             Boolean                    @default(false)
   agendaSettings            AgendaSettings?
   agendaContacts            AgendaContact[]
+  agendaGroups              AgendaGroup[]
   agendaPlaces              AgendaPlace[]
   agendaRules               AgendaRule[]
   agendaAppointments        AgendaAppointment[]
@@ -544,6 +545,8 @@ model AgendaContact {
   linkedContactId    String?
   /// Imported from the dossiers: their shared groupId, or the single dossier's id.
   dossierGroupKey    String?
+  /// Coloured group (« Mesures », « Ad hoc »…). Null = the owner's first group of the kind.
+  groupId            String?
   /// Not available before this time (minutes), e.g. « pas avant 10 h ».
   notBeforeMin       Int?
   /// Encrypted (may hold health information).
@@ -570,6 +573,7 @@ model AgendaContact {
   owner              User                           @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   linkedContact      AgendaContact?                 @relation("AgendaContactLink", fields: [linkedContactId, ownerId], references: [id, ownerId], onDelete: NoAction, onUpdate: NoAction)
   linkedFrom         AgendaContact[]                @relation("AgendaContactLink")
+  group              AgendaGroup?                   @relation(fields: [groupId, ownerId], references: [id, ownerId], onDelete: NoAction, onUpdate: NoAction)
   places             AgendaPlace[]
   availabilities     AgendaAvailability[]
   participations     AgendaAppointmentParticipant[]
@@ -582,6 +586,32 @@ model AgendaContact {
   @@unique([ownerId, dossierGroupKey])
   @@index([ownerId, category, status])
   @@index([linkedContactId])
+  @@index([groupId])
+}
+
+enum AgendaGroupKind {
+  PERSONS
+  PARTNERS
+}
+
+/// « Agenda » add-on: a coloured group of contacts, made by the user (« Mesures », « Ad hoc », « Avocats »…).
+/// One group per contact. The name is not encrypted: it says nothing about anyone's health (decision 2026-11-02).
+model AgendaGroup {
+  id        String          @id @default(cuid())
+  ownerId   String
+  kind      AgendaGroupKind
+  name      String
+  /// A key of the fixed palette (src/lib/agenda/groups-rules.ts), never a free colour.
+  color     String
+  position  Int             @default(0)
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+  owner     User            @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  contacts  AgendaContact[]
+
+  @@unique([id, ownerId])
+  @@unique([ownerId, name])
+  @@index([ownerId, kind, position])
 }
 
 /// An address: a contact's (position 0 = default) or a free place of the owner.

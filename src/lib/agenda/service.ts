@@ -3,6 +3,7 @@ import { personsFromDossiers, type AgendaEndReasonValue, type AgendaPeriodValue,
 import type { AddressPrecision } from "./geocode";
 import { AgendaRefusal } from "./bridge/errors";
 import { TX_OPTIONS } from "./bridge/lock";
+import { assertPersonGroup } from "./groups";
 import type { Tx } from "./bridge/lock";
 import { seal, sealOrNull, sealPoint, unseal, unsealPoint } from "./sealed";
 import type { AgendaPersonInput, AgendaSettingsInput } from "./validation";
@@ -31,6 +32,8 @@ export type AgendaSettingsView = {
 export type AgendaPersonView = {
   id: string;
   fullName: string;
+  /** Null = the first group (groups-rules.ts groupOf). */
+  groupId: string | null;
   fromDossiers: boolean;
   address: Place | null;
   /** Null = no regular visits. */
@@ -136,6 +139,7 @@ function toPersonView(r: PersonRow): AgendaPersonView {
   return {
     id: r.id,
     fullName: r.fullName,
+    groupId: r.groupId,
     fromDossiers: r.dossierGroupKey !== null,
     address: place ? toPlace(place.address, place.point, place.precision) : null,
     visitsPerPeriod: r.visitsPerPeriod,
@@ -191,6 +195,7 @@ export async function importPersonsFromDossiers(ownerId: string, actorId: string
 function personColumns(input: AgendaPersonInput) {
   return {
     fullName: input.fullName,
+    groupId: input.groupId,
     visitsPerPeriod: input.visitsPerPeriod,
     visitPeriod: input.visitPeriod,
     visitEvery: input.visitEvery === 1 || input.visitPeriod === null ? null : input.visitEvery,
@@ -232,6 +237,7 @@ export async function assertRoomFor(tx: Tx, ownerId: string, added: number): Pro
 export async function createAgendaPerson(ownerId: string, actorId: string, input: AgendaPersonInput): Promise<void> {
   await db.$transaction(async (tx) => {
     await assertRoomFor(tx, ownerId, 1);
+    await assertPersonGroup(tx, ownerId, input.groupId);
     const contact = await tx.agendaContact.create({
       data: {
         ownerId,
@@ -255,6 +261,7 @@ export async function updateAgendaPerson(ownerId: string, personId: string, inpu
   const endedOn = input.status !== "ENDED" ? null : existing.status === "ENDED" ? existing.endedOn : todayUtc();
   await db.$transaction(async (tx) => {
     const key = { id_ownerId: { id: personId, ownerId } };
+    await assertPersonGroup(tx, ownerId, input.groupId);
     await tx.agendaContact.update({ where: key, data: { ...personColumns(input), endedOn } });
     await replaceDefaultPlace(tx, ownerId, personId, input.address);
   });

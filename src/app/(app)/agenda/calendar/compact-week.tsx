@@ -3,6 +3,7 @@
 import { ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { DayView } from "@/lib/agenda/views/types";
+import { GroupBadge } from "../group-badge";
 import { SOURCE_WORD, timeRange } from "../week/format";
 import { dayOfMonth, meetingCount, meetingsOf, weekdayInitial } from "./calendar-format";
 
@@ -54,6 +55,7 @@ function CompactDay({ day, onOpen }: { day: DayView; onOpen: () => void }) {
             <span key={e.key} className="flex items-baseline gap-2 text-sm">
               <span className="shrink-0 font-medium tabular-nums">{timeRange(e.start, e.end)}</span>
               <span className="truncate">{e.title}</span>
+              {e.group && <GroupBadge group={e.group} className="shrink-0" />}
               {e.source === "PROPOSED" || e.source === "FIXED" || e.source === "MISSED" ? (
                 <span className="shrink-0 text-xs text-muted-foreground">{SOURCE_WORD[e.source]}</span>
               ) : null}

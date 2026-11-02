@@ -40,6 +40,17 @@
     --agenda-missed: 215 16% 47%;
     --agenda-busy: 215 20% 93%;
     --agenda-paper: 40 33% 99%;
+    /* Agenda groups: a fixed palette, ≥ 3:1 against the page (WCAG 1.4.11); always shown with the group's name. */
+    --group-blue: 217 91% 45%;
+    --group-teal: 180 80% 28%;
+    --group-green: 142 70% 30%;
+    --group-lime: 85 75% 30%;
+    --group-amber: 38 92% 38%;
+    --group-orange: 24 95% 45%;
+    --group-red: 0 72% 48%;
+    --group-pink: 330 75% 48%;
+    --group-purple: 270 60% 50%;
+    --group-slate: 215 16% 42%;
   }
 
   .dark {
@@ -77,6 +88,16 @@
     --agenda-missed: 215 20% 65%;
     --agenda-busy: 217 33% 15%;
     --agenda-paper: 222 47% 7%;
+    --group-blue: 213 94% 68%;
+    --group-teal: 175 70% 50%;
+    --group-green: 142 60% 55%;
+    --group-lime: 84 70% 55%;
+    --group-amber: 45 93% 55%;
+    --group-orange: 27 96% 61%;
+    --group-red: 0 85% 68%;
+    --group-pink: 330 80% 70%;
+    --group-purple: 270 85% 75%;
+    --group-slate: 215 20% 65%;
   }
 }
 

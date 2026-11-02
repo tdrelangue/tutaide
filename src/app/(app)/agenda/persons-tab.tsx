@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useId, useRef, useState } from "react";
-import { FileSpreadsheet, FolderInput, ListChecks, Loader2, Pencil, Plus, Trash2 } from "lucide-react";
+import { FileSpreadsheet, FolderInput, ListChecks, Loader2, Pencil, Plus, Tags, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -17,12 +17,16 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { END_REASON_LABELS, formatDuration, formatFrequency } from "@/lib/agenda/rules";
+import type { AgendaGroupView } from "@/lib/agenda/groups";
+import { groupOf, type GroupTag } from "@/lib/agenda/groups-rules";
 import type { AgendaPersonView } from "@/lib/agenda/service";
 import type { IsoDate, VisitStatusRow } from "@/lib/agenda/views/types";
 import { formatDayPlain } from "./appointments/format";
 import { InlineError } from "./appointments/inline-error";
 import { ERROR_TEXT, PrecisionBadge } from "./address-field";
 import { ContactsFileDialog } from "./contacts-file-dialog";
+import { GroupBadge, GroupDot } from "./group-badge";
+import { GroupsDialog } from "./groups-dialog";
 import { PersonDialog } from "./person-dialog";
 import { SelectionBar } from "./selection-bar";
 import { importAgendaPersons, removeAgendaPerson } from "./actions";
@@ -32,6 +36,7 @@ import { useAgendaAction } from "./use-agenda-action";
 
 type Props = {
   persons: AgendaPersonView[];
+  groups: AgendaGroupView[];
   importableCount: number;
   defaultVisitMinutes: number;
 };
@@ -95,8 +100,13 @@ function useVisitStatuses(persons: AgendaPersonView[]) {
   return { statuses, error, reload: load };
 }
 
-export function PersonsTab({ persons, importableCount, defaultVisitMinutes }: Props) {
+export function PersonsTab({ persons: allPersons, groups, importableCount, defaultVisitMinutes }: Props) {
   const [editing, setEditing] = useState<Editing>(null);
+  const [isGroupsOpen, setIsGroupsOpen] = useState(false);
+  /** Null = every group. */
+  const [groupFilter, setGroupFilter] = useState<string | null>(null);
+  const filterGroup = groups.find((g) => g.id === groupFilter) ?? null;
+  const persons = filterGroup ? allPersons.filter((p) => groupOf(p.groupId, groups)?.id === filterGroup.id) : allPersons;
   const [isFileOpen, setIsFileOpen] = useState(false);
   const [toDelete, setToDelete] = useState<AgendaPersonView | null>(null);
   /** Kept while the confirmation closes, so its title never reads "undefined". */
@@ -104,7 +114,7 @@ export function PersonsTab({ persons, importableCount, defaultVisitMinutes }: Pr
   const addRef = useRef<HTMLButtonElement>(null);
   const importAction = useAgendaAction();
   const deleteAction = useAgendaAction();
-  const visits = useVisitStatuses(persons);
+  const visits = useVisitStatuses(allPersons);
   const selection = useSelection();
   // Removed persons disappear from the selection.
   const selected = selection.selected && new Set([...selection.selected].filter((id) => persons.some((p) => p.id === id)));
@@ -171,6 +181,10 @@ export function PersonsTab({ persons, importableCount, defaultVisitMinutes }: Pr
               Importer depuis mes dossiers ({importableCount})
             </Button>
           )}
+          <Button variant="outline" onClick={() => setIsGroupsOpen(true)}>
+            <Tags className="mr-2 h-4 w-4" aria-hidden="true" />
+            Groupes
+          </Button>
           <Button variant="outline" onClick={() => setIsFileOpen(true)}>
             <FileSpreadsheet className="mr-2 h-4 w-4" aria-hidden="true" />
             Importer un fichier (Proxima…)
@@ -188,7 +202,11 @@ export function PersonsTab({ persons, importableCount, defaultVisitMinutes }: Pr
         </div>
       </div>
 
-      {persons.length === 0 && (
+      {groups.length > 1 && allPersons.length > 0 && (
+        <GroupFilter groups={groups} value={filterGroup?.id ?? null} total={allPersons.length} onChange={setGroupFilter} />
+      )}
+
+      {allPersons.length === 0 && (
         <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
           Aucune personne dans l&apos;agenda pour l&apos;instant.
           {importableCount > 0
@@ -201,6 +219,7 @@ export function PersonsTab({ persons, importableCount, defaultVisitMinutes }: Pr
         <SelectionBar
           selected={selected}
           persons={persons}
+          groups={groups}
           onSelectAll={() => selection.set(persons.map((p) => p.id))}
           onClear={() => selection.set([])}
           onExit={selection.stop}
@@ -211,9 +230,9 @@ export function PersonsTab({ persons, importableCount, defaultVisitMinutes }: Pr
         <InlineError message={`Les dates de visite n'ont pas pu être chargées. ${visits.error}`} onRetry={handleVisitsRetry} />
       )}
 
-      <PersonTable title="À visiter" rows={active} selection={rowSelection} statuses={visits.statuses} defaultVisitMinutes={defaultVisitMinutes} onEdit={setEditing} onDelete={askDelete} />
-      <PersonTable title="En pause" rows={paused} selection={rowSelection} statuses={visits.statuses} defaultVisitMinutes={defaultVisitMinutes} onEdit={setEditing} onDelete={askDelete} />
-      <PersonTable title="Mesures terminées" rows={ended} selection={rowSelection} statuses={visits.statuses} defaultVisitMinutes={defaultVisitMinutes} onEdit={setEditing} onDelete={askDelete} />
+      <PersonTable title="À visiter" rows={active} selection={rowSelection} groups={groups} statuses={visits.statuses} defaultVisitMinutes={defaultVisitMinutes} onEdit={setEditing} onDelete={askDelete} />
+      <PersonTable title="En pause" rows={paused} selection={rowSelection} groups={groups} statuses={visits.statuses} defaultVisitMinutes={defaultVisitMinutes} onEdit={setEditing} onDelete={askDelete} />
+      <PersonTable title="Mesures terminées" rows={ended} selection={rowSelection} groups={groups} statuses={visits.statuses} defaultVisitMinutes={defaultVisitMinutes} onEdit={setEditing} onDelete={askDelete} />
 
       {editing && (
         <PersonDialog
@@ -221,11 +240,13 @@ export function PersonsTab({ persons, importableCount, defaultVisitMinutes }: Pr
           open
           onOpenChange={handleDialogOpenChange}
           person={editing.person}
+          groups={groups}
           defaultVisitMinutes={defaultVisitMinutes}
         />
       )}
 
       <ContactsFileDialog open={isFileOpen} onOpenChange={setIsFileOpen} />
+      <GroupsDialog open={isGroupsOpen} onOpenChange={setIsGroupsOpen} groups={groups} />
 
       <AlertDialog open={toDelete !== null} onOpenChange={handleDeleteOpenChange}>
         <AlertDialogContent>
@@ -261,6 +282,7 @@ function PersonTable({
   title,
   rows,
   selection,
+  groups,
   statuses,
   defaultVisitMinutes,
   onEdit,
@@ -269,6 +291,7 @@ function PersonTable({
   title: string;
   rows: AgendaPersonView[];
   selection: RowSelection;
+  groups: AgendaGroupView[];
   statuses: VisitStatuses;
   defaultVisitMinutes: number;
   onEdit: (editing: Editing) => void;
@@ -307,7 +330,7 @@ function PersonTable({
           </thead>
           <tbody>
             {rows.map((person) => (
-              <PersonRow key={person.id} person={person} selection={selection} status={statuses === null ? undefined : (statuses.get(person.id) ?? null)} defaultVisitMinutes={defaultVisitMinutes} onEdit={onEdit} onDelete={onDelete} />
+              <PersonRow key={person.id} person={person} group={groups.length > 1 ? groupOf(person.groupId, groups) : null} selection={selection} status={statuses === null ? undefined : (statuses.get(person.id) ?? null)} defaultVisitMinutes={defaultVisitMinutes} onEdit={onEdit} onDelete={onDelete} />
             ))}
           </tbody>
         </table>
@@ -318,6 +341,7 @@ function PersonTable({
 
 function PersonRow({
   person,
+  group,
   selection,
   status,
   defaultVisitMinutes,
@@ -325,6 +349,8 @@ function PersonRow({
   onDelete,
 }: {
   person: AgendaPersonView;
+  /** Shown once there is more than one group. */
+  group: GroupTag | null;
   selection: RowSelection;
   /** undefined while loading, null when the agenda has nothing for this person. */
   status: VisitStatusRow | null | undefined;
@@ -346,6 +372,7 @@ function PersonRow({
       )}
       <th scope="row" className="px-3 py-2 text-left font-normal">
         <span className="font-medium">{person.fullName}</span>
+        {group && <GroupBadge group={group} className="ml-2" />}
         {person.fromDossiers && <Badge variant="outline" className="ml-2 text-xs">Issue de vos dossiers</Badge>}
         {person.phone && (
           <a href={`tel:${person.phone.replace(/[^0-9+]/g, "")}`} className="block text-xs text-muted-foreground underline-offset-2 hover:underline">
@@ -412,5 +439,35 @@ function VisitCells({ person, status }: { person: AgendaPersonView; status: Visi
         ? <td className="whitespace-nowrap px-3 py-2 text-muted-foreground">En pause</td>
         : <DateCell date={person.status === "ENDED" ? null : (status?.nextDue ?? null)} />}
     </>
+  );
+}
+
+type GroupFilterProps = {
+  groups: AgendaGroupView[];
+  /** Null = every group. */
+  value: string | null;
+  total: number;
+  onChange: (groupId: string | null) => void;
+};
+
+/** « Tous » or one group: toggle buttons, the chosen one marked by shape and aria-pressed, not colour alone. */
+function GroupFilter({ groups, value, total, onChange }: GroupFilterProps) {
+  const chip = (isOn: boolean) =>
+    cn(
+      "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm",
+      isOn ? "border-foreground bg-foreground text-background" : "border-border hover:bg-muted",
+    );
+  return (
+    <div role="group" aria-label="Afficher un groupe" className="flex flex-wrap gap-2">
+      <button type="button" aria-pressed={value === null} className={chip(value === null)} onClick={() => onChange(null)}>
+        Tous ({total})
+      </button>
+      {groups.map((g) => (
+        <button key={g.id} type="button" aria-pressed={value === g.id} className={chip(value === g.id)} onClick={() => onChange(g.id)}>
+          <GroupDot color={g.color} />
+          {g.name} ({g.count})
+        </button>
+      ))}
+    </div>
   );
 }

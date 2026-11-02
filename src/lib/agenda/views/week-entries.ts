@@ -1,5 +1,6 @@
 import type { Appointment, Block, IsoDate, PastItem, PinWarning, PlannedItem, PlannerState, Task, ValidatedItem } from "../../agenda-engine/domain";
 import { OCCURRENCE_KEY, nameIndex, participantNames } from "./labels";
+import type { GroupTag } from "../groups-rules";
 import type { EntrySource, EntryView } from "./types";
 
 /** What the entry builders need besides the item itself. */
@@ -8,6 +9,8 @@ export type EntryContext = {
   readonly names: ReadonlyMap<string, string>;
   /** Warnings of the pinned blocks of the day. */
   readonly warnings: readonly PinWarning[];
+  /** Contact id -> group (colour and name on the blocks). */
+  readonly groups: ReadonlyMap<string, GroupTag>;
 };
 
 type EntryParts = Pick<EntryView, "source" | "title" | "start" | "end" | "date" | "kind"> & Partial<EntryView>;
@@ -31,6 +34,14 @@ function entry(parts: EntryParts): EntryView {
   return { ...DEFAULTS, ...parts, key, itemKey };
 }
 
+function groupOfParticipants(participants: readonly string[], ctx: EntryContext): GroupTag | null {
+  for (const id of participants) {
+    const group = ctx.groups.get(id);
+    if (group) return group;
+  }
+  return null;
+}
+
 /** Visits show where they are; appointments show who and where. */
 function subtitleOf(kind: "VISIT" | "APPT", participants: readonly string[], placeLabel: string, names: ReadonlyMap<string, string>): string {
   if (kind === "VISIT") return placeLabel;
@@ -47,6 +58,7 @@ export function validatedEntry(v: ValidatedItem, ctx: EntryContext): EntryView {
     appointmentId: isPast ? null : v.apptId,
     title: v.title,
     subtitle: subtitleOf(v.kind, v.participants, v.place.label, ctx.names),
+    group: groupOfParticipants(v.participants, ctx),
     start: v.start,
     end: v.end,
     priority: v.priority,
@@ -65,6 +77,7 @@ export function pastEntry(p: PastItem, ctx: EntryContext): EntryView {
     kind: p.kind,
     title: p.title,
     subtitle: who === "" ? null : who,
+    group: groupOfParticipants(p.participants, ctx),
     start: p.start,
     end: p.end,
   });
@@ -91,6 +104,7 @@ export function proposedEntry(date: IsoDate, item: PlannedItem, ctx: EntryContex
     kind: task.kind,
     title: task.title,
     subtitle: taskSubtitle(task, ctx),
+    group: groupOfParticipants(task.participants, ctx),
     start: item.start,
     end: item.end,
     priority: task.priority,
@@ -112,6 +126,7 @@ function eventEntry(date: IsoDate, block: Block, task: Task, ctx: EntryContext):
     kind: task.kind,
     title: task.title,
     subtitle: taskSubtitle(task, ctx),
+    group: groupOfParticipants(task.participants, ctx),
     start: block.s,
     end: block.e,
     priority: task.priority,
@@ -151,6 +166,7 @@ export function fixedAppointmentEntry(appt: Appointment, state: PlannerState, ct
     kind: "APPT",
     title: appt.title,
     subtitle: subtitleOf("APPT", appt.participants, placeLabel, ctx.names),
+    group: groupOfParticipants(appt.participants, ctx),
     start: appt.when.time,
     end: appt.when.time + appt.dur,
     priority: appt.priority,
@@ -158,8 +174,12 @@ export function fixedAppointmentEntry(appt: Appointment, state: PlannerState, ct
 }
 
 /** « Ces rendez-vous ont-ils eu lieu ? »: the validated items, oldest first, each with its day. */
-export function confirmationEntries(state: PlannerState, items: readonly ValidatedItem[]): EntryView[] {
-  const ctx: EntryContext = { today: state.today, names: nameIndex(state), warnings: [] };
+export function confirmationEntries(
+  state: PlannerState,
+  items: readonly ValidatedItem[],
+  groups: ReadonlyMap<string, GroupTag> = new Map(),
+): EntryView[] {
+  const ctx: EntryContext = { today: state.today, names: nameIndex(state), warnings: [], groups };
   return items
     .map((v) => validatedEntry(v, ctx))
     .sort((a, b) => (a.date ?? "").localeCompare(b.date ?? "") || a.start - b.start);

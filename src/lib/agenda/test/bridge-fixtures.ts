@@ -58,6 +58,7 @@ export async function addPerson(client: PrismaClient, ownerId: string, fullName:
   const { address = ROUBAIX, lastVisitOn = "2026-09-01", period = "MONTH" } = options;
   await service.createAgendaPerson(ownerId, ownerId, {
     fullName,
+    groupId: null,
     address,
     visitsPerPeriod: 1,
     visitPeriod: period,

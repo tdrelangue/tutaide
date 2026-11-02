@@ -135,6 +135,7 @@ export function entryAccessibleName(entry: EntryView, dayLabel: string): string 
     // Same wording as the visible time line (WCAG 2.5.3): « 9 h 05 – 10 h 05 ».
     `${dayLabel}, ${timeRange(entry.start, entry.end)}`,
     SOURCE_WORD[entry.source],
+    entry.group ? `groupe ${entry.group.name}` : null,
     entry.priority ? `priorité ${PRIORITY_LABEL[entry.priority]}` : null,
     entry.moved ? "décalé" : null,
     entry.rescheduled ? "à reprogrammer" : null,
