@@ -7,7 +7,8 @@ import { findImportConflicts, importContactsFromFile, type ImportConflict, type 
 import { requireAgendaOwner } from "@/lib/agenda/context";
 import { dayRuleSchema, deleteDayRule, ruleIdSchema, saveDayRule } from "@/lib/agenda/day-rules";
 import { searchAddress, type GeocodeResult } from "@/lib/agenda/geocode";
-import { createAgendaGroup, deleteAgendaGroup, moveAgendaGroup, setPersonsGroup, updateAgendaGroup } from "@/lib/agenda/groups";
+import { createGroup, deleteGroup, moveGroup, setPersonsGroup, updateGroup, type GroupScope } from "@/lib/agenda/groups";
+import { addressBookOf, createPartner, deletePartner, updatePartner } from "@/lib/agenda/partners";
 import {
   createAgendaPerson,
   deleteAgendaPerson,
@@ -17,7 +18,16 @@ import {
   saveAgendaSettings as storeAgendaSettings,
   updateAgendaPerson,
 } from "@/lib/agenda/service";
-import { agendaGroupSchema, agendaPersonSchema, agendaSettingsSchema, groupIdSchema, personIdSchema, phoneSchema } from "@/lib/agenda/validation";
+import {
+  agendaGroupSchema,
+  agendaPartnerSchema,
+  agendaPersonSchema,
+  agendaSettingsSchema,
+  groupIdSchema,
+  partnerIdSchema,
+  personIdSchema,
+  phoneSchema,
+} from "@/lib/agenda/validation";
 import { failureMessage } from "./action-errors";
 
 /**
@@ -203,16 +213,25 @@ export async function removeAgendaDayRule(ruleId: string): Promise<AgendaActionR
 // Groups (Thomas, 2026-11-02)
 // ---------------------------------------------------------------------------
 
-export async function saveAgendaGroup(groupId: string | null, input: unknown): Promise<AgendaActionResult> {
+const groupKindSchema = z.enum(["PERSONS", "PARTNERS"]);
+
+/** Persons' groups are the MJPM's; partners' groups belong to the shared address book. */
+async function groupScope(kind: unknown): Promise<GroupScope> {
+  const { ownerId } = await requireAgendaOwner();
+  if (groupKindSchema.parse(kind) === "PERSONS") return { kind: "PERSONS", ownerId };
+  return { kind: "PARTNERS", book: await addressBookOf(ownerId) };
+}
+
+export async function saveAgendaGroup(groupId: string | null, input: unknown, kind: unknown = "PERSONS"): Promise<AgendaActionResult> {
   try {
-    const { ownerId } = await requireAgendaOwner();
+    const scope = await groupScope(kind);
     const data = agendaGroupSchema.parse(input);
     const id = groupIdSchema.nullable().parse(groupId);
     if (id === null) {
-      await createAgendaGroup(ownerId, data);
+      await createGroup(scope, data);
       return done(`Groupe « ${data.name} » créé`);
     }
-    if (!(await updateAgendaGroup(ownerId, id, data))) return { success: false, error: "Groupe introuvable." };
+    if (!(await updateGroup(scope, id, data))) return { success: false, error: "Groupe introuvable." };
     return done("Groupe modifié");
   } catch (error) {
     return failure("saveGroup", error);
@@ -221,10 +240,10 @@ export async function saveAgendaGroup(groupId: string | null, input: unknown): P
 
 const directionSchema = z.enum(["up", "down"]);
 
-export async function moveAgendaGroupAction(groupId: string, direction: unknown): Promise<AgendaActionResult> {
+export async function moveAgendaGroupAction(groupId: string, direction: unknown, kind: unknown = "PERSONS"): Promise<AgendaActionResult> {
   try {
-    const { ownerId } = await requireAgendaOwner();
-    if (!(await moveAgendaGroup(ownerId, groupIdSchema.parse(groupId), directionSchema.parse(direction)))) {
+    const scope = await groupScope(kind);
+    if (!(await moveGroup(scope, groupIdSchema.parse(groupId), directionSchema.parse(direction)))) {
       return { success: false, error: "Groupe introuvable." };
     }
     return done("Ordre des groupes modifié");
@@ -233,13 +252,14 @@ export async function moveAgendaGroupAction(groupId: string, direction: unknown)
   }
 }
 
-export async function removeAgendaGroup(groupId: string): Promise<AgendaActionResult> {
+export async function removeAgendaGroup(groupId: string, kind: unknown = "PERSONS"): Promise<AgendaActionResult> {
   try {
-    const { ownerId } = await requireAgendaOwner();
-    const result = await deleteAgendaGroup(ownerId, groupIdSchema.parse(groupId));
+    const scope = await groupScope(kind);
+    const result = await deleteGroup(scope, groupIdSchema.parse(groupId));
     if (result === null) return { success: false, error: "Groupe introuvable." };
     if (result.moved === 0) return done("Groupe supprimé");
-    return done(`Groupe supprimé : ${plural(result.moved, "personne passée", "personnes passées")} dans « ${result.into} »`);
+    const moved = scope.kind === "PERSONS" ? plural(result.moved, "personne passée", "personnes passées") : plural(result.moved, "contact passé", "contacts passés");
+    return done(`Groupe supprimé : ${moved} dans « ${result.into} »`);
   } catch (error) {
     return failure("removeGroup", error);
   }
@@ -253,5 +273,38 @@ export async function moveAgendaPersonsToGroup(personIds: unknown, groupId: unkn
     return done(`${plural(count, "personne déplacée", "personnes déplacées")}`);
   } catch (error) {
     return failure("movePersonsToGroup", error);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Contacts: the partners' address book, shared by the structure (Thomas, 2026-11-02)
+// ---------------------------------------------------------------------------
+
+export async function saveAgendaPartner(partnerId: string | null, input: unknown): Promise<AgendaActionResult> {
+  try {
+    const { ownerId, actorId } = await requireAgendaOwner();
+    const book = await addressBookOf(ownerId);
+    const data = agendaPartnerSchema.parse(input);
+    const id = partnerIdSchema.nullable().parse(partnerId);
+    if (id === null) {
+      await createPartner(book, actorId, data);
+      return done("Contact ajouté");
+    }
+    if (!(await updatePartner(book, id, data))) return { success: false, error: "Contact introuvable." };
+    return done("Modifications enregistrées");
+  } catch (error) {
+    return failure("savePartner", error);
+  }
+}
+
+export async function removeAgendaPartner(partnerId: string): Promise<AgendaActionResult> {
+  try {
+    const { ownerId } = await requireAgendaOwner();
+    if (!(await deletePartner(await addressBookOf(ownerId), partnerIdSchema.parse(partnerId)))) {
+      return { success: false, error: "Contact introuvable." };
+    }
+    return done("Contact supprimé");
+  } catch (error) {
+    return failure("removePartner", error);
   }
 }

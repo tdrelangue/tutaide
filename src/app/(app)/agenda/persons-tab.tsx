@@ -25,7 +25,7 @@ import { formatDayPlain } from "./appointments/format";
 import { InlineError } from "./appointments/inline-error";
 import { ERROR_TEXT, PrecisionBadge } from "./address-field";
 import { ContactsFileDialog } from "./contacts-file-dialog";
-import { GroupBadge, GroupDot } from "./group-badge";
+import { GroupBadge, GroupFilter } from "./group-badge";
 import { GroupsDialog } from "./groups-dialog";
 import { PersonDialog } from "./person-dialog";
 import { SelectionBar } from "./selection-bar";
@@ -439,35 +439,5 @@ function VisitCells({ person, status }: { person: AgendaPersonView; status: Visi
         ? <td className="whitespace-nowrap px-3 py-2 text-muted-foreground">En pause</td>
         : <DateCell date={person.status === "ENDED" ? null : (status?.nextDue ?? null)} />}
     </>
-  );
-}
-
-type GroupFilterProps = {
-  groups: AgendaGroupView[];
-  /** Null = every group. */
-  value: string | null;
-  total: number;
-  onChange: (groupId: string | null) => void;
-};
-
-/** « Tous » or one group: toggle buttons, the chosen one marked by shape and aria-pressed, not colour alone. */
-function GroupFilter({ groups, value, total, onChange }: GroupFilterProps) {
-  const chip = (isOn: boolean) =>
-    cn(
-      "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm",
-      isOn ? "border-foreground bg-foreground text-background" : "border-border hover:bg-muted",
-    );
-  return (
-    <div role="group" aria-label="Afficher un groupe" className="flex flex-wrap gap-2">
-      <button type="button" aria-pressed={value === null} className={chip(value === null)} onClick={() => onChange(null)}>
-        Tous ({total})
-      </button>
-      {groups.map((g) => (
-        <button key={g.id} type="button" aria-pressed={value === g.id} className={chip(value === g.id)} onClick={() => onChange(g.id)}>
-          <GroupDot color={g.color} />
-          {g.name} ({g.count})
-        </button>
-      ))}
-    </div>
   );
 }

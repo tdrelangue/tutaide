@@ -96,3 +96,37 @@ export const agendaPersonSchema = z
     path: ["endReason"],
   });
 export type AgendaPersonInput = z.infer<typeof agendaPersonSchema>;
+
+/** Optional free text: trimmed, empty = null. */
+const optionalText = (max: number, label: string) =>
+  z
+    .string()
+    .trim()
+    .max(max, `${label} : ${max} caractères au plus.`)
+    .nullable()
+    .default(null)
+    .transform((v) => (v ? v : null));
+
+/** A partner of the shared address book (Thomas, 2026-11-02): a name or a structure, at least. */
+export const agendaPartnerSchema = z
+  .object({
+    /** Null = the first group of partners. */
+    groupId: groupIdSchema.nullable().default(null),
+    civility: optionalText(20, "Civilité"),
+    lastName: optionalText(100, "Nom"),
+    firstName: optionalText(100, "Prénom"),
+    company: optionalText(150, "Structure"),
+    role: optionalText(100, "Fonction"),
+    phone: phoneSchema,
+    mobile: phoneSchema,
+    email: optionalText(200, "E-mail").refine((v) => v === null || z.string().email().safeParse(v).success, "Adresse e-mail invalide."),
+    address: placeSchema.nullable().default(null),
+    notes: optionalText(1000, "Notes"),
+  })
+  .refine((p) => p.lastName !== null || p.company !== null, {
+    message: "Indiquez un nom ou une structure.",
+    path: ["lastName"],
+  });
+export type AgendaPartnerInput = z.infer<typeof agendaPartnerSchema>;
+
+export const partnerIdSchema = z.string().regex(/^[a-z0-9]{20,40}$/, "Contact introuvable.");

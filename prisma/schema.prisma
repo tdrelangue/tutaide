@@ -42,6 +42,7 @@ model User {
   agendaSettings            AgendaSettings?
   agendaContacts            AgendaContact[]
   agendaGroups              AgendaGroup[]
+  agendaPartners            AgendaPartner[]
   agendaPlaces              AgendaPlace[]
   agendaRules               AgendaRule[]
   agendaAppointments        AgendaAppointment[]
@@ -265,6 +266,8 @@ model Organization {
   billingStartsAt          DateTime?
   members                  User[]
   smtpConfig               OrgSmtpConfig?
+  agendaGroups             AgendaGroup[]
+  agendaPartners           AgendaPartner[]
   moduleConfigs            OrgModuleConfig[]
   auditEvents              OrgAuditEvent[]
 
@@ -596,22 +599,62 @@ enum AgendaGroupKind {
 
 /// « Agenda » add-on: a coloured group of contacts, made by the user (« Mesures », « Ad hoc », « Avocats »…).
 /// One group per contact. The name is not encrypted: it says nothing about anyone's health (decision 2026-11-02).
+/// PERSONS groups belong to the MJPM (ownerId). PARTNERS groups belong to the shared address book:
+/// the structure (orgId), or the account itself when it has no structure (ownerId).
 model AgendaGroup {
-  id        String          @id @default(cuid())
-  ownerId   String
-  kind      AgendaGroupKind
-  name      String
+  id           String          @id @default(cuid())
+  ownerId      String?
+  orgId        String?
+  kind         AgendaGroupKind
+  name         String
   /// A key of the fixed palette (src/lib/agenda/groups-rules.ts), never a free colour.
-  color     String
-  position  Int             @default(0)
-  createdAt DateTime        @default(now())
-  updatedAt DateTime        @updatedAt
-  owner     User            @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  contacts  AgendaContact[]
+  color        String
+  position     Int             @default(0)
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  owner        User?           @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  organization Organization?   @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  contacts     AgendaContact[]
+  partners     AgendaPartner[]
 
   @@unique([id, ownerId])
   @@unique([ownerId, name])
+  @@unique([orgId, name])
   @@index([ownerId, kind, position])
+  @@index([orgId, kind, position])
+}
+
+/// « Agenda » add-on: a partner (lawyer, notary, craftsman…) in the shared address book
+/// (Thomas, 2026-11-02): the structure's (orgId), or the account's own without a structure (userId).
+/// Phones, e-mail, address, point and notes are encrypted like the persons' (sealed.ts).
+model AgendaPartner {
+  id           String        @id @default(cuid())
+  orgId        String?
+  userId       String?
+  groupId      String?
+  civility     String?
+  lastName     String?
+  firstName    String?
+  /// « Étude Maître Terieur », « SARL Bricol' »…
+  company      String?
+  role         String?
+  phone        String?
+  mobile       String?
+  email        String?
+  address      String?
+  point        String?
+  precision    String?
+  notes        String?
+  createdById  String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  organization Organization? @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  user         User?         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  group        AgendaGroup?  @relation(fields: [groupId], references: [id], onDelete: SetNull)
+
+  @@index([orgId])
+  @@index([userId])
+  @@index([groupId])
 }
 
 /// An address: a contact's (position 0 = default) or a free place of the owner.

@@ -26,6 +26,14 @@ export type GroupKindValue = "PERSONS" | "PARTNERS";
 /** Given to every agenda; no « Ad hoc » group: users make their own (Thomas, 2026-11-02). */
 export const DEFAULT_PERSON_GROUP = { name: "Mesures", color: "blue" } as const satisfies { name: string; color: GroupColor };
 
+/** The partners' address book starts with the usual trades (Thomas, 2026-11-02); users rename or add their own. */
+export const DEFAULT_PARTNER_GROUPS: readonly { readonly name: string; readonly color: GroupColor }[] = [
+  { name: "Avocats", color: "purple" },
+  { name: "Notaires", color: "teal" },
+  { name: "Artisans / hommes à tout faire", color: "orange" },
+  { name: "Autres partenaires", color: "slate" },
+];
+
 export const MAX_GROUPS_PER_OWNER = 30;
 
 export function isGroupColor(value: string): value is GroupColor {

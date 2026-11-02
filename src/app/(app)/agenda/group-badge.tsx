@@ -69,3 +69,32 @@ export function ColorPicker({ name, value, onChange, disabled }: ColorPickerProp
     </fieldset>
   );
 }
+
+type GroupFilterProps = {
+  groups: readonly (GroupTag & { readonly count: number })[];
+  value: string | null;
+  total: number;
+  onChange: (groupId: string | null) => void;
+};
+
+/** « Tous » or one group: toggle buttons, the chosen one marked by shape and aria-pressed, not colour alone. */
+export function GroupFilter({ groups, value, total, onChange }: GroupFilterProps) {
+  const chip = (isOn: boolean) =>
+    cn(
+      "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm",
+      isOn ? "border-foreground bg-foreground text-background" : "border-border hover:bg-muted",
+    );
+  return (
+    <div role="group" aria-label="Afficher un groupe" className="flex flex-wrap gap-2">
+      <button type="button" aria-pressed={value === null} className={chip(value === null)} onClick={() => onChange(null)}>
+        Tous ({total})
+      </button>
+      {groups.map((g) => (
+        <button key={g.id} type="button" aria-pressed={value === g.id} className={chip(value === g.id)} onClick={() => onChange(g.id)}>
+          <GroupDot color={g.color} />
+          {g.name} ({g.count})
+        </button>
+      ))}
+    </div>
+  );
+}

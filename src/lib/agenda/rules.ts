@@ -114,3 +114,15 @@ export function personsFromDossiers(dossiers: DossierRow[], existingKeys: Set<st
     })
     .sort((a, b) => a.fullName.localeCompare(b.fullName, "fr"));
 }
+
+// ---------------------------------------------------------------------------
+// Contacts (partners)
+// ---------------------------------------------------------------------------
+
+type PartnerNameParts = { civility: string | null; firstName: string | null; lastName: string | null; company: string | null };
+
+/** « Me Alex Terieur », or the structure when there is no name (« Étude Terieur »). */
+export function partnerName(p: PartnerNameParts): string {
+  const person = [p.civility, p.firstName, p.lastName].filter((s): s is string => s !== null && s !== "").join(" ");
+  return p.lastName ? person : (p.company ?? person);
+}

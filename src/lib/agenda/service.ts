@@ -69,7 +69,7 @@ function toPrecision(value: string | null): AddressPrecision {
   return value === "street" || value === "locality" || value === "municipality" ? value : "housenumber";
 }
 
-function toPlace(sealedLabel: string | null, sealedPoint: string | null, precision: string | null): Place | null {
+export function toPlace(sealedLabel: string | null, sealedPoint: string | null, precision: string | null): Place | null {
   const label = unseal(sealedLabel);
   const point = unsealPoint(sealedPoint);
   if (label === null && point === null) return null;

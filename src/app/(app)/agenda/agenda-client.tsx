@@ -1,20 +1,22 @@
 "use client";
 
 import Link from "next/link";
-import { CalendarClock, CalendarDays, FileSearch, ListTodo, Settings2, Users } from "lucide-react";
+import { BookUser, CalendarClock, CalendarDays, FileSearch, ListTodo, Settings2, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { MandataireSelect } from "@/components/mandataire-select";
 import type { MandataireContext } from "@/lib/access/selection-actions";
 import type { AgendaGroupView } from "@/lib/agenda/groups";
 import { groupOf } from "@/lib/agenda/groups-rules";
+import type { AgendaPartnerView } from "@/lib/agenda/partners";
 import type { AgendaPersonView, AgendaSettingsView } from "@/lib/agenda/service";
 import { AppointmentsTab } from "./appointments/appointments-tab";
+import { ContactsTab } from "./contacts-tab";
 import { PersonsTab } from "./persons-tab";
 import { AGENDA_SETTINGS_HREF } from "./fix-links";
 import { PlanningTab } from "./calendar/planning-tab";
 
-const TABS = ["planning", "rendez-vous", "personnes"] as const;
+const TABS = ["planning", "rendez-vous", "personnes", "contacts"] as const;
 type TabKey = (typeof TABS)[number];
 
 function isTabKey(value: string | undefined): value is TabKey {
@@ -26,6 +28,9 @@ type AgendaData = {
   profile: AgendaSettingsView;
   persons: AgendaPersonView[];
   groups: AgendaGroupView[];
+  /** The structure's shared address book (Thomas, 2026-11-02). */
+  partners: AgendaPartnerView[];
+  partnerGroups: AgendaGroupView[];
   importableCount: number;
 };
 
@@ -81,7 +86,7 @@ export function AgendaClient({ data, mandataires, initialTab }: Props) {
           </p>
         ) : (
           <Tabs defaultValue={defaultTab} className="w-full">
-            <TabsList className="grid h-auto w-full max-w-xl grid-cols-3">
+            <TabsList className="grid h-auto w-full max-w-2xl grid-cols-2 sm:grid-cols-4">
               <TabsTrigger value="planning" className="flex items-center gap-2">
                 <CalendarClock className="h-4 w-4" aria-hidden="true" /> Planning
               </TabsTrigger>
@@ -90,6 +95,9 @@ export function AgendaClient({ data, mandataires, initialTab }: Props) {
               </TabsTrigger>
               <TabsTrigger value="personnes" className="flex items-center gap-2">
                 <Users className="h-4 w-4" aria-hidden="true" /> <span className="sm:hidden">Personnes</span><span className="hidden sm:inline">Personnes à visiter</span>
+              </TabsTrigger>
+              <TabsTrigger value="contacts" className="flex items-center gap-2">
+                <BookUser className="h-4 w-4" aria-hidden="true" /> Contacts
               </TabsTrigger>
             </TabsList>
             {needsSetup && <SetupCard />}
@@ -107,6 +115,9 @@ export function AgendaClient({ data, mandataires, initialTab }: Props) {
                 importableCount={data.importableCount}
                 defaultVisitMinutes={data.profile.defaultVisitMinutes}
               />
+            </TabsContent>
+            <TabsContent value="contacts" forceMount className="mt-6 data-[state=inactive]:hidden">
+              <ContactsTab partners={data.partners} groups={data.partnerGroups} />
             </TabsContent>
           </Tabs>
         )}
