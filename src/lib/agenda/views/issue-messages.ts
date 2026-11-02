@@ -30,11 +30,6 @@ const TEMPLATES: Readonly<Record<string, Template>> = {
     many: "",
     fixTab: SETTINGS_TAB,
   },
-  LAST_VISIT_UNKNOWN: {
-    one: "{n} personne sans date de dernière visite : sa première visite est répartie, sans urgence, sur la période qui suit son ajout.",
-    many: "{n} personnes sans date de dernière visite : leur première visite est répartie, sans urgence, sur la période qui suit leur ajout.",
-    fixTab: PERSONS_TAB,
-  },
   BAD_AVAILABILITY: {
     one: "Les disponibilités d'une personne sont illisibles : elle est considérée disponible à vos heures de travail.",
     many: "Les disponibilités de {n} personnes sont illisibles : elles sont considérées disponibles à vos heures de travail.",
@@ -103,10 +98,19 @@ function messageFor(template: Template, count: number): string {
   return text.replace("{n}", String(count));
 }
 
+/**
+ * Reasons that are normal use, not a problem: never shown. A person without
+ * a last visit is simply followed from the day they were added (Thomas,
+ * 2026-11-02: the banner for it was only noise).
+ */
+const SILENT: ReadonlySet<string> = new Set(["LAST_VISIT_UNKNOWN"]);
+
 /** One view per reason, in order of first appearance. */
 export function toIssueViews(issues: readonly BridgeIssue[]): IssueView[] {
   const counts = new Map<string, number>();
-  for (const issue of issues) counts.set(issue.reason, (counts.get(issue.reason) ?? 0) + 1);
+  for (const issue of issues) {
+    if (!SILENT.has(issue.reason)) counts.set(issue.reason, (counts.get(issue.reason) ?? 0) + 1);
+  }
   return [...counts].map(([reason, count]) => {
     const template = TEMPLATES[reason] ?? FALLBACK;
     return { kind: reason, message: messageFor(template, count), fixTab: template.fixTab };

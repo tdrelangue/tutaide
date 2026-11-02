@@ -70,7 +70,7 @@ describe("the demo agenda", () => {
       assert.ok(question.placesMore >= 1, "breaking the rule places the notary signature");
       assert.ok(view.proposal.problems.some((p) => p.title === "Signature chez le notaire" && p.reason === "NO_COMMON_SLOT"));
       assert.equal(view.proposal.problems.some((p) => p.reason === "NO_ADDRESS"), true, "Sophie Stiqué has no address on purpose");
-      assert.match(view.issues.map((i) => i.message).join(" "), /2 personnes sans date de dernière visite/);
+      assert.doesNotMatch(view.issues.map((i) => i.message).join(" "), /sans date de dernière visite/, "normal use, never a warning");
     });
   }
 

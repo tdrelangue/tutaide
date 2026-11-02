@@ -16,16 +16,14 @@ describe("toIssueViews", () => {
     assert.ok(views.every((v) => v.fixTab === "personnes"));
   });
 
-  it("aggregates the unknown last visits in one informational message", () => {
-    const views = toIssueViews([1, 2, 3].map((n) => makeIssue("contact", `c${n}`, "LAST_VISIT_UNKNOWN")));
-    assert.equal(views.length, 1);
-    assert.match(views[0].message, /^3 personnes sans date de dernière visite/);
-    assert.match(views[0].message, /sans urgence/);
+  it("never shows a person without a last visit: it is normal use, not a problem", () => {
+    const views = toIssueViews([makeIssue("contact", "c1", "LAST_VISIT_UNKNOWN"), makeIssue("contact", "c2", "VISITS_INCOMPLETE")]);
+    assert.deepEqual(views.map((v) => v.kind), ["VISITS_INCOMPLETE"]);
   });
 
   it("uses the singular for one row", () => {
-    const [view] = toIssueViews([makeIssue("contact", "c1", "LAST_VISIT_UNKNOWN")]);
-    assert.match(view.message, /^1 personne sans date de dernière visite : sa première visite est répartie, sans urgence/);
+    const [view] = toIssueViews([makeIssue("contact", "c1", "VISITS_INCOMPLETE")]);
+    assert.match(view.message, /^Les visites régulières d'une personne/);
   });
 
   it("never echoes a row id", () => {

@@ -163,11 +163,13 @@ describe("buildWeekView: the stored planning", () => {
 
   it("lists the rows the agenda could not use as issues, without names", async () => {
     const owner = await seedOwner(client, "wk-issues@test.invalid");
-    await addPerson(client, owner, "Jean Bonneau", { lastVisitOn: null });
-    await addPerson(client, owner, "Aude Javel", { lastVisitOn: null });
+    const jean = await addPerson(client, owner, "Jean Bonneau", { lastVisitOn: null });
+    const aude = await addPerson(client, owner, "Aude Javel", { lastVisitOn: null });
+    // A frequency without its period: unusable, so reported (a missing last visit is not).
+    await client.agendaContact.updateMany({ where: { id: { in: [jean, aude] } }, data: { visitPeriod: null } });
     const view = await weekViewOf(owner, THIS_WEEK, false);
     assert.equal(view.issues.length, 1);
-    assert.match(view.issues[0].message, /^2 personnes sans date de dernière visite/);
+    assert.match(view.issues[0].message, /^Les visites régulières de 2 personnes sont incomplètes/);
     assert.ok(!JSON.stringify(view.issues).includes("Jean"));
   });
 });
