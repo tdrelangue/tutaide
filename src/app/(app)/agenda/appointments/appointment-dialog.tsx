@@ -98,6 +98,12 @@ export function AppointmentDialog({ open, onOpenChange, persons, defaultParticip
   function preventCloseWhileBusy(event: Event) {
     if (isBusy) event.preventDefault();
   }
+  /** Échap in an open « Avec qui ? » list closes the list only, never the dialog (and its typed form). */
+  function handleEscape(event: KeyboardEvent) {
+    const target = event.target;
+    const isOpenCombobox = target instanceof HTMLElement && target.getAttribute("role") === "combobox" && target.getAttribute("aria-expanded") === "true";
+    if (isBusy || isOpenCombobox) event.preventDefault();
+  }
 
   const heading = TITLES[flow.step.kind];
   return (
@@ -105,7 +111,7 @@ export function AppointmentDialog({ open, onOpenChange, persons, defaultParticip
       <DialogContent
         className="max-h-[90vh] overflow-y-auto sm:max-w-2xl"
         closeDisabled={isBusy}
-        onEscapeKeyDown={preventCloseWhileBusy}
+        onEscapeKeyDown={handleEscape}
         onInteractOutside={preventCloseWhileBusy}
       >
         <DialogHeader>

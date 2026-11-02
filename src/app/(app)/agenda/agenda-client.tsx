@@ -7,6 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { MandataireSelect } from "@/components/mandataire-select";
 import type { MandataireContext } from "@/lib/access/selection-actions";
 import type { AgendaGroupView } from "@/lib/agenda/groups";
+import { groupOf } from "@/lib/agenda/groups-rules";
 import type { AgendaPersonView, AgendaSettingsView } from "@/lib/agenda/service";
 import { AppointmentsTab } from "./appointments/appointments-tab";
 import { PersonsTab } from "./persons-tab";
@@ -38,7 +39,10 @@ type Props = {
 export function AgendaClient({ data, mandataires, initialTab }: Props) {
   const isAssistant = mandataires.choices.length > 0;
   const needsSetup = data !== null && data.profile.home === null;
-  const personOptions = (data?.persons ?? []).filter((p) => p.status !== "ENDED").map((p) => ({ id: p.id, fullName: p.fullName }));
+  const groups = data?.groups ?? [];
+  const personOptions = (data?.persons ?? [])
+    .filter((p) => p.status !== "ENDED")
+    .map((p) => ({ id: p.id, fullName: p.fullName, group: groupOf(p.groupId, groups) }));
   const defaultTab: TabKey = isTabKey(initialTab) ? initialTab : "planning";
 
   return (

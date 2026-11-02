@@ -26,6 +26,7 @@ import {
 } from "./form-model";
 import type { FieldErrors, FieldKey, FieldProps, FormValues } from "./form-model";
 import type { PersonOption } from "./shared-contracts";
+import { ParticipantPicker } from "./participant-picker";
 import { WhenFields } from "./when-fields";
 
 type AppointmentFormProps = {
@@ -117,32 +118,18 @@ function TitleField({ values, update, errors, register }: FieldProps) {
 }
 
 function ParticipantsField({ values, update, persons }: FieldProps & { readonly persons: readonly PersonOption[] }) {
-  function handleToggle(event: React.ChangeEvent<HTMLInputElement>) {
-    const id = event.target.value;
-    const others = values.participantIds.filter((p) => p !== id);
-    update({ participantIds: event.target.checked ? [...others, id] : others });
+  function handleChange(ids: string[]) {
+    update({ participantIds: ids });
   }
+  const count = values.participantIds.length;
   return (
-    <fieldset className="space-y-2" aria-describedby="appt-people-hint">
+    <fieldset className="space-y-2">
       <legend className="text-sm font-medium">Avec qui ? <span className="font-normal text-muted-foreground">(facultatif)</span></legend>
       <p id="appt-people-hint" className="text-xs text-muted-foreground">
-        Sans personne cochée, c&apos;est un rendez-vous personnel.
-        {values.participantIds.length > 0 && ` ${values.participantIds.length} personne${values.participantIds.length > 1 ? "s" : ""} choisie${values.participantIds.length > 1 ? "s" : ""}.`}
+        Tapez quelques lettres du nom. Sans personne choisie, c&apos;est un rendez-vous personnel.
+        {count > 0 && ` ${count} personne${count > 1 ? "s" : ""} choisie${count > 1 ? "s" : ""}.`}
       </p>
-      {persons.length === 0 ? (
-        <p className="text-sm text-muted-foreground">Aucune personne dans l&apos;agenda pour l&apos;instant.</p>
-      ) : (
-        <ul className="max-h-44 space-y-1 overflow-y-auto rounded-md border p-2">
-          {persons.map((person) => (
-            <li key={person.id}>
-              <label className="flex cursor-pointer items-center gap-2 rounded px-1 py-1 text-sm hover:bg-muted/60">
-                <input type="checkbox" value={person.id} checked={values.participantIds.includes(person.id)} onChange={handleToggle} className="h-4 w-4 accent-primary" />
-                {person.fullName}
-              </label>
-            </li>
-          ))}
-        </ul>
-      )}
+      <ParticipantPicker persons={persons} value={values.participantIds} onChange={handleChange} />
     </fieldset>
   );
 }

@@ -3,9 +3,11 @@
  * (appointments/). The dialogs live in appointments/ and are reused by the
  * week grid with exactly these props.
  */
+import type { GroupTag } from "@/lib/agenda/groups-rules";
 import type { IsoDate } from "@/lib/agenda/views/types";
 
-export type PersonOption = { readonly id: string; readonly fullName: string };
+/** A person who can take part in an appointment; `group` colours and filters the search. */
+export type PersonOption = { readonly id: string; readonly fullName: string; readonly group?: GroupTag | null };
 
 /** appointments/appointment-dialog.tsx — « Nouveau rendez-vous », including the rule 12 insertion flow. */
 export type AppointmentDialogProps = {
