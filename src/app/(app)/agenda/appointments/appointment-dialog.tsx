@@ -9,6 +9,7 @@ import type { InsertView, IssueView } from "@/lib/agenda/views/types";
 import { addAppointment } from "../planning-actions";
 import { useAgendaQuery } from "../use-agenda-query";
 import { AppointmentForm } from "./appointment-form";
+import { formatItem } from "./format";
 import { InlineError, IssueList } from "./inline-error";
 import { InsertStep } from "./insert-step";
 import type { NeedsInsert } from "./insert-step";
@@ -22,7 +23,7 @@ type Step =
 const TITLES: Record<Step["kind"], { title: string; description: string }> = {
   FORM: {
     title: "Nouveau rendez-vous",
-    description: "Avant validation de la semaine, il rejoint la liste et sera placé avec les autres, selon sa priorité.",
+    description: "À date et heure fixes, il est validé tout de suite. Entre deux dates, il sera placé avec les autres, selon sa priorité.",
   },
   INSERT: {
     title: "Où placer ce rendez-vous ?",
@@ -60,6 +61,12 @@ function useAppointmentSteps({ open, onOpenChange, onDone }: Pick<AppointmentDia
   function handleView(view: InsertView) {
     if (view.kind === "LISTED") {
       toast.success("Ajouté : il sera placé dans la prochaine proposition.");
+      close(true);
+    } else if (view.kind === "VALIDATED") {
+      toast.success("Rendez-vous ajouté au planning, validé.");
+      if (view.conflicts.length > 0) {
+        toast.warning(`Il chevauche : ${view.conflicts.map(formatItem).join(" ; ")}. Déplacez ce qui doit l'être.`, { duration: 12_000 });
+      }
       close(true);
     } else if (view.kind === "NOT_PLANNABLE") setRefused(view.issues);
     else if (view.kind === "UNPLANNABLE") setStep({ kind: "UNPLANNABLE", issues: view.issues });

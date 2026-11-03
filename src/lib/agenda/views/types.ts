@@ -177,6 +177,8 @@ export type SlotView = { readonly date: IsoDate; readonly start: Minutes; readon
 export type InsertView =
   /** Before validation: simply added, the next proposal places it by priority. */
   | { readonly kind: "LISTED"; readonly appointmentId: string }
+  /** Fixed date and time: validated at once; `conflicts` = validated items it overlaps. */
+  | { readonly kind: "VALIDATED"; readonly appointmentId: string; readonly conflicts: readonly ItemRef[] }
   /** Its dates touch the validated plan: free slots first, nothing moves. */
   | {
       readonly kind: "NEEDS_INSERT";
@@ -210,6 +212,16 @@ export type AppointmentStatus = "A_PLACER" | "PREVU" | "FAIT" | "ANNULE";
 export type WhenView =
   | { readonly kind: "FIXED"; readonly date: IsoDate; readonly timeMin: Minutes }
   | { readonly kind: "WEEK" | "RANGE"; readonly from: IsoDate; readonly to: IsoDate };
+
+/** After « Modifier le rendez-vous »: what happened to its validated items to come. */
+export type EditView = {
+  readonly kept: number;
+  /** Their day left the new dates: the next proposal places the appointment again. */
+  readonly cancelled: number;
+  /** A fixed date and time, not validated before: validated now. */
+  readonly validated: boolean;
+  readonly conflicts: readonly ItemRef[];
+};
 
 export type AppointmentRow = {
   readonly id: string;

@@ -6,7 +6,7 @@ import { MAX_FILE_CONTACTS } from "@/lib/agenda/contacts-file";
 import { findImportConflicts, importContactsFromFile, type ImportConflict, type ImportReport } from "@/lib/agenda/contacts-import";
 import { requireAgendaOwner } from "@/lib/agenda/context";
 import { dayRuleSchema, deleteDayRule, ruleIdSchema, saveDayRule } from "@/lib/agenda/day-rules";
-import { searchAddress, type GeocodeResult } from "@/lib/agenda/geocode";
+import { searchPlaces, type GeocodeResult } from "@/lib/agenda/geocode";
 import { createGroup, deleteGroup, moveGroup, setPersonsGroup, updateGroup, type GroupScope } from "@/lib/agenda/groups";
 import { addressBookOf, createPartner, deletePartner, updatePartner } from "@/lib/agenda/partners";
 import { importPartnersFromFile, partnerImportSchema, type PartnerImportReport } from "@/lib/agenda/partners-import";
@@ -51,7 +51,7 @@ function done(message: string): AgendaActionResult {
 export async function searchAgendaAddress(query: string): Promise<GeocodeResult> {
   try {
     await requireAgendaOwner();
-    return await searchAddress(z.string().max(200, "Adresse trop longue.").parse(query));
+    return await searchPlaces(z.string().max(200, "Adresse trop longue.").parse(query));
   } catch (error) {
     const result = failure("searchAddress", error);
     return { ok: false, error: result.success ? "" : result.error };

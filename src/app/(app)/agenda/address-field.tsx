@@ -5,7 +5,7 @@ import { Loader2, MapPin, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { PRECISION_LABELS, type GeocodedAddress } from "@/lib/agenda/geocode";
+import { NAMED_PLACE_LABELS, PRECISION_LABELS, type GeocodedAddress } from "@/lib/agenda/geocode";
 import type { Place } from "@/lib/agenda/service";
 import { searchAgendaAddress } from "./actions";
 
@@ -161,7 +161,7 @@ export function AddressField({
               value={query}
               onChange={handleQueryChange}
               onKeyDown={handleKeyDown}
-              placeholder="ex. 12 rue de la Monnaie, Lille"
+              placeholder="ex. 12 rue de la Monnaie, Lille — ou EHPAD Bagatelle Lubersac"
               autoComplete="off"
               aria-describedby={`${id}-hint`}
             />
@@ -171,7 +171,8 @@ export function AddressField({
             </Button>
           </div>
           <p id={`${id}-hint`} className="text-xs text-muted-foreground">
-            Numéro, rue et commune ({MIN_QUERY} caractères minimum), puis choisissez l&apos;adresse dans la liste.
+            Numéro, rue et commune, ou le nom d&apos;un EHPAD, d&apos;un hôpital, d&apos;un tribunal ou d&apos;un lieu-dit
+            ({MIN_QUERY} caractères minimum), puis choisissez dans la liste.
           </p>
           {error && <p role="alert" className={ERROR_TEXT}>{error}</p>}
           {results !== null && results.length === 0 && (
@@ -190,7 +191,11 @@ export function AddressField({
                   >
                     <MapPin className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
                     <span className="flex-1">{address.label}</span>
-                    <PrecisionBadge precision={address.precision} />
+                    {address.named ? (
+                      <Badge variant="secondary" className="text-xs">{NAMED_PLACE_LABELS[address.named]}</Badge>
+                    ) : (
+                      <PrecisionBadge precision={address.precision} />
+                    )}
                   </button>
                 </li>
               ))}

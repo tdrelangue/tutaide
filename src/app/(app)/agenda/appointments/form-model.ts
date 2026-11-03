@@ -95,6 +95,35 @@ export function initialValues(today: IsoDate, participantIds: readonly string[])
   };
 }
 
+/** « Modifier le rendez-vous »: the stored appointment as the form's values (pure). */
+export function valuesFromInput(input: AppointmentInput, today: IsoDate): FormValues {
+  const base = initialValues(today, input.participantIds);
+  const { place, when } = input;
+  const fixed = when.kind === "FIXED";
+  return {
+    ...base,
+    title: input.title,
+    partnerIds: input.partnerIds ?? [],
+    place: place.kind === "PLACE" || place.kind === "HOME" ? "OFFICE" : place.kind,
+    placePersonId: place.kind === "PERSON" ? place.personId : null,
+    placePartnerId: place.kind === "PARTNER" ? place.partnerId : null,
+    outsideLabel: place.kind === "OUTSIDE" ? place.label : "",
+    outsideAddress: place.kind === "OUTSIDE" ? place.address : null,
+    durationMin: input.durationMin,
+    whenKind: when.kind,
+    date: fixed ? when.date : base.date,
+    time: fixed ? minutesToTime(when.timeMin) : base.time,
+    weekOf: when.kind === "WEEK" ? mondayOf(when.from) : base.weekOf,
+    from: fixed ? base.from : when.from,
+    to: fixed ? base.to : when.to,
+    priority: input.priority,
+  };
+}
+
+function minutesToTime(minutes: number): string {
+  return `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
+}
+
 /** The weeks offered by « Dans la semaine du… »: this one and the next ones, Monday to Friday. */
 export function weekOptions(today: IsoDate): readonly { value: IsoDate; label: string }[] {
   const first = mondayOf(today);
@@ -174,6 +203,7 @@ export function toInput(values: FormValues): AppointmentInput {
     place: placeInput(values),
     durationMin: values.durationMin,
     when: whenInput(values),
-    priority: values.priority,
+    // Fixed time: validated at once, its priority only matters if it must move one day.
+    priority: values.whenKind === "FIXED" ? "NORMAL" : values.priority,
   };
 }

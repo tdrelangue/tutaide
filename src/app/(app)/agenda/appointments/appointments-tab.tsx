@@ -12,6 +12,7 @@ import { AppointmentGroups } from "./appointment-list";
 import { ConfirmPanel } from "./confirm-panel";
 import type { MissedItem } from "./confirm-panel";
 import { DeleteAppointmentDialog } from "./delete-dialog";
+import { EditAppointmentDialog } from "./edit-dialog";
 import { InlineError } from "./inline-error";
 import { MissedDialog } from "./missed-dialog";
 import type { PersonOption } from "./shared-contracts";
@@ -26,6 +27,7 @@ export function AppointmentsTab({ persons }: AppointmentsTabProps) {
   const [toConfirm, setToConfirm] = useState<readonly EntryView[]>([]);
   const [isCreating, setIsCreating] = useState(false);
   const [missed, setMissed] = useState<{ open: boolean; item: MissedItem | null }>({ open: false, item: null });
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [toDelete, setToDelete] = useState<{ open: boolean; row: AppointmentRow | null }>({ open: false, row: null });
   const addRef = useRef<HTMLButtonElement>(null);
   const { run: runList, isBusy, error } = useAgendaQuery();
@@ -62,6 +64,14 @@ export function AppointmentsTab({ persons }: AppointmentsTabProps) {
     setToDelete({ open: true, row });
   }
 
+  function handleEdit(row: AppointmentRow) {
+    setEditingId(row.id);
+  }
+
+  function handleEditClose() {
+    setEditingId(null);
+  }
+
   function handleDeleteOpenChange(open: boolean) {
     setToDelete((current) => ({ ...current, open }));
   }
@@ -89,9 +99,10 @@ export function AppointmentsTab({ persons }: AppointmentsTabProps) {
       </div>
 
       <ConfirmPanel entries={toConfirm} onMissed={handleMissed} />
-      <TabBody rows={rows} isBusy={isBusy} error={error} onRetry={handleRetry} onNew={handleNew} onDelete={handleDelete} />
+      <TabBody rows={rows} isBusy={isBusy} error={error} onRetry={handleRetry} onNew={handleNew} onDelete={handleDelete} onEdit={handleEdit} />
 
       <AppointmentDialog open={isCreating} onOpenChange={setIsCreating} persons={persons} onDone={handleChanged} />
+      <EditAppointmentDialog appointmentId={editingId} onClose={handleEditClose} persons={persons} onDone={handleChanged} />
       <MissedDialog open={missed.open} onOpenChange={handleMissedOpenChange} item={missed.item} onDone={handleChanged} />
       <DeleteAppointmentDialog open={toDelete.open} onOpenChange={handleDeleteOpenChange} row={toDelete.row} onDone={handleDeleted} />
     </div>
@@ -105,15 +116,16 @@ type TabBodyProps = {
   readonly onRetry: () => void;
   readonly onNew: () => void;
   readonly onDelete: (row: AppointmentRow) => void;
+  readonly onEdit: (row: AppointmentRow) => void;
 };
 
-function TabBody({ rows, isBusy, error, onRetry, onNew, onDelete }: TabBodyProps) {
+function TabBody({ rows, isBusy, error, onRetry, onNew, onDelete, onEdit }: TabBodyProps) {
   if (error && rows === null) return <InlineError message={error} onRetry={onRetry} />;
   if (rows === null) return <ListSkeleton isBusy={isBusy} />;
   return (
     <>
       {error && <InlineError message={error} onRetry={onRetry} />}
-      {rows.length === 0 ? <EmptyState onNew={onNew} /> : <AppointmentGroups rows={rows} onDelete={onDelete} />}
+      {rows.length === 0 ? <EmptyState onNew={onNew} /> : <AppointmentGroups rows={rows} onDelete={onDelete} onEdit={onEdit} />}
     </>
   );
 }

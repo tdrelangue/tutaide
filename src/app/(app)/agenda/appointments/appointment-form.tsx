@@ -36,13 +36,16 @@ type AppointmentFormProps = {
   readonly isBusy: boolean;
   readonly onSubmit: (input: AppointmentInput) => void;
   readonly onCancel: () => void;
+  /** « Modifier le rendez-vous »: the stored values, and the button says « Enregistrer ». */
+  readonly initial?: FormValues;
+  readonly submitLabel?: string;
   /** Server error, shown above the buttons. */
   readonly children?: ReactNode;
 };
 
 /** Step 1 of « Nouveau rendez-vous »: what, with whom, where, how long, when, how important. */
-export function AppointmentForm({ persons, defaultParticipantIds, isBusy, onSubmit, onCancel, children }: AppointmentFormProps) {
-  const [values, setValues] = useState<FormValues>(() => initialValues(localToday(), defaultParticipantIds));
+export function AppointmentForm({ persons, defaultParticipantIds, isBusy, onSubmit, onCancel, initial, submitLabel = "Ajouter le rendez-vous", children }: AppointmentFormProps) {
+  const [values, setValues] = useState<FormValues>(() => initial ?? initialValues(localToday(), defaultParticipantIds));
   const [errors, setErrors] = useState<FieldErrors>({});
   const fields = useRef<Partial<Record<FieldKey, HTMLInputElement | null>>>({});
 
@@ -79,7 +82,8 @@ export function AppointmentForm({ persons, defaultParticipantIds, isBusy, onSubm
           <DurationField {...props} />
         </div>
         <WhenFields {...props} weeks={weekOptions(localToday())} choices={WHEN_CHOICES} />
-        <PriorityField {...props} />
+        {/* A fixed date and time is already agreed: nothing to rank (Thomas, 2026-11-03). */}
+        {values.whenKind !== "FIXED" && <PriorityField {...props} />}
       </fieldset>
       {children}
       <DialogFooter className="gap-2">
@@ -87,7 +91,7 @@ export function AppointmentForm({ persons, defaultParticipantIds, isBusy, onSubm
         <BusyButton type="button" variant="outline" onClick={onCancel} busy={isBusy}>Annuler</BusyButton>
         <BusyButton type="submit" busy={isBusy}>
           {isBusy && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
-          Ajouter le rendez-vous
+          {submitLabel}
         </BusyButton>
       </DialogFooter>
     </form>

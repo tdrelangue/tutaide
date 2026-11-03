@@ -35,6 +35,11 @@ export const MAX_MOVABLE = 100;
 
 export type AddOutcome =
   | { readonly kind: "LISTED"; readonly appointmentId: string }
+  /**
+   * A fixed date and time was typed: the appointment is already agreed, it is
+   * validated at once (Thomas, 2026-11-03). `conflicts`: validated items it overlaps.
+   */
+  | { readonly kind: "VALIDATED"; readonly appointmentId: string; readonly conflicts: readonly ValidatedItem[] }
   | {
       readonly kind: "NEEDS_INSERT";
       readonly appointmentId: string;
@@ -104,9 +109,26 @@ export async function addAppointment(ownerId: string, actorId: string, input: Ap
   if (!loaded.ok) return { kind: "NOT_PLANNABLE", issues: loaded.issues };
   const ap = loaded.state.appointments.find((a) => a.id === appointmentId);
   if (!ap) return { kind: "UNPLANNABLE", appointmentId, issues: loaded.issues };
+  // Fixed date and time: agreed, so validated at once; over validated items, the user says which ones move.
+  // (Overlaps are a matter of hours, not of road times: no travel needed to know.)
+  if (ap.when.kind === "FIXED" && fixedConflicts(createContext(loaded.state), ap).length === 0) {
+    await validateFixedAppointment(ownerId, loaded.state, loaded.version, ap, deps);
+    return { kind: "VALIDATED", appointmentId, conflicts: [] };
+  }
   if (!touchesValidatedPlan(loaded.state, ap)) return { kind: "LISTED", appointmentId };
   const { ctx } = await planningFor(ownerId, loaded.state, loaded.version, ap, deps);
   return { kind: "NEEDS_INSERT", appointmentId, options: insertOptions(ctx, ap, ctx.state.today), conflicts: fixedConflicts(ctx, ap) };
+}
+
+/** Its own date and time, whatever the planner would have thought of it: the user agreed it. */
+export async function validateFixedAppointment(ownerId: string, state: PlannerState, version: number, ap: Appointment, deps: PlanDeps): Promise<{ readonly conflicts: readonly ValidatedItem[] }> {
+  if (ap.when.kind !== "FIXED") throw new AgendaUserError("Ce rendez-vous n'a pas d'heure fixe.");
+  // Its own time, not a search: road times play no part.
+  const planning: Planning = { ctx: createContext(state), ap, version };
+  const { date, time } = ap.when;
+  const placement = { date, start: time, end: time + ap.dur };
+  await writeInsertion(ownerId, planning, { placement, changes: [], bent: [] }, deps.now);
+  return { conflicts: fixedConflicts(planning.ctx, ap) };
 }
 
 async function createAddedItem(tx: Tx, ownerId: string, added: ValidatedItem): Promise<void> {

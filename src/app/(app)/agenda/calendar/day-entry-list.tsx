@@ -2,7 +2,7 @@
 
 import { cn } from "@/lib/utils";
 import type { DayView } from "@/lib/agenda/views/types";
-import { SOURCE_STYLE } from "../week/entry-card";
+import { entryStyle } from "../week/entry-card";
 import { GroupBadge } from "../group-badge";
 import { SOURCE_WORD, timeRange } from "../week/format";
 import { ListChecks } from "lucide-react";
@@ -25,7 +25,7 @@ export function DayEntryList({ day, onOpenNotes }: { day: DayView; onOpenNotes?:
       <p className="text-sm font-medium">{meetingCount(meetings.length)}</p>
       <ol className="space-y-2">
         {day.entries.map((entry) => (
-          <li key={entry.key} className={cn("rounded-md px-3 py-2 text-sm", SOURCE_STYLE[entry.source], blocks.includes(entry) && "opacity-90")}>
+          <li key={entry.key} className={cn("rounded-md px-3 py-2 text-sm", entryStyle(entry), blocks.includes(entry) && "opacity-90")}>
             <p className="flex flex-wrap items-baseline justify-between gap-x-3">
               <span className="font-semibold tabular-nums">{timeRange(entry.start, entry.end)}</span>
               {SOURCE_WORD[entry.source] !== entry.title && <span className="text-xs font-medium text-foreground/80">{SOURCE_WORD[entry.source]}</span>}

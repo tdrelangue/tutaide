@@ -34,6 +34,7 @@ import { importAgendaPersons, removeAgendaPerson } from "./actions";
 import { getVisitStatus } from "./planning-actions";
 import { useAgendaQuery } from "./use-agenda-query";
 import { useAgendaAction } from "./use-agenda-action";
+import { SortableHeader, sortRows, useTableSort } from "./sort-header";
 
 type Props = {
   persons: AgendaPersonView[];
@@ -344,8 +345,10 @@ function PersonTable({
   onDelete: (person: AgendaPersonView) => void;
 }) {
   const headingId = useId();
+  const { sort, toggle } = useTableSort();
   if (rows.length === 0) return null;
-  const ids = rows.map((p) => p.id);
+  const sorted = sortRows(rows, sort);
+  const ids = sorted.map((p) => p.id);
   const ticked = selection ? ids.filter((id) => selection.selected.has(id)).length : 0;
   const allState = ticked === 0 ? false : ticked === ids.length ? true : "indeterminate";
   return (
@@ -364,8 +367,8 @@ function PersonTable({
                   />
                 </th>
               )}
-              <th scope="col" className="px-3 py-2 font-medium">Nom</th>
-              <th scope="col" className="px-3 py-2 font-medium">Lieu de visite</th>
+              <SortableHeader label="Nom" sortKey="name" sort={sort} onSort={toggle} />
+              <SortableHeader label="Lieu de visite" sortKey="address" sort={sort} onSort={toggle} />
               <th scope="col" className="px-3 py-2 font-medium">Fréquence</th>
               <th scope="col" className="px-3 py-2 font-medium">Durée</th>
               <th scope="col" className="whitespace-nowrap px-3 py-2 font-medium">Vu le</th>
@@ -375,7 +378,7 @@ function PersonTable({
             </tr>
           </thead>
           <tbody>
-            {rows.map((person) => (
+            {sorted.map((person) => (
               <PersonRow key={person.id} person={person} group={groups.length > 1 ? groupOf(person.groupId, groups) : null} selection={selection} status={statuses === null ? undefined : (statuses.get(person.id) ?? null)} defaultVisitMinutes={defaultVisitMinutes} onEdit={onEdit} onDelete={onDelete} />
             ))}
           </tbody>

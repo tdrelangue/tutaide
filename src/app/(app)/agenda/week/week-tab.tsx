@@ -6,6 +6,7 @@ import type { IsoDate } from "@/lib/agenda/views/types";
 import type { PersonOption } from "../appointments/shared-contracts";
 import { AppointmentDialog } from "../appointments/appointment-dialog";
 import { DeleteAppointmentDialog } from "../appointments/delete-dialog";
+import { EditAppointmentDialog } from "../appointments/edit-dialog";
 import { MissedDialog } from "../appointments/missed-dialog";
 import { ERROR_TEXT } from "../address-field";
 import { addDays, mondayOf, weekLabel } from "./format";
@@ -140,6 +141,7 @@ function WeekDialogs({ data, ui, persons }: { data: WeekData; ui: WeekInteractio
       <MissedDialog open={ui.missed !== null} onOpenChange={ui.handleMissedOpenChange} item={ui.missed} onDone={ui.handleDialogDone} />
       <NotesDialog target={ui.notes} onClose={ui.closeNotes} />
       <DeleteAppointmentDialog open={ui.isDeleteOpen} onOpenChange={ui.setIsDeleteOpen} row={ui.deleting} onDone={ui.handleDialogDone} />
+      <EditAppointmentDialog appointmentId={ui.editingId} onClose={ui.closeEdit} persons={persons} onDone={ui.handleDialogDone} />
       <AppointmentDialog open={ui.isAppointmentOpen} onOpenChange={ui.setIsAppointmentOpen} persons={persons} onDone={ui.handleDialogDone} />
     </>
   );

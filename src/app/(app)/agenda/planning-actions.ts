@@ -5,14 +5,15 @@ import { fromIso } from "@/lib/agenda/bridge/dates";
 import { loadPlannerState, ownerToday } from "@/lib/agenda/bridge/load";
 import { applyMoves, addAppointment as addNewAppointment, movableCandidates, placeInFreeSlot, previewMoves } from "@/lib/agenda/bridge/ops/insert";
 import { markItemMissed } from "@/lib/agenda/bridge/ops/missed";
+import { editAppointment } from "@/lib/agenda/bridge/ops/edit";
 import { pinBlock, setOccurrence, setRuleAnswer, unpinBlock } from "@/lib/agenda/bridge/ops/adjust";
 import { validatePeriod } from "@/lib/agenda/bridge/ops/plan";
 import type { Period } from "@/lib/agenda/bridge/period";
 import { readConfirmations, readWeek } from "@/lib/agenda/bridge/ops/week";
-import { deleteAppointment, listAppointments as loadAppointments } from "@/lib/agenda/appointments";
+import { appointmentForEdit, deleteAppointment, listAppointments as loadAppointments } from "@/lib/agenda/appointments";
 import { agendaGroupTags } from "@/lib/agenda/partners";
 import type { AppointmentInput } from "@/lib/agenda/appointments";
-import { buildInsertView, buildMovesPreview } from "@/lib/agenda/views/insert-view";
+import { buildInsertView, buildMovesPreview, itemRef } from "@/lib/agenda/views/insert-view";
 import { buildVisitStatus } from "@/lib/agenda/views/visit-status";
 import { buildWeekView } from "@/lib/agenda/views/week-view";
 import { confirmationEntries } from "@/lib/agenda/views/week-entries";
@@ -20,6 +21,7 @@ import type { PlanDeps } from "@/lib/agenda/bridge/ops/plan";
 import type {
   AgendaDataResult,
   AppointmentRow,
+  EditView,
   EntryView,
   InsertView,
   IsoDate,
@@ -172,6 +174,22 @@ export async function addAppointment(input: AppointmentInput): Promise<AgendaDat
     const candidates = loaded?.ok ? movableCandidates(loaded.state) : [];
     const view = buildInsertView(outcome, candidates);
     return outcome.kind === "NOT_PLANNABLE" ? { success: true, data: view } : written(view);
+  });
+}
+
+/** « Modifier le rendez-vous »: what the form shows. */
+export async function getAppointmentForEdit(appointmentId: string): Promise<AgendaDataResult<AppointmentInput>> {
+  return run("getAppointmentForEdit", async ({ ownerId }) => {
+    const input = await appointmentForEdit(ownerId, appointmentIdSchema.parse(appointmentId));
+    return input === null ? fail("Rendez-vous introuvable.") : { success: true, data: input };
+  });
+}
+
+/** Saves the changes; its validated items to come follow (bridge/ops/edit.ts). */
+export async function saveAppointmentEdit(appointmentId: string, input: AppointmentInput): Promise<AgendaDataResult<EditView>> {
+  return run("saveAppointmentEdit", async ({ ownerId }) => {
+    const outcome = await editAppointment(ownerId, appointmentIdSchema.parse(appointmentId), input, planDeps());
+    return written({ ...outcome, conflicts: outcome.conflicts.map(itemRef) });
   });
 }
 

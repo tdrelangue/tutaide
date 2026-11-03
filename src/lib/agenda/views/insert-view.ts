@@ -14,6 +14,8 @@ export function buildInsertView(outcome: AddOutcome, candidates: readonly Valida
   switch (outcome.kind) {
     case "LISTED":
       return { kind: "LISTED", appointmentId: outcome.appointmentId };
+    case "VALIDATED":
+      return { kind: "VALIDATED", appointmentId: outcome.appointmentId, conflicts: outcome.conflicts.map(itemRef) };
     case "NEEDS_INSERT":
       return {
         kind: "NEEDS_INSERT",

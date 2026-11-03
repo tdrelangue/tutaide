@@ -1,9 +1,9 @@
 import { z } from "zod";
-import { seal, sealPoint } from "./sealed";
+import { seal, sealPoint, unseal, unsealPoint } from "./sealed";
 import { placeSchema } from "./validation";
 import { keepNotesOnHistory } from "./notes";
 import { db } from "@/lib/db";
-import { fromIso, isRealDate } from "./bridge/dates";
+import { fromIso, isRealDate, toIso } from "./bridge/dates";
 import { ownerToday } from "./bridge/load";
 import { sortAppointmentRows, toAppointmentRow } from "./views/appointment-rows";
 import type { AppointmentRow } from "./views/types";
@@ -62,7 +62,7 @@ export const appointmentSchema = z
   .refine((a) => windowIsValid(a.when), { message: "Période invalide : la fin doit suivre le début, sur un an au plus.", path: ["when"] });
 /** What callers send (`partnerIds` may be left out); functions parse it before use. */
 export type AppointmentInput = z.input<typeof appointmentSchema>;
-type ParsedAppointment = z.infer<typeof appointmentSchema>;
+export type ParsedAppointment = z.infer<typeof appointmentSchema>;
 
 function whenColumns(when: ParsedAppointment["when"]) {
   if (when.kind === "FIXED") return { whenKind: when.kind, date: fromIso(when.date), timeMin: when.timeMin, fromDate: null, toDate: null };
@@ -113,14 +113,9 @@ async function resolvePlace(
 export async function createAppointment(ownerId: string, actorId: string, rawInput: AppointmentInput): Promise<string> {
   const input = appointmentSchema.parse(rawInput);
   await assertOwned(ownerId, input);
-  const book = input.partnerIds.length > 0 ? await addressBookOf(ownerId) : null;
+  const book = await bookFor(ownerId, input);
   return db.$transaction(async (tx) => {
-    const partnerContacts = new Map<string, string>();
-    for (const partnerId of new Set(input.partnerIds)) {
-      if (book) partnerContacts.set(partnerId, await ensurePartnerContact(tx, ownerId, book, partnerId));
-    }
-    const where = await resolvePlace(tx, ownerId, input.place, partnerContacts);
-    const contactIds = [...new Set([...input.participantIds, ...partnerContacts.values()])];
+    const { where, contactIds } = await participantsAndPlace(tx, ownerId, input, book);
     const created = await tx.agendaAppointment.create({
     data: {
       ownerId,
@@ -136,6 +131,102 @@ export async function createAppointment(ownerId: string, actorId: string, rawInp
     });
     return created.id;
   }, TX_OPTIONS);
+}
+
+type AddressBookOrNull = Awaited<ReturnType<typeof addressBookOf>> | null;
+
+/** Read before the transaction: it uses its own connection (one only in tests: it would wait for the transaction). */
+async function bookFor(ownerId: string, input: ParsedAppointment): Promise<AddressBookOrNull> {
+  return input.partnerIds.length > 0 ? addressBookOf(ownerId) : null;
+}
+
+/** Contacts of the address book get their agenda contact; the place is resolved: shared by create and update. */
+async function participantsAndPlace(tx: Tx, ownerId: string, input: ParsedAppointment, book: AddressBookOrNull) {
+  const partnerContacts = new Map<string, string>();
+  for (const partnerId of new Set(input.partnerIds)) {
+    if (book) partnerContacts.set(partnerId, await ensurePartnerContact(tx, ownerId, book, partnerId));
+  }
+  const where = await resolvePlace(tx, ownerId, input.place, partnerContacts);
+  const contactIds = [...new Set([...input.participantIds, ...partnerContacts.values()])];
+  return { where, contactIds };
+}
+
+/** What updateAppointmentRow needs, read and checked outside the transaction (see bookFor). */
+export async function prepareAppointmentUpdate(ownerId: string, rawInput: AppointmentInput): Promise<{ input: ParsedAppointment; book: AddressBookOrNull }> {
+  const input = appointmentSchema.parse(rawInput);
+  await assertOwned(ownerId, input);
+  return { input, book: await bookFor(ownerId, input) };
+}
+
+/**
+ * « Modifier le rendez-vous » (Thomas, 2026-11-03): title, who, where, how
+ * long, when, priority. Only the appointment row here; its validated items
+ * are brought in line by bridge/ops/edit.ts. False when it is not this owner's.
+ */
+export async function updateAppointmentRow(tx: Tx, ownerId: string, appointmentId: string, input: ParsedAppointment, book: AddressBookOrNull): Promise<boolean> {
+  const found = await tx.agendaAppointment.findFirst({ where: { id: appointmentId, ownerId }, select: { placeId: true, place: { select: { contactId: true } } } });
+  if (!found) return false;
+  const { where, contactIds } = await participantsAndPlace(tx, ownerId, input, book);
+  await tx.agendaAppointment.update({
+    where: { id_ownerId: { id: appointmentId, ownerId } },
+    data: {
+      title: input.title,
+      ...where,
+      durationMin: input.durationMin,
+      priority: input.priority,
+      ...whenColumns(input.when),
+      version: { increment: 1 },
+    },
+  });
+  await tx.agendaAppointmentParticipant.deleteMany({ where: { ownerId, appointmentId } });
+  await tx.agendaAppointmentParticipant.createMany({ data: contactIds.map((contactId) => ({ ownerId, appointmentId, contactId })) });
+  if (found.placeId !== where.placeId) await dropUnusedOutsidePlace(tx, ownerId, found.placeId, found.place?.contactId ?? null);
+  return true;
+}
+
+type EditPlace = AppointmentInput["place"];
+
+function editPlace(row: {
+  placeKind: "HOME" | "OFFICE" | "VISIO" | "PLACE";
+  place: { label: string; address: string; point: string; precision: string | null; contact: { id: string; partnerId: string | null } | null } | null;
+}): EditPlace {
+  if (row.placeKind === "VISIO") return { kind: "VISIO" };
+  // « Chez moi » left the form (2026-11-02): such an old appointment reads « Au bureau » once edited.
+  if (row.placeKind !== "PLACE" || row.place === null) return { kind: "OFFICE" };
+  const { contact } = row.place;
+  if (contact?.partnerId) return { kind: "PARTNER", partnerId: contact.partnerId };
+  if (contact) return { kind: "PERSON", personId: contact.id };
+  const point = unsealPoint(row.place.point);
+  const label = unseal(row.place.address);
+  if (!point || !label) return { kind: "OFFICE" };
+  const precision = placeSchema.shape.precision.safeParse(row.place.precision).data ?? "street";
+  return { kind: "OUTSIDE", label: row.place.label === OUTSIDE_LABEL ? "" : row.place.label, address: { label, lat: point.lat, lon: point.lon, precision } };
+}
+
+/** The appointment as the form fills it, to edit it. Null when it is not this owner's (or has no dates). */
+export async function appointmentForEdit(ownerId: string, appointmentId: string): Promise<AppointmentInput | null> {
+  const row = await db.agendaAppointment.findFirst({
+    where: { id: appointmentId, ownerId },
+    include: {
+      participants: { include: { contact: { select: { id: true, partnerId: true } } } },
+      place: { select: { label: true, address: true, point: true, precision: true, contact: { select: { id: true, partnerId: true } } } },
+    },
+  });
+  if (!row) return null;
+  const contacts = row.participants.map((p) => p.contact);
+  let when: AppointmentInput["when"];
+  if (row.whenKind === "FIXED" && row.date && row.timeMin !== null) when = { kind: "FIXED", date: toIso(row.date), timeMin: row.timeMin };
+  else if (row.whenKind !== "FIXED" && row.fromDate && row.toDate) when = { kind: row.whenKind, from: toIso(row.fromDate), to: toIso(row.toDate) };
+  else return null;
+  return {
+    title: row.title,
+    participantIds: contacts.filter((c) => c.partnerId === null).map((c) => c.id),
+    partnerIds: contacts.flatMap((c) => (c.partnerId === null ? [] : [c.partnerId])),
+    place: editPlace(row),
+    durationMin: row.durationMin,
+    when,
+    priority: row.priority,
+  };
 }
 
 /**

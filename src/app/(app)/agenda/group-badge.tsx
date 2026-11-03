@@ -18,6 +18,24 @@ const SWATCH: Readonly<Record<GroupColor, string>> = {
   slate: "bg-group-slate",
 };
 
+/**
+ * A validated block in its group's colour (Thomas, 2026-11-03): the bar and a
+ * light tint; the text stays foreground (the tint is 12 %, contrast kept) and
+ * the group's name is still written on the block.
+ */
+export const GROUP_CARD: Readonly<Record<GroupColor, string>> = {
+  blue: "border border-group-blue/40 border-l-4 border-l-group-blue bg-group-blue/10",
+  teal: "border border-group-teal/40 border-l-4 border-l-group-teal bg-group-teal/10",
+  green: "border border-group-green/40 border-l-4 border-l-group-green bg-group-green/10",
+  lime: "border border-group-lime/40 border-l-4 border-l-group-lime bg-group-lime/10",
+  amber: "border border-group-amber/40 border-l-4 border-l-group-amber bg-group-amber/10",
+  orange: "border border-group-orange/40 border-l-4 border-l-group-orange bg-group-orange/10",
+  red: "border border-group-red/40 border-l-4 border-l-group-red bg-group-red/10",
+  pink: "border border-group-pink/40 border-l-4 border-l-group-pink bg-group-pink/10",
+  purple: "border border-group-purple/40 border-l-4 border-l-group-purple bg-group-purple/10",
+  slate: "border border-group-slate/40 border-l-4 border-l-group-slate bg-group-slate/10",
+};
+
 export function GroupDot({ color, className }: { color: GroupColor; className?: string }) {
   return <span aria-hidden="true" className={cn("inline-block h-2.5 w-2.5 shrink-0 rounded-full", SWATCH[color], className)} />;
 }

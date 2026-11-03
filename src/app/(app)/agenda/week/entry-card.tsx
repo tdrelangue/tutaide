@@ -5,7 +5,7 @@ import { AlertTriangle, Ban, CalendarCheck, Check, CircleDashed, CircleSlash, Lo
 import { cn } from "@/lib/utils";
 import type { DayView, EntrySource, EntryView } from "@/lib/agenda/views/types";
 import { PRIORITY_LABEL, SOURCE_WORD, WARNING_LABEL, entryAccessibleName, timeRange } from "./format";
-import { GroupBadge } from "../group-badge";
+import { GROUP_CARD, GroupBadge } from "../group-badge";
 import { EntryMenu, type EntryAction } from "./entry-menu";
 import type { BindDrag } from "./use-pointer-drag";
 
@@ -25,6 +25,13 @@ export const SOURCE_STYLE: Readonly<Record<EntrySource, string>> = {
 };
 
 const WARNED_PIN_STYLE = "border-2 border-agenda-warn bg-agenda-warn-soft";
+
+/** A validated block takes its group's colour; every other state keeps its own style. */
+export function entryStyle(entry: EntryView): string {
+  if (entry.source === "PINNED" && entry.warning) return WARNED_PIN_STYLE;
+  if (entry.source === "VALIDATED" && entry.group) return GROUP_CARD[entry.group.color];
+  return SOURCE_STYLE[entry.source];
+}
 
 /**
  * Small secondary text on cards. text-muted-foreground drops to ≈4.3:1 on the
@@ -63,7 +70,7 @@ function cardClass(entry: EntryView, draggable: boolean, isDragged: boolean): st
     "flex h-full w-full flex-col overflow-hidden rounded-md px-1.5 py-0.5 text-left text-foreground shadow-sm",
     "focus-visible:relative focus-visible:z-20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1",
     "hover:z-10 hover:shadow-md motion-safe:transition-shadow",
-    entry.source === "PINNED" && entry.warning ? WARNED_PIN_STYLE : SOURCE_STYLE[entry.source],
+    entryStyle(entry),
     draggable && "cursor-grab touch-none active:cursor-grabbing",
     isDragged && "opacity-40",
   );
