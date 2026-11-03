@@ -91,9 +91,9 @@ export async function getMonth(date: IsoDate): Promise<AgendaDataResult<WeekView
 
 /** The same week with a fresh proposal (may take a few seconds: road times). Nothing is stored. */
 /** « Préparer ma proposition »: everyone who can be visited, by town and establishment, most urgent first. */
-export async function getPreparation(from: IsoDate, to: IsoDate): Promise<AgendaDataResult<PreparationView>> {
+export async function getPreparation(from: IsoDate, to: IsoDate, scale: "week" | "month" = "week"): Promise<AgendaDataResult<PreparationView>> {
   return run("getPreparation", async ({ ownerId }) => {
-    const period = weekPeriod(from, to);
+    const period = scale === "month" ? monthPeriod(from) : weekPeriod(from, to);
     const loaded = await loadPlannerState(ownerId, new Date());
     if (!loaded.ok) return fail(NOT_PLANNABLE_ERROR, loaded.issues);
     const start = period.from < loaded.state.today ? loaded.state.today : period.from;
@@ -104,6 +104,26 @@ export async function getPreparation(from: IsoDate, to: IsoDate): Promise<Agenda
 /** « Proposer pour moi » (no choice), or « Préparer ma proposition » with the persons and appointments picked. */
 export async function proposeWeek(from: IsoDate, to: IsoDate, choice: PlanChoiceInput = null): Promise<AgendaDataResult<WeekView>> {
   return run("proposeWeek", async ({ ownerId }) => weekResult(ownerId, weekPeriod(from, to), planDeps(), true, choiceSchema.parse(choice)));
+}
+
+/**
+ * The month (Thomas, 2026-11-03): « Créer une proposition » from the month view
+ * proposes for the month, from the week view for the week. Same two ways.
+ */
+export async function proposeMonth(date: IsoDate, choice: PlanChoiceInput = null): Promise<AgendaDataResult<WeekView>> {
+  return run("proposeMonth", async ({ ownerId }) => weekResult(ownerId, monthPeriod(date), planDeps(), true, choiceSchema.parse(choice)));
+}
+
+/** Validates the month's proposal the user saw, then returns the month (stored planning only). */
+export async function validateMonth(date: IsoDate, fingerprint: string, choice: PlanChoiceInput = null): Promise<AgendaDataResult<WeekView>> {
+  return run("validateMonth", async ({ ownerId }) => {
+    const period = monthPeriod(date);
+    const deps = planDeps();
+    const count = await validatePeriod(ownerId, period, fingerprintSchema.parse(fingerprint), deps, choiceSchema.parse(choice));
+    const month = await weekResult(ownerId, period, deps, false);
+    if (!month.success) return month;
+    return written(month.data, count === 0 ? "Rien de nouveau à valider." : `Mois validé : ${count} élément${count > 1 ? "s" : ""} ajouté${count > 1 ? "s" : ""} au planning.`);
+  });
 }
 
 /** Validates the proposal the user saw (`fingerprint`), then returns the week again (stored planning only). */

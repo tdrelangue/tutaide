@@ -197,6 +197,18 @@ describe("travel model from IGN, with cache and offline estimate", () => {
     expect(again.calls).toEqual([]);
   });
 
+  it("asks at most `maxRequests` pairs, the shortest first; the rest is estimated, then asked next time", async () => {
+    const f = fakeFetch(() => IGN_ROUTE);
+    const cache = memoryCache();
+    const { estimated } = await buildTravelModel([BRIVE, TULLE, OBJAT], { fetch: f, cache, maxRequests: 1 });
+    expect(f.calls).toHaveLength(1);
+    expect(estimated).toHaveLength(2);
+    expect(estimated).not.toContain(pairKey(BRIVE, OBJAT));
+    const again = fakeFetch(() => IGN_ROUTE);
+    await buildTravelModel([BRIVE, TULLE, OBJAT], { fetch: again, cache, maxRequests: 1 });
+    expect(again.calls).toHaveLength(1);
+  });
+
   it("counts no travel to a video call or within the same building", async () => {
     const { model } = await buildTravelModel([BRIVE, VISIO], {
       fetch: fakeFetch(() => IGN_ROUTE),

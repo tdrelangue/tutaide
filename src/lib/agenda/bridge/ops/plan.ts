@@ -18,6 +18,8 @@ export type PlanDeps = {
   readonly now: Date;
   /** Gap between two IGN requests; tests with a fake service set 0 (default: the engine's). */
   readonly ignMinIntervalMs?: number;
+  /** Most IGN requests per calculation (bridge/travel.ts MAX_IGN_REQUESTS by default). */
+  readonly maxIgnRequests?: number;
 };
 
 export type ProposeResult =

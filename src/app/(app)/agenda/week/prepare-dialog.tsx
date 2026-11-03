@@ -28,6 +28,8 @@ type Props = {
   readonly initial: PlanChoiceInput;
   readonly onClose: () => void;
   readonly onOrganise: (choice: NonNullable<PlanChoiceInput>) => void;
+  /** The month view prepares a month (Thomas: the view you are in decides). */
+  readonly scale?: "week" | "month";
 };
 
 /**
@@ -38,7 +40,7 @@ type Props = {
  * A town of no interest is hidden. Tutellia then organises exactly these
  * choices and suggests others on the way.
  */
-export function PrepareDialog({ open, from, to, initial, onClose, onOrganise }: Props) {
+export function PrepareDialog({ open, from, to, initial, onClose, onOrganise, scale = "week" }: Props) {
   return (
     <Dialog open={open} onOpenChange={(next) => !next && onClose()}>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
@@ -49,19 +51,19 @@ export function PrepareDialog({ open, from, to, initial, onClose, onOrganise }: 
             Tutellia organise ensuite les journées et vous suggère d&apos;autres personnes en route.
           </DialogDescription>
         </DialogHeader>
-        {open && <Body key={`${from}:${to}`} from={from} to={to} initial={initial} onClose={onClose} onOrganise={onOrganise} />}
+        {open && <Body key={`${from}:${to}`} from={from} to={to} initial={initial} onClose={onClose} onOrganise={onOrganise} scale={scale} />}
       </DialogContent>
     </Dialog>
   );
 }
 
-function usePreparation(from: IsoDate, to: IsoDate) {
+function usePreparation(from: IsoDate, to: IsoDate, scale: "week" | "month") {
   const [view, setView] = useState<PreparationView | null>(null);
   const query = useAgendaQuery();
   const { run } = query;
   useEffect(() => {
-    void run(() => getPreparation(from, to)).then((data) => data && setView(data));
-  }, [from, to, run]);
+    void run(() => getPreparation(from, to, scale)).then((data) => data && setView(data));
+  }, [from, to, scale, run]);
   return { view, query };
 }
 
@@ -74,8 +76,8 @@ function toggled(set: ReadonlySet<string>, ids: readonly string[], on: boolean):
   return next;
 }
 
-function Body({ from, to, initial, onClose, onOrganise }: Omit<Props, "open">) {
-  const { view, query } = usePreparation(from, to);
+function Body({ from, to, initial, onClose, onOrganise, scale = "week" }: Omit<Props, "open">) {
+  const { view, query } = usePreparation(from, to, scale);
   const [picked, setPicked] = useState<Set<string>>(() => new Set(initial?.persons ?? []));
   const [appointments, setAppointments] = useState<Set<string> | null>(initial ? new Set(initial.appointments) : null);
   const [hidden, setHidden] = useState<Set<string>>(new Set());

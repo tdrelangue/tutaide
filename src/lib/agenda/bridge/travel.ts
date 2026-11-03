@@ -25,6 +25,13 @@ export function placesForPeriod(state: PlannerState, from: IsoDate, to: IsoDate)
 }
 
 /**
+ * Most road times asked to IGN per calculation: about 20 s at IGN's pace, so
+ * a month (≈ 1 200 pairs) never runs past the server's time limit. The rest is
+ * estimated, then asked by the next calculations (the cache keeps them).
+ */
+const MAX_IGN_REQUESTS = 90;
+
+/**
  * Road times for the period: from this MJPM's cache, otherwise asked to IGN
  * (French public service, HTTPS only), otherwise estimated and listed as such.
  * New road times are saved for next time.
@@ -37,7 +44,7 @@ export async function travelFor(
 ): Promise<TravelMatrix> {
   const stored = await loadStoredCache(ownerId, deps.now);
   const cache = stored ?? createMemoryCache();
-  const matrix = await buildTravelModel(placesForPeriod(state, period.from, period.to), { fetch: deps.fetch, cache, minIntervalMs: deps.ignMinIntervalMs });
+  const matrix = await buildTravelModel(placesForPeriod(state, period.from, period.to), { fetch: deps.fetch, cache, minIntervalMs: deps.ignMinIntervalMs, maxRequests: deps.maxIgnRequests ?? MAX_IGN_REQUESTS });
   if (stored !== null) await saveStoredCache(ownerId, stored, deps.now);
   return matrix;
 }

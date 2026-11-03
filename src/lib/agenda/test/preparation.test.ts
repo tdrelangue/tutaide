@@ -53,4 +53,16 @@ describe("a prepared proposal", () => {
     await assert.rejects(validatePeriod(owner, WEEK, proposed.fingerprint, deps), "another choice is another proposal");
     assert.ok((await validatePeriod(owner, WEEK, proposed.fingerprint, deps, choice)) >= 1);
   });
+
+  it("works for a whole month too (the month view proposes a month)", async () => {
+    const owner = await seedOwner(client, "prepare-month@test.invalid");
+    const jean = await addPerson(client, owner, "Jean Bonneau");
+    const month = { from: "2026-11-01", to: "2026-11-30" };
+    const proposed = await proposePeriod(owner, month, deps, { persons: [jean], appointments: [] });
+    assert.ok(proposed.ok);
+    const days = new Set(proposed.proposal.plan.days.map((d) => d.date.slice(0, 7)));
+    assert.deepEqual([...days], ["2026-11"]);
+    assert.ok(proposed.proposal.plan.days.flatMap((d) => d.items).some((i) => i.task.person?.id === jean));
+    assert.ok((await validatePeriod(owner, month, proposed.fingerprint, deps, { persons: [jean], appointments: [] })) >= 1);
+  });
 });

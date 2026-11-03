@@ -5,7 +5,10 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { DayView, EntryView, IsoDate, WeekView } from "@/lib/agenda/views/types";
 import { NotesDialog, type NotesTarget } from "../notes/notes-dialog";
-import { getMonth } from "../planning-actions";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { getMonth, proposeMonth, validateMonth, type PlanChoiceInput } from "../planning-actions";
+import { PrepareDialog } from "../week/prepare-dialog";
 import { useAgendaQuery } from "../use-agenda-query";
 import { ERROR_TEXT } from "../address-field";
 import { BusyButton } from "../week/busy-button";
@@ -22,6 +25,8 @@ function useMonthData() {
   const [month, setMonth] = useState<IsoDate>(() => shiftMonth(localToday(), 0));
   const [view, setView] = useState<WeekView | null>(null);
   const monthRef = useRef(month);
+  /** « Préparer ma proposition » for the month: the persons picked; null = « Proposer pour moi ». */
+  const [choice, setChoice] = useState<PlanChoiceInput>(null);
 
   const load = useCallback(
     async (first: IsoDate) => {
@@ -33,15 +38,43 @@ function useMonthData() {
 
   useEffect(() => {
     monthRef.current = month;
+    setChoice(null);
     void load(month);
   }, [month, load]);
+
+  /** Proposes the month (with this choice, or the current one when none is given). */
+  const propose = useCallback(
+    async (next?: PlanChoiceInput) => {
+      const picked = next === undefined ? choice : next;
+      setChoice(picked);
+      const first = monthRef.current;
+      const data = await run(() => proposeMonth(first, picked), { isCurrent: () => monthRef.current === first });
+      if (data) setView(data);
+    },
+    [run, choice],
+  );
+  const validate = useCallback(async () => {
+    const first = monthRef.current;
+    const fingerprint = view?.proposal?.fingerprint;
+    if (!fingerprint) return;
+    const data = await run(() => validateMonth(first, fingerprint, choice), { isCurrent: () => monthRef.current === first });
+    if (!data) return;
+    setView(data);
+    setChoice(null);
+    toast.success("Mois validé : c'est maintenant votre planning.");
+  }, [run, view, choice]);
+  /** Back to the stored planning, nothing proposed. */
+  const clearProposal = useCallback(() => {
+    setChoice(null);
+    void load(monthRef.current);
+  }, [load]);
 
   const go = useCallback((delta: number) => setMonth((m) => shiftMonth(m, delta)), []);
   // « Ce mois-ci » follows the server's today once known.
   const goToday = useCallback(() => setMonth(shiftMonth(view?.today ?? localToday(), 0)), [view]);
   const retry = useCallback(() => void load(monthRef.current), [load]);
   const shown = view !== null && view.from === month ? view : null;
-  return { month, view: shown, isBusy, error, go, goToday, retry };
+  return { month, view: shown, isBusy, error, go, goToday, retry, propose, validate, clearProposal, choice };
 }
 
 /**
@@ -52,6 +85,7 @@ function useMonthData() {
 export function MonthView({ onOpenWeek }: { onOpenWeek: (date: IsoDate) => void }) {
   const data = useMonthData();
   const [selected, setSelected] = useState<DayView | null>(null);
+  const [isPreparing, setIsPreparing] = useState(false);
   const [notes, setNotes] = useState<NotesTarget | null>(null);
   function handleOpenNotes(entry: EntryView, day: DayView) {
     if (entry.itemKey) setNotes({ key: entry.itemKey, title: entry.title, when: `${day.label}, ${timeRange(entry.start, entry.end)}` });
@@ -66,6 +100,15 @@ export function MonthView({ onOpenWeek }: { onOpenWeek: (date: IsoDate) => void 
   return (
     <div className="space-y-3">
       <MonthToolbar label={monthLabel(data.month)} busy={data.isBusy} onPrevious={() => data.go(-1)} onToday={data.goToday} onNext={() => data.go(1)} />
+      <MonthProposalBar
+        view={data.view}
+        busy={data.isBusy}
+        pickedCount={data.choice ? data.choice.persons.length : null}
+        onPrepare={() => setIsPreparing(true)}
+        onAuto={() => void data.propose(null)}
+        onValidate={() => void data.validate()}
+        onClear={data.clearProposal}
+      />
       {data.error && (
         <p role="alert" className={ERROR_TEXT}>
           {data.error}{" "}
@@ -74,10 +117,58 @@ export function MonthView({ onOpenWeek }: { onOpenWeek: (date: IsoDate) => void 
       )}
       {data.view ? <MonthGrid view={data.view} onSelect={setSelected} /> : !data.error && <MonthSkeleton />}
       <p className="text-xs text-muted-foreground">
-        Vue indicative : touchez un jour pour voir son détail. Pour préparer ou modifier le planning, ouvrez la semaine.
+        Touchez un jour pour voir son détail. Pour déplacer un bloc ou répondre aux questions d&apos;une proposition, ouvrez la semaine.
       </p>
       <DayDetailDialog day={selected} onClose={handleClose} onOpenWeek={handleOpenWeek} onOpenNotes={handleOpenNotes} />
       <NotesDialog target={notes} onClose={() => setNotes(null)} />
+      <PrepareDialog
+        open={isPreparing}
+        from={data.month}
+        to={data.view?.to ?? data.month}
+        initial={data.choice}
+        scale="month"
+        onClose={() => setIsPreparing(false)}
+        onOrganise={(picked) => void data.propose(picked)}
+      />
+    </div>
+  );
+}
+
+type ProposalBarProps = {
+  readonly view: WeekView | null;
+  readonly busy: boolean;
+  readonly pickedCount: number | null;
+  readonly onPrepare: () => void;
+  readonly onAuto: () => void;
+  readonly onValidate: () => void;
+  readonly onClear: () => void;
+};
+
+/**
+ * A proposal for the whole month (Thomas, 2026-11-03: the view decides the
+ * period): the same two ways as the week, then « Valider le mois ».
+ */
+function MonthProposalBar({ view, busy, pickedCount, onPrepare, onAuto, onValidate, onClear }: ProposalBarProps) {
+  const proposal = view?.proposal ?? null;
+  if (!proposal) {
+    return (
+      <div className="flex flex-wrap items-center gap-2 rounded-lg border p-3 text-sm">
+        <p className="mr-auto text-xs text-muted-foreground">Créer une proposition pour tout le mois.</p>
+        <BusyButton size="sm" onClick={onPrepare} busy={busy} disabled={view === null}>Préparer ma proposition</BusyButton>
+        <BusyButton variant="outline" size="sm" onClick={onAuto} busy={busy} disabled={view === null}>Proposer pour moi</BusyButton>
+      </div>
+    );
+  }
+  const who = pickedCount === null ? "Proposée par Tutellia." : `Préparée par vous (${pickedCount} personne${pickedCount > 1 ? "s" : ""} choisie${pickedCount > 1 ? "s" : ""}).`;
+  return (
+    <div className="flex flex-wrap items-center gap-2 rounded-lg border p-3 text-sm">
+      <p className="mr-auto">
+        <span className="font-medium">Proposition du mois : {proposal.placedCount} visite{proposal.placedCount > 1 ? "s" : ""}</span>
+        <span className="block text-xs text-muted-foreground">{who} Rien n&apos;est planifié avant validation.</span>
+      </p>
+      <BusyButton variant="outline" size="sm" onClick={onPrepare} busy={busy}>{pickedCount === null ? "Préparer ma proposition" : "Modifier mes choix"}</BusyButton>
+      <Button type="button" variant="ghost" size="sm" onClick={onClear} disabled={busy}>Abandonner la proposition</Button>
+      <BusyButton size="sm" onClick={onValidate} busy={busy}>Valider le mois</BusyButton>
     </div>
   );
 }

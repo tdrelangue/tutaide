@@ -40,6 +40,12 @@ export interface MatrixDeps {
   readonly now?: () => number;
   /** Minimum gap between two request starts (default MIN_INTERVAL_MS; 0 in tests with a fake service). */
   readonly minIntervalMs?: number;
+  /**
+   * Most pairs asked to IGN in one calculation (Thomas, 2026-11-03: spare the
+   * requests). The others are estimated now and asked in a later calculation,
+   * the cache filling up little by little. Absent = no limit.
+   */
+  readonly maxRequests?: number;
 }
 
 export interface TravelMatrix {
@@ -196,9 +202,12 @@ export async function buildTravelModel(
     if (hit) known.set(pairKey(a, b), hit);
     else missing.push([a, b]);
   }
-  const answers = await fetchAll(missing, deps);
-  const estimated: string[] = [];
-  missing.forEach(([a, b], i) => {
+  // The shortest legs first: they shape the order of a tour; long ones are well estimated in a straight line.
+  const byLength = [...missing].sort((p, q) => straightLineTravel.km(p[0], p[1]) - straightLineTravel.km(q[0], q[1]));
+  const asked = deps.maxRequests === undefined ? byLength : byLength.slice(0, deps.maxRequests);
+  const answers = await fetchAll(asked, deps);
+  const estimated: string[] = byLength.slice(asked.length).map(([a, b]) => pairKey(a, b));
+  asked.forEach(([a, b], i) => {
     const route = answers[i];
     if (!route) {
       estimated.push(pairKey(a, b));
