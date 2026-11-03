@@ -81,7 +81,13 @@ export interface Contact {
   readonly visits: VisitPlan | null;
   readonly prefDay: PrefDayRule | null;
   /** « Adresse temporaire » (Thomas, 2026-11-03): visits due between `from` and `to` go there. */
-  readonly temporary?: { readonly place: Place; readonly from: IsoDate; readonly to: IsoDate } | null;
+  readonly temporary?: {
+    readonly place: Place;
+    readonly from: IsoDate;
+    readonly to: IsoDate;
+    /** Her hours while there (an EHPAD: afternoons only); absent = her usual `avail`. */
+    readonly avail?: readonly Availability[] | null;
+  } | null;
 }
 
 interface RuleBase {

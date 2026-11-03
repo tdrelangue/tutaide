@@ -36,6 +36,18 @@ describe("mapContact basics", () => {
     expect(value?.temporary).toMatchObject({ from: "2026-10-01", to: "2026-10-31", place: { id: "temp" } });
   });
 
+  it("a temporary EHPAD cuts her hours to the afternoon; leaving her EHPAD gives her own hours back", () => {
+    const dated = { position: 90, fromDate: new Date("2026-10-01T00:00:00Z"), toDate: new Date("2026-10-31T00:00:00Z") };
+    const toEhpad = [placeRow({ id: "home" }), placeRow({ id: "temp", ...dated, address: seal("EHPAD les Tilleuls, 3 rue du Port") })];
+    const there = mapContact(input({}, toEhpad), TODAY).value?.temporary;
+    expect(there?.avail).toEqual([{ dows: [1, 2, 3, 4, 5, 6, 7], from: 840, to: 1050 }]);
+    const fromEhpad = [placeRow({ id: "home" }), placeRow({ id: "temp", ...dated, address: seal("CH de Tulle") })];
+    const out = mapContact(input({ inEhpad: true }, fromEhpad), TODAY).value;
+    expect(out?.avail).toEqual([{ dows: [1, 2, 3, 4, 5, 6, 7], from: 840, to: 1050 }]);
+    expect(out?.temporary?.avail).toBeNull();
+    const plain = [placeRow({ id: "home" }), placeRow({ id: "temp", ...dated, address: seal("CH de Tulle") })];
+    expect(mapContact(input({}, plain), TODAY).value?.temporary).not.toHaveProperty("avail");
+  });
   it("orders places by position, then id", () => {
     const places = [
       placeRow({ id: "b", position: 1, label: "B" }),

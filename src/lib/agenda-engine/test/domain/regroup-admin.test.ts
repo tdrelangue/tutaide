@@ -1,6 +1,6 @@
 // Thomas, 2026-11-03: first visits spread by town, a day draws its area, people offered in advance, admin time kept.
 import { describe, expect, it } from "vitest";
-import { buildTasks, createContext, freshWeeks, solve } from "../../domain";
+import { apptTask, availWindows, buildTasks, createContext, freshWeeks, solve } from "../../domain";
 import type { Contact, Place } from "../../domain";
 import { FRI, H, MON, place, protege, settings, state } from "./fixtures";
 
@@ -115,5 +115,45 @@ describe("« Préparer ma proposition »: exactly the persons picked, the rest o
     expect(later?.task.early).toBeUndefined();
     expect(items.find((i) => i.task.person?.id === "due")?.task.early).toBe(true);
     expect(items.some((i) => i.task.person?.id === "objat")).toBe(false);
+  });
+});
+
+describe("« Adresse temporaire »: appointments at her place and EHPAD hours (Thomas, 2026-11-03)", () => {
+  const ehpad = { ...at("chandou", 45.284, 1.767, "19000 Tulle"), site: "190011395" };
+  const home = OBJAT(1);
+  const person: Contact = {
+    ...protege("a", "a", { at: home, last: "2026-09-19", minutes: 60 }),
+    temporary: { place: ehpad, from: MON, to: FRI, avail: [{ dows: [1, 2, 3, 4, 5], from: 14 * 60, to: 17 * 60 + 30 }] },
+  };
+  const appt = (date: string) => ({
+    id: "rdv",
+    title: "Rendez-vous",
+    participants: ["a"],
+    placeId: "a-home",
+    dur: 30,
+    when: { kind: "FIXED" as const, date, time: 10 * 60 },
+    priority: "NORMAL" as const,
+  });
+
+  it("« chez la personne » goes to the temporary address while it lasts, home after", () => {
+    const ctx = createContext(state({ contacts: [person] }));
+    expect(apptTask(ctx, appt(MON))?.place.id).toBe("chandou");
+    expect(apptTask(ctx, appt("2026-10-26"))?.place.id).toBe("a-home");
+  });
+
+  it("an appointment elsewhere stays where it is", () => {
+    const ctx = createContext(state({ contacts: [person] }));
+    expect(apptTask(ctx, { ...appt(MON), placeId: "office" })?.place.id).toBe("office");
+  });
+
+  it("in a temporary EHPAD her visits are in the afternoon; her usual hours come back after", () => {
+    const ctx = createContext(state({ contacts: [person] }));
+    const visit = buildTasks(ctx, MON, FRI, new Set()).tasks[0];
+    if (!visit) throw new Error("expected a visit");
+    const wins = availWindows(ctx, visit, MON);
+    expect(wins.length).toBeGreaterThan(0);
+    expect(wins.every(([from, to]) => from >= 14 * 60 && to <= 17 * 60 + 30)).toBe(true);
+    const later = availWindows(ctx, visit, "2026-10-26");
+    expect(later.some(([from]) => from < 12 * 60)).toBe(true);
   });
 });

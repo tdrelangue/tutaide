@@ -1,7 +1,7 @@
 import type { AgendaAvailability, AgendaContact, AgendaPlace } from "@prisma/client";
 import type { Availability, Contact, Place, PrefDayRule, VisitPlan } from "../../../agenda-engine/domain";
 import { isValidVisitPlan } from "../../../agenda-engine/domain/recurrence";
-import { EHPAD_VISIT_FROM, EHPAD_VISIT_TO, findEhpad, livesInEhpad } from "../../ehpad";
+import { EHPAD_VISIT_FROM, EHPAD_VISIT_TO, findEhpad, livesInEhpad, mentionsEhpad } from "../../ehpad";
 import { isIsoDow, toIso } from "../dates";
 import { ABSENT, found, groupBy, makeIssue, mapMany, rejected } from "../issues";
 import type { Many, Mapped } from "../issues";
@@ -107,14 +107,39 @@ function mapPrefDay(row: AgendaContact): Mapped<PrefDayRule> {
 type Temporary = NonNullable<Contact["temporary"]>;
 
 /** The « Adresse temporaire » row (dated), as the engine reads it; an EHPAD gets its site for grouping. */
-function mapTemporary(rows: readonly AgendaPlace[]): Mapped<Temporary> {
+function mapTemporary(rows: readonly AgendaPlace[], hours: TemporaryHours): Mapped<Temporary> {
   const row = rows.find((p) => p.fromDate !== null && p.toDate !== null);
   if (!row || !row.fromDate || !row.toDate) return ABSENT;
   const mapped = mapPlaceRow(row, "contact", row.id);
   if (mapped.value === null) return rejected(mapped.issues);
   const place = mapped.value;
   const ehpad = findEhpad(place.address, place);
-  return found({ place: ehpad ? { ...place, site: ehpad.id } : place, from: toIso(row.fromDate), to: toIso(row.toDate) });
+  const inEhpad = hours.protege && (ehpad !== null || mentionsEhpad(place.address));
+  return found({
+    place: ehpad ? { ...place, site: ehpad.id } : place,
+    from: toIso(row.fromDate),
+    to: toIso(row.toDate),
+    ...temporaryAvail(inEhpad, hours),
+  });
+}
+
+type TemporaryHours = {
+  readonly protege: boolean;
+  /** Her own hours, before any EHPAD cut. */
+  readonly raw: readonly Availability[] | null;
+  /** Her home is an EHPAD (her usual hours are afternoons only). */
+  readonly homeInEhpad: boolean;
+};
+
+/**
+ * Her hours at the temporary address (Thomas, 2026-11-03): in an EHPAD,
+ * afternoons only, like a resident; out of her EHPAD (hospital…), her own
+ * hours without the EHPAD cut; otherwise her usual hours (nothing to say).
+ */
+function temporaryAvail(inEhpad: boolean, hours: TemporaryHours): { avail?: readonly Availability[] | null } {
+  if (inEhpad) return { avail: afternoonOnly(hours.raw) };
+  if (hours.homeInEhpad) return { avail: hours.raw };
+  return {};
 }
 
 /** Always yields a contact; what could not be used is reported in the issues. */
@@ -122,11 +147,13 @@ export function mapContact(input: ContactInput, today: string): Mapped<Contact> 
   const { row } = input;
   // A dated (temporary) address is never one of the usual places.
   const places = mapPlaces(row, input.places.filter((p) => p.fromDate === null));
-  const temporary = mapTemporary(input.places);
   const avail = mapAvail(row.id, input.avails);
   const visits = mapVisits(row, today);
   const prefDay = mapPrefDay(row);
-  const ehpad = row.category === "PROTEGE" ? withEhpad(row, places.values, avail.value) : { places: places.values, avail: avail.value };
+  const protege = row.category === "PROTEGE";
+  const ehpad = protege ? withEhpad(row, places.values, avail.value) : { places: places.values, avail: avail.value };
+  const homeInEhpad = protege && ehpad.avail !== avail.value;
+  const temporary = mapTemporary(input.places, { protege, raw: avail.value, homeInEhpad });
   return found(
     {
       id: row.id,

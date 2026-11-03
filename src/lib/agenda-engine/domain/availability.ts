@@ -66,10 +66,13 @@ function computeWindows(
   for (const id of task.participants) {
     const c = ctx.contacts.get(id);
     if (!c) continue;
-    if (c.avail)
+    // At a temporary address, its own hours (an EHPAD: afternoons; back from one: her usual ones).
+    const temp = c.temporary;
+    const avail = temp && temp.avail !== undefined && date >= temp.from && date <= temp.to ? temp.avail : c.avail;
+    if (avail)
       wins = intersect(
         wins,
-        c.avail
+        avail
           .filter((a) => a.dows.includes(dow))
           .map((a): TimeWindow => [a.from, a.to]),
       );

@@ -46,8 +46,9 @@ const NO_MOVE = {
 
 /** An appointment as a task: its own window, or its fixed time. Null when its place is unknown. */
 export function apptTask(ctx: PlannerContext, ap: Appointment): Task | null {
-  const place = ctx.places.get(ap.placeId);
-  if (!place) return null;
+  const stored = ctx.places.get(ap.placeId);
+  if (!stored) return null;
+  const place = atTemporary(ctx, ap, stored);
   const base = {
     ...NO_MOVE,
     id: ap.id,
@@ -78,6 +79,20 @@ export function apptTask(ctx: PlannerContext, ap: Appointment): Task | null {
     latest: ap.when.to,
     due: ap.when.from,
   };
+}
+
+/**
+ * « Chez la personne » while she is somewhere else (hospital, EHPAD…; Thomas,
+ * 2026-11-03): the appointment goes to her temporary address when it covers
+ * the appointment's day (its fixed date, or the start of its window).
+ */
+function atTemporary(ctx: PlannerContext, ap: Appointment, stored: Place): Place {
+  const day = ap.when.kind === "FIXED" ? ap.when.date : ap.when.from;
+  for (const id of ap.participants) {
+    const c = ctx.contacts.get(id);
+    if (c?.places[0]?.id === ap.placeId && c.temporary) return placeOn(c, stored, day);
+  }
+  return stored;
 }
 
 /** A validated item the user allowed to move, as a task kept inside its own window. */
