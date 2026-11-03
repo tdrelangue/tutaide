@@ -527,6 +527,9 @@ model AgendaSettings {
   lunchStartMin   Int?     @default(750)
   lunchEndMin     Int?     @default(810)
   defaultVisitMin Int      @default(30)
+  /// Minimum office time kept free every working day, minutes (Thomas, 2026-11-03): the planner
+  /// never proposes more visits + road than the day minus lunch minus this. Null = no minimum.
+  minAdminMin     Int?
   timezone        String   @default("Europe/Paris")
   /// Optimistic locking: the MJPM and an assistant may edit at the same time.
   version         Int      @default(0)

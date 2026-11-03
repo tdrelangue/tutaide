@@ -148,6 +148,7 @@ function CardTags({ entry }: { entry: EntryView }) {
       <span className="font-medium">{SOURCE_WORD[entry.source]}</span>
       {entry.group && <GroupBadge group={entry.group} />}
       {entry.priority && <PriorityTag priority={entry.priority} />}
+      {entry.early && <span className="rounded border border-border px-1" title="Pas encore à voir : proposé car la journée passe par sa commune">En avance</span>}
       {entry.moved && <span className="rounded border border-agenda-warn px-1">Décalé</span>}
       {entry.rescheduled && <span className="rounded border border-agenda-warn px-1">À reprogrammer</span>}
     </span>

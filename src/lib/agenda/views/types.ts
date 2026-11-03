@@ -62,6 +62,8 @@ export type EntryView = {
   readonly priority: PriorityValue | null;
   /** Visit placed again after « N'a pas eu lieu ». */
   readonly rescheduled: boolean;
+  /** Proposed visit not due yet, offered because the day goes to that area (« En avance »). */
+  readonly early?: boolean;
   /** Validated item shifted once by an urgent insertion (« décalé »). */
   readonly moved: boolean;
   /** For PINNED: why the chosen time breaks a rule (shown, never refused). */

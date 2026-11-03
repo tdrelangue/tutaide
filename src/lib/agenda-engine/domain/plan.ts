@@ -72,9 +72,9 @@ export function solve(
   P1: IsoDate,
   opts: RuleOptions = stateRuleOptions(ctx),
 ): Plan {
-  const { fixed, tasks, held, invalid } = buildTasks(ctx, P0, P1, new Set());
+  const { fixed, tasks, held, invalid, early } = buildTasks(ctx, P0, P1, new Set());
   const days = buildDays(ctx, P0, P1, fixed, held, opts);
-  const placement = placeTasks(ctx, days, tasks, opts, P1);
+  const placement = placeTasks(ctx, days, tasks, opts, P1, early);
   const planned = days.map((d) => plannedDay(ctx, d, placement));
   const unplaced: Unplaced[] = [...invalid, ...placement.unplaced];
   return {

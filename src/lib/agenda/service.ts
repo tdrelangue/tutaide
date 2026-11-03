@@ -26,6 +26,8 @@ export type AgendaSettingsView = {
   /** Strict limit, drive home included (null = same as the wished end). */
   dayEndLimitMinutes: number | null;
   defaultVisitMinutes: number;
+  /** Administrative time kept free every working day (null = no minimum). */
+  minAdminMinutes: number | null;
 };
 
 /** A protected person to visit (an AgendaContact of category PROTEGE). */
@@ -59,6 +61,7 @@ const DEFAULT_SETTINGS: AgendaSettingsView = {
   dayStartMinutes: 510,
   dayEndMinutes: 1080,
   dayEndLimitMinutes: 1140,
+  minAdminMinutes: null,
   defaultVisitMinutes: 30,
 };
 
@@ -93,6 +96,7 @@ export async function getAgendaSettings(ownerId: string): Promise<AgendaSettings
     dayEndMinutes: row.dayEndMin,
     dayEndLimitMinutes: row.dayEndLimitMin,
     defaultVisitMinutes: row.defaultVisitMin,
+    minAdminMinutes: row.minAdminMin,
   };
 }
 
@@ -110,6 +114,7 @@ function settingsColumns(input: AgendaSettingsInput) {
     dayEndMin: input.dayEndMinutes,
     dayEndLimitMin: input.dayEndLimitMinutes,
     defaultVisitMin: input.defaultVisitMinutes,
+    minAdminMin: input.minAdminMinutes ?? null,
   };
 }
 

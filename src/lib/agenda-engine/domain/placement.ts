@@ -1,7 +1,7 @@
 import { availWindows } from "./availability";
 import type { PlannerContext } from "./context";
 import { binds } from "./days";
-import { groupingCost } from "./grouping";
+import { groupingCost, sameArea } from "./grouping";
 import type { IsoDate, PrefDayRule, SlotRule } from "./model";
 import type {
   BentRule,
@@ -322,22 +322,79 @@ export function sortTasks(tasks: readonly Task[]): Task[] {
   );
 }
 
-/** Greedy cheapest insertion, then 2-opt per day. Shared by full plans and insertions. */
+interface Routes {
+  readonly ctx: PlannerContext;
+  readonly routes: Map<IsoDate, readonly Task[]>;
+  readonly days: readonly Day[];
+  readonly opts: RuleOptions;
+}
+
+/** Adds `task` to `day` if it fits there now (its rules, the day's room and times); true when added. */
+function joinDay(r: Routes, day: Day, task: Task): boolean {
+  if (task.earliest > day.date || task.latest < day.date) return false;
+  if (!allowedDay(r.ctx, task, day, r.opts, false)) return false;
+  const route = r.routes.get(day.date) ?? [];
+  if (!hasRoom(day, task, false, route.length)) return false;
+  const ins = tryInsert(r.ctx, day, route, task);
+  if (!ins) return false;
+  r.routes.set(day.date, ins.order);
+  return true;
+}
+
+/**
+ * A visit just went to a town: the other visits of that town and of the
+ * neighbouring ones join the same day while it has room (Thomas,
+ * 2026-11-03: « quitte à être à Tulle, autant visiter les gens de Tulle »),
+ * nearest first. Returns the ids placed.
+ */
+function pullArea(r: Routes, day: Day, placed: Task, waiting: readonly Task[]): Set<string> {
+  const joined = new Set<string>();
+  const mates = waiting
+    .filter((t) => t.kind === "VISIT" && t.id !== placed.id && sameArea(t.place, placed.place))
+    .sort((a, b) => Math.hypot(a.place.lat - placed.place.lat, a.place.lon - placed.place.lon) - Math.hypot(b.place.lat - placed.place.lat, b.place.lon - placed.place.lon));
+  for (const mate of mates) if (joinDay(r, day, mate)) joined.add(mate.id);
+  return joined;
+}
+
+/** Last pass: a day that goes to a town offers its people in advance, if it still has room. */
+function offerEarly(r: Routes, early: readonly Task[]): void {
+  const offered = new Set<string>();
+  for (const day of r.days) {
+    const route = r.routes.get(day.date) ?? [];
+    if (route.length === 0) continue;
+    for (const task of early) {
+      if (offered.has(task.id) || !route.some((t) => t.kind === "VISIT" && sameArea(t.place, task.place))) continue;
+      if (joinDay(r, day, task)) offered.add(task.id);
+    }
+  }
+}
+
+/**
+ * Greedy cheapest insertion, then 2-opt per day. Shared by full plans and
+ * insertions. Each placed visit draws its area onto the same day; then the
+ * days going somewhere offer that area's people in advance (`early`).
+ */
 export function placeTasks(
   ctx: PlannerContext,
   days: readonly Day[],
   tasks: readonly Task[],
   opts: RuleOptions,
   P1: IsoDate,
+  early: readonly Task[] = [],
 ): Placement {
   const routes = new Map<IsoDate, readonly Task[]>(
     days.map((d) => [d.date, []]),
   );
+  const r: Routes = { ctx, routes, days, opts };
   const late: LateItem[] = [];
   const unplaced: Unplaced[] = [];
   const bent: BentRule[] = [];
   const postponed: Task[] = [];
-  for (const task of sortTasks(tasks)) {
+  const queue = sortTasks(tasks);
+  const done = new Set<string>();
+  for (const task of queue) {
+    if (done.has(task.id)) continue;
+    done.add(task.id);
     const out = chooseDay({ ctx, routes, task, days, opts }, P1);
     if (out.kind === "postponed") postponed.push(task);
     else if (out.kind === "unplaced") unplaced.push(out.unplaced);
@@ -345,8 +402,13 @@ export function placeTasks(
       routes.set(out.cand.day.date, out.cand.order);
       if (out.bent) bent.push(out.bent);
       if (out.late) late.push(out.late);
+      if (task.kind === "VISIT") {
+        const waiting = queue.filter((t) => !done.has(t.id));
+        for (const id of pullArea(r, out.cand.day, task, waiting)) done.add(id);
+      }
     }
   }
+  offerEarly(r, early);
   for (const day of days)
     routes.set(day.date, twoOpt(ctx, day, routes.get(day.date) ?? []));
   return { routes, late, unplaced, bent, postponed };

@@ -37,6 +37,11 @@ export interface Task {
   readonly rescheduled: boolean;
   /** Placed by hand by the user (dragged): it stays where it is. */
   readonly pinned: boolean;
+  /**
+   * Not due in the period: offered because the day already goes to that town
+   * (« quitte à être à Tulle », Thomas 2026-11-03). Only ever a suggestion.
+   */
+  readonly early?: boolean;
 }
 
 export type BlockKind = "lunch" | "busy" | "event" | "held";

@@ -137,6 +137,7 @@ export function entryAccessibleName(entry: EntryView, dayLabel: string): string 
     SOURCE_WORD[entry.source],
     entry.group ? `groupe ${entry.group.name}` : null,
     entry.priority ? `priorité ${PRIORITY_LABEL[entry.priority]}` : null,
+    entry.early ? "en avance" : null,
     entry.moved ? "décalé" : null,
     entry.rescheduled ? "à reprogrammer" : null,
     entry.warning ? `attention : ${WARNING_LABEL[entry.warning]}` : null,

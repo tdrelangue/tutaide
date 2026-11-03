@@ -17,12 +17,15 @@ import {
   nextVisitDue,
   rhythmAnchor,
 } from "./recurrence";
+import { cityKey } from "./grouping";
 import { addDays } from "./time";
 
 /** Max visit occurrences generated per person and period. */
 const MAX_OCCURRENCES = 12;
 
 export interface TaskSet {
+  /** Visits not due in the period, offered only on a day that already goes to their town. */
+  readonly early?: readonly Task[];
   /** Fixed-time appointments of the period (not yet validated). */
   readonly fixed: readonly Task[];
   /** Everything the planner must place. */
@@ -180,11 +183,52 @@ function visitTask(
   };
 }
 
+/** People of one town given the same week, at most this many (a big town spreads over several weeks). */
+const FRESH_PER_WEEK_AND_TOWN = 8;
+
+/** Never seen and last visit unknown: the people the first round must spread out. */
+function isFresh(ctx: PlannerContext, person: Contact): boolean {
+  return (
+    person.visits?.startedOn !== undefined &&
+    lastSeen(ctx, person).date === null &&
+    rhythmAnchor(ctx, person).source === null
+  );
+}
+
+/** Stable small number from a text (same town, same week, every time it is computed). */
+function textHash(text: string): number {
+  let h = 0;
+  for (const ch of text) h = (h * 31 + (ch.codePointAt(0) ?? 0)) % 1_000_003;
+  return h;
+}
+
 /**
- * Person whose last visit is unknown and not seen since: the first visit is
- * spread over the whole interval from `startedOn`, at low priority (placed
- * where it fits best, postponed quietly otherwise). Null once that interval
- * is over or a later visit is known: the usual rhythm applies.
+ * Week rank of each person's first visit (Thomas, 2026-11-03): a caseload
+ * entered at once is spread over the interval from the start, so the next
+ * round is regular too — and a town's people share their week (« quitte à
+ * être à Tulle »), by packs of FRESH_PER_WEEK_AND_TOWN. Pure and stable.
+ */
+export function freshWeeks(ctx: PlannerContext): ReadonlyMap<string, number> {
+  const byTown = new Map<string, Contact[]>();
+  for (const person of ctx.state.contacts) {
+    if (!isFresh(ctx, person)) continue;
+    const town = cityKey(person.places[0]?.address ?? "") ?? "?";
+    byTown.set(town, [...(byTown.get(town) ?? []), person]);
+  }
+  const out = new Map<string, number>();
+  for (const [town, people] of byTown) {
+    const sorted = [...people].sort((a, b) => (a.id < b.id ? -1 : 1));
+    sorted.forEach((p, i) => out.set(p.id, textHash(town) + Math.floor(i / FRESH_PER_WEEK_AND_TOWN)));
+  }
+  return out;
+}
+
+/**
+ * Person whose last visit is unknown and not seen since: the first visit
+ * goes in the week given by `freshWeeks`, inside the first interval from
+ * `startedOn`, at low priority (postponed quietly when that week is full,
+ * then offered the week after). Null once that interval is over or a later
+ * visit is known: the usual rhythm applies.
  */
 function freshStart(
   ctx: PlannerContext,
@@ -192,16 +236,23 @@ function freshStart(
   visits: VisitPlan,
   P0: IsoDate,
   P1: IsoDate,
+  rank: number | undefined,
 ): { first: Occurrence; nextDue: IsoDate } | null {
   const { startedOn } = visits;
-  if (startedOn === undefined) return null;
-  if (lastSeen(ctx, person).date !== null || rhythmAnchor(ctx, person).source !== null) return null;
+  if (startedOn === undefined || !isFresh(ctx, person)) return null;
   const interval = intervalDays(visits);
-  const latest = addDays(startedOn, interval);
-  if (latest < P0 || startedOn > P1) return null;
-  const due = addDays(startedOn, interval / 2);
+  const end = addDays(startedOn, interval);
+  if (end < P0 || startedOn > P1) return null;
+  const weeks = Math.max(1, Math.floor(interval / 7));
+  const weekStart = addDays(startedOn, ((rank ?? 0) % weeks) * 7);
+  const weekEnd = addDays(weekStart, 6) > end ? end : addDays(weekStart, 6);
+  // Its week went by without room: from now on, within the interval.
+  const missed = weekEnd < P0;
+  const earliest = missed ? P0 : weekStart < P0 ? P0 : weekStart;
+  const latest = missed ? (addDays(P0, 6) > end ? end : addDays(P0, 6)) : weekEnd;
+  const due = addDays(earliest, 2) > latest ? latest : addDays(earliest, 2);
   return {
-    first: { earliest: startedOn < P0 ? P0 : startedOn, latest, due, overdue: false },
+    first: { earliest, latest, due, overdue: false },
     nextDue: addDays(due, interval),
   };
 }
@@ -212,6 +263,7 @@ function visitTasks(
   person: Contact,
   P0: IsoDate,
   P1: IsoDate,
+  freshRanks: ReadonlyMap<string, number>,
 ): Task[] | Unplaced {
   const { visits } = person;
   if (!visits || person.category !== "PROTEGE" || person.status !== "ACTIVE")
@@ -226,7 +278,7 @@ function visitTasks(
   if (!isValidVisitPlan(visits)) return invalid("INVALID_FREQUENCY");
   const place = person.places[0];
   if (!place) return invalid("NO_ADDRESS");
-  const fresh = freshStart(ctx, person, visits, P0, P1);
+  const fresh = freshStart(ctx, person, visits, P0, P1, freshRanks.get(person.id));
   const due = fresh?.nextDue ?? nextVisitDue(ctx, person);
   if (due === null) return [];
   const missed = missedSinceLastSeen(ctx, person);
@@ -340,6 +392,28 @@ export function appointmentTasks(
   return out;
 }
 
+/**
+ * The next visit of each active person with nothing in the period: a
+ * candidate to be seen in advance when a day already goes to their area.
+ */
+function earlyTasks(ctx: PlannerContext, P0: IsoDate, P1: IsoDate, busy: ReadonlySet<string>): Task[] {
+  const out: Task[] = [];
+  for (const person of ctx.state.contacts) {
+    const { visits } = person;
+    const place = person.places[0];
+    if (!visits || !place || busy.has(person.id) || person.category !== "PROTEGE" || person.status !== "ACTIVE") continue;
+    if (!isValidVisitPlan(visits)) continue;
+    const due = nextVisitDue(ctx, person);
+    // Keyed on the period, not on the real due date: « Pas cette fois » refuses this offer only,
+    // never the visit at its normal time.
+    const id = `${person.id}@${P0}`;
+    if (due === null || due <= P1 || ctx.state.skips.includes(id)) continue;
+    const o = { earliest: P0, latest: P1, due, overdue: false };
+    out.push({ ...visitTask(ctx, person, place, o, false), id, priority: "LOW", early: true });
+  }
+  return out;
+}
+
 /** Everything the period must hold. */
 export function buildTasks(
   ctx: PlannerContext,
@@ -351,8 +425,9 @@ export function buildTasks(
   const { held, moving } = heldItems(ctx, P0, P1, movable);
   const visits: Task[] = [];
   const invalid = [...appts.invalid];
+  const freshRanks = freshWeeks(ctx);
   for (const person of ctx.state.contacts) {
-    const out = visitTasks(ctx, person, P0, P1);
+    const out = visitTasks(ctx, person, P0, P1, freshRanks);
     if (Array.isArray(out)) visits.push(...out);
     else invalid.push(out);
   }
@@ -362,5 +437,13 @@ export function buildTasks(
     ...visits,
     ...moving.map((v) => itemToTask(ctx, v)),
   ].filter((t) => !pinnedIds.has(t.id));
-  return { fixed: fixedEvents(ctx, P0, P1, appts), tasks, held, invalid };
+  // Anyone already in the period (a visit, an appointment, a validated item) is not offered early.
+  const busy = new Set([
+    // A visit whose window is outside the period (a first visit due another week) leaves the person free.
+    ...tasks.filter((t) => t.earliest <= P1 && t.latest >= P0).flatMap((t) => t.participants),
+    ...held.flatMap((v) => v.participants),
+    ...appts.fixed.flatMap((t) => t.participants),
+    ...ctx.state.pins.flatMap((p) => p.participants),
+  ]);
+  return { fixed: fixedEvents(ctx, P0, P1, appts), tasks, held, invalid, early: earlyTasks(ctx, P0, P1, busy) };
 }

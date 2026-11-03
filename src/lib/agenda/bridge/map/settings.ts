@@ -34,5 +34,6 @@ export function mapSettings(row: AgendaSettings | null): Mapped<Settings> {
     dayEndLimit: row.dayEndLimitMin,
     lunch: lunchOf(row),
     visitMinutes: row.defaultVisitMin,
+    minAdmin: row.minAdminMin,
   });
 }

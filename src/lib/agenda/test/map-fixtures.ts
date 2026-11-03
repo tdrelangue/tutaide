@@ -33,6 +33,7 @@ export function settingsRow(over: Partial<AgendaSettings> = {}): AgendaSettings 
     lunchStartMin: 750,
     lunchEndMin: 810,
     defaultVisitMin: 60,
+    minAdminMin: null,
     timezone: "Europe/Paris",
     version: 0,
     createdAt: day("2026-01-01"),

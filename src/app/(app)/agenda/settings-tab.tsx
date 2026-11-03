@@ -24,6 +24,9 @@ const WEEKDAYS: { value: number; label: string }[] = [
   { value: 7, label: "Dimanche" },
 ];
 
+/** Hours of office work kept free every day (Thomas, 2026-11-03): 1 h to 6 h, or typed. */
+const ADMIN_CHOICES: readonly number[] = [60, 120, 180, 240, 300, 360];
+
 /** Where the MJPM starts and ends their rounds, and when they work. */
 export function SettingsTab({ profile }: { profile: AgendaSettingsView }) {
   const [home, setHome] = useState<Place | null>(profile.home);
@@ -35,6 +38,7 @@ export function SettingsTab({ profile }: { profile: AgendaSettingsView }) {
     profile.dayEndLimitMinutes === null ? "" : minutesToTime(profile.dayEndLimitMinutes)
   );
   const [visitMinutes, setVisitMinutes] = useState(profile.defaultVisitMinutes);
+  const [adminMinutes, setAdminMinutes] = useState<number | null>(profile.minAdminMinutes);
   const [pendingHome, setPendingHome] = useState(false);
   const [pendingOffice, setPendingOffice] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
@@ -101,6 +105,7 @@ export function SettingsTab({ profile }: { profile: AgendaSettingsView }) {
         dayEndMinutes: timeToMinutes(dayEnd) ?? -1,
         dayEndLimitMinutes: limit,
         defaultVisitMinutes: visitMinutes,
+        minAdminMinutes: adminMinutes,
       })
     );
   }
@@ -171,6 +176,22 @@ export function SettingsTab({ profile }: { profile: AgendaSettingsView }) {
               disabled={isBusy}
               min={15}
             />
+          </div>
+          <div className="space-y-1">
+            <DurationField
+              id="agenda-admin-minutes"
+              label="Temps d'administratif à garder chaque jour"
+              value={adminMinutes}
+              onChange={setAdminMinutes}
+              defaultLabel="Aucun minimum"
+              choices={ADMIN_CHOICES}
+              disabled={isBusy}
+              min={15}
+            />
+            <p className="max-w-xl text-sm text-muted-foreground">
+              Tutellia ne propose jamais plus de visites que le reste de la journée, route comprise
+              (pause déjeuner déduite). Vous pouvez toujours ajouter vous-même des rendez-vous ce jour-là.
+            </p>
           </div>
         </CardContent>
       </Card>

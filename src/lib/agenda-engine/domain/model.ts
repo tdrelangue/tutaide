@@ -187,6 +187,13 @@ export interface Settings {
   readonly dayEndLimit: Minutes | null;
   readonly lunch: readonly [Minutes, Minutes] | null;
   readonly visitMinutes: number;
+  /**
+   * Administrative time kept free every working day (Thomas, 2026-11-03).
+   * Strict for the planner: visits, appointments and road of a day never go
+   * beyond the day (start to wished end, lunch out) minus this. The user may
+   * still add or move things there herself. Null or absent = no minimum.
+   */
+  readonly minAdmin?: Minutes | null;
 }
 
 export type Answer = "break" | "respect";

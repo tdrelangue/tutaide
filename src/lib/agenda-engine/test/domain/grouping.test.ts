@@ -35,8 +35,11 @@ describe("visits are grouped by city, then by establishment (Thomas, 2026-11-02)
   it("reads the city from the postcode of the address", () => {
     expect(cityKey("32 Grand'Rue 19150 Cornil")).toBe("19150 cornil");
     expect(cityKey("EHPAD, 2 av. du Dr Roullet, 19200 USSEL")).toBe("19200 ussel");
-    expect(cityKey("19100 Brive-la-Gaillarde")).toBe("19100 brive");
-    expect(cityKey("Lieu sans code postal")).toBeNull();
+    expect(cityKey("19100 Brive-la-Gaillarde")).toBe("19100 brive-la-gaillarde");
+    expect(cityKey("1 Rue Haute 19360 Saint-Pantaléon-de-Larche")).not.toBe(cityKey("2 Rue Basse 19360 Malemort"));
+    expect(cityKey("3 Place 19360 Saint Pantaleon de Larche")).toBe("19360 saint-pantaleon-de-larche");
+    expect(cityKey("Soudeilles")).toBe("soudeilles");
+    expect(cityKey("12 lieu sans code postal")).toBeNull();
   });
 
   it("draws a visit to the day of its town, and costs extra only for a far town", () => {

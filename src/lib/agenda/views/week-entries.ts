@@ -109,6 +109,7 @@ export function proposedEntry(date: IsoDate, item: PlannedItem, ctx: EntryContex
     end: item.end,
     priority: task.priority,
     rescheduled: task.rescheduled,
+    early: task.early === true,
     canMove: true,
     canSkip: occurrenceKey !== null,
   });

@@ -60,6 +60,7 @@ function EntryDetails({ entry, dayLabel }: { entry: EntryView; dayLabel: string 
       <span className="block text-xs">
         {SOURCE_WORD[entry.source]}
         {entry.priority && ` · priorité ${PRIORITY_LABEL[entry.priority]}`}
+        {entry.early && " · en avance : la journée passe par sa commune"}
         {entry.moved && " · décalé"}
         {entry.rescheduled && " · à reprogrammer"}
       </span>

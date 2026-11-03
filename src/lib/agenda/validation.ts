@@ -27,6 +27,8 @@ export const agendaSettingsSchema = z
     /** Strict limit, drive home included. Null = same as the wished end. */
     dayEndLimitMinutes: dayMinute("Heure limite").nullable(),
     defaultVisitMinutes: minutes.min(15, "Une visite dure au moins 15 minutes.").max(8 * 60),
+    /** Minimum administrative time kept each working day, road included in the rest. Null = none. */
+    minAdminMinutes: minutes.min(0, "Temps d'administratif invalide.").max(12 * 60, "Temps d'administratif invalide.").nullable().optional(),
   })
   .refine((p) => p.dayEndMinutes - p.dayStartMinutes >= 60, {
     message: "La fin de journée doit être au moins une heure après le début.",

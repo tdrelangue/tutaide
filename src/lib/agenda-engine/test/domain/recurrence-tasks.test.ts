@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { diffDays } from "../../domain/time";
 import {
   buildTasks,
   createContext,
@@ -196,12 +197,15 @@ describe("buildTasks", () => {
     expect(tasks[0]?.dur).toBe(60);
   });
 
-  it("spreads a person without a known last visit over a whole interval from the day they were added, without urgency", () => {
+  it("gives a person without a known last visit one week of the first interval from the day they were added, without urgency", () => {
     const fresh = protege("anne", "Anne Onyme", { at: MALEMORT, last: MON, priority: "NORMAL" });
     const contact = { ...fresh, visits: fresh.visits && { ...fresh.visits, startedOn: MON } };
     const ctx = createContext(state({ contacts: [contact] }));
-    const { tasks } = buildTasks(ctx, MON, SUN4, new Set());
-    expect(tasks[0]).toMatchObject({ earliest: MON, latest: "2026-11-18", priority: "LOW", overdue: false });
+    const { tasks } = buildTasks(ctx, MON, "2026-12-31", new Set());
+    const first = tasks[0];
+    expect(first).toMatchObject({ priority: "LOW", overdue: false });
+    expect(first && first.earliest >= MON && first.latest <= "2026-11-18").toBe(true);
+    expect(first && diffDays(first.latest, first.earliest)).toBeLessThanOrEqual(6);
   });
 
   it("treats a person without a known last visit like any other once that first interval is over", () => {

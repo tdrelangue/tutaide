@@ -15,12 +15,15 @@ interface Tour {
   lastWasBlock: boolean;
   readonly used: Set<Block>;
   readonly items: PlannedItem[];
+  /** Minutes out in the field: road, visits, appointments with a place (the admin-time rule). */
+  field: number;
 }
 
 const MUST_ARRIVE_ON_TIME = new Set(["held", "event", "busy"]);
 
 function moveTo(ctx: PlannerContext, tour: Tour, place: Place): void {
   if (place.remote === true) return;
+  tour.field += ctx.travel.minutes(tour.pos, place);
   tour.km += ctx.travel.km(tour.pos, place);
   tour.pos = place;
 }
@@ -34,6 +37,7 @@ function jump(ctx: PlannerContext, tour: Tour, b: Block): void {
     )
       tour.late = true;
     moveTo(ctx, tour, b.place);
+    tour.field += Math.max(0, b.e - b.s);
     tour.lastActEnd = b.e;
   }
   if (b.e >= tour.t) tour.lastWasBlock = true;
@@ -63,6 +67,7 @@ function placeNext(
       continue;
     }
     moveTo(ctx, tour, task.place);
+    tour.field += task.dur;
     tour.items.push({ task, start, end });
     tour.t = end;
     tour.lastActEnd = end;
@@ -70,6 +75,17 @@ function placeNext(
     return true;
   }
   return false;
+}
+
+/**
+ * Minutes a day may spend in the field: from the start to the wished end,
+ * lunch out, minus the admin time kept. Infinite without an admin minimum.
+ */
+export function fieldBudget(ctx: PlannerContext): number {
+  const { dayStart, dayEnd, lunch, minAdmin } = ctx.state.settings;
+  if (minAdmin === null || minAdmin === undefined) return Infinity;
+  const lunchLength = lunch ? Math.max(0, lunch[1] - lunch[0]) : 0;
+  return Math.max(0, dayEnd - dayStart - lunchLength - minAdmin);
 }
 
 /**
@@ -92,6 +108,7 @@ export function simulate(
     lastWasBlock: false,
     used: new Set(),
     items: [],
+    field: 0,
   };
   for (const task of order) if (!placeNext(ctx, day, tour, task)) return null;
   for (const b of day.blocks)
@@ -106,6 +123,11 @@ export function simulate(
     finish > (dayEndLimit ?? dayEnd)
   )
     return null;
+  // The admin time is the user's: the planner proposes no visit past it. Her own appointments
+  // count in the time but are never refused for it (she may add what she wants).
+  const field = tour.field + ctx.travel.minutes(tour.pos, home);
+  const proposesVisits = tour.items.some((i) => i.task.kind === "VISIT");
+  if (proposesVisits && field > fieldBudget(ctx)) return null;
   return {
     items: tour.items,
     km: tour.km + ctx.travel.km(tour.pos, home),
