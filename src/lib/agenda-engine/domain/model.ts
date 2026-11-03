@@ -234,6 +234,12 @@ export interface PlannerState {
   readonly past: readonly PastItem[];
   /** Visit occurrence ids skipped with « Pas cette fois ». */
   readonly skips: readonly string[];
+  /**
+   * « Préparer ma proposition » (Thomas, 2026-11-03): the persons and
+   * appointments the user picked. Set: exactly these are placed, the rest is
+   * only suggested on the way. Absent: the planner chooses (« Proposer pour moi »).
+   */
+  readonly choice?: { readonly persons: readonly string[]; readonly appointments: readonly string[] } | null;
   /** Per-occurrence priority, keyed by visit occurrence id. */
   readonly priorityOverrides: Readonly<Record<string, Priority>>;
   /** « Durée pour cette fois »: minutes of one visit occurrence, keyed like `priorityOverrides`. */

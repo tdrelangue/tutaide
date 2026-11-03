@@ -22,6 +22,14 @@ function useWeekDialogState(data: WeekData) {
   /** « Supprimer le rendez-vous… »: kept while the dialog closes, so its title never goes blank. */
   const [deleting, setDeleting] = useState<{ id: string; title: string } | null>(null);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  /** « Préparer ma proposition ». */
+  const [isPreparing, setIsPreparing] = useState(false);
+  function openPrepare() {
+    setIsPreparing(true);
+  }
+  function closePrepare() {
+    setIsPreparing(false);
+  }
   /** « Ce jour… »: office half-day, reschedule. */
   const [openDay, setOpenDay] = useState<DayView | null>(null);
   function closeDay() {
@@ -61,7 +69,7 @@ function useWeekDialogState(data: WeekData) {
     setIsDeleteOpen(true);
   }
 
-  return { moving, setMoving, missed, setMissed, isAppointmentOpen, setIsAppointmentOpen, notes, setNotes, closeNotes, closeMove, handleMissedOpenChange, handleDialogDone, openAppointment, deleting, isDeleteOpen, setIsDeleteOpen, askDelete, editingId, setEditingId, closeEdit, resizing, setResizing, closeResize, openDay, setOpenDay, closeDay };
+  return { moving, setMoving, missed, setMissed, isAppointmentOpen, setIsAppointmentOpen, notes, setNotes, closeNotes, closeMove, handleMissedOpenChange, handleDialogDone, openAppointment, deleting, isDeleteOpen, setIsDeleteOpen, askDelete, editingId, setEditingId, closeEdit, resizing, setResizing, closeResize, openDay, setOpenDay, closeDay, isPreparing, openPrepare, closePrepare };
 }
 
 /** Week navigation: previous, next, and the server's « today ». */

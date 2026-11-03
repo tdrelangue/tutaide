@@ -50,7 +50,7 @@ export function WeekToolbar(props: WeekToolbarProps) {
         </BusyButton>
         <BusyButton onClick={onPropose} busy={busy} disabled={!canPlan}>
           {isProposing ? <Loader2 className="motion-safe:animate-spin" aria-hidden="true" /> : <Wand2 aria-hidden="true" />}
-          {hasProposal ? "Recalculer la proposition" : "Préparer une proposition"}
+          {hasProposal ? "Recalculer la proposition" : "Proposer pour moi"}
         </BusyButton>
       </div>
     </div>

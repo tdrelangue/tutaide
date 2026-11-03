@@ -18,8 +18,14 @@ import type { AppointmentInput } from "@/lib/agenda/appointments";
 import { buildInsertView, buildMovesPreview, itemRef } from "@/lib/agenda/views/insert-view";
 import { buildVisitStatus } from "@/lib/agenda/views/visit-status";
 import { buildWeekView } from "@/lib/agenda/views/week-view";
+import { buildPreparation, type PreparationView } from "@/lib/agenda/views/preparation";
 import { confirmationEntries } from "@/lib/agenda/views/week-entries";
-import type { PlanDeps } from "@/lib/agenda/bridge/ops/plan";
+import type { PlanChoice, PlanDeps } from "@/lib/agenda/bridge/ops/plan";
+
+const idList = z.array(z.string().regex(/^[a-z0-9]{20,40}$/, "Élément introuvable.")).max(500);
+/** What the page sends for « Préparer ma proposition »; null = « Proposer pour moi ». */
+const choiceSchema = z.object({ persons: idList, appointments: idList }).nullable();
+export type PlanChoiceInput = z.infer<typeof choiceSchema>;
 import type {
   AgendaDataResult,
   AppointmentRow,
@@ -65,8 +71,8 @@ import type { Done } from "./planning-support";
 
 const INVALID_PERIOD_ERROR = "Période invalide : indiquez deux dates, la fin après le début, sur un mois au plus.";
 
-async function weekResult(ownerId: string, period: Period, deps: PlanDeps, withProposal: boolean): Promise<AgendaDataResult<WeekView>> {
-  const read = await readWeek(ownerId, period, deps, withProposal);
+async function weekResult(ownerId: string, period: Period, deps: PlanDeps, withProposal: boolean, choice: PlanChoice = null): Promise<AgendaDataResult<WeekView>> {
+  const read = await readWeek(ownerId, period, deps, withProposal, choice);
   if (!read.ok) return read.reason === "INVALID_INPUT" ? fail(INVALID_PERIOD_ERROR) : fail(NOT_PLANNABLE_ERROR, read.issues);
   const groups = await agendaGroupTags(ownerId);
   const data = buildWeekView({ state: read.state, from: period.from, to: period.to, proposal: read.proposal, issues: read.issues, groups });
@@ -84,17 +90,29 @@ export async function getMonth(date: IsoDate): Promise<AgendaDataResult<WeekView
 }
 
 /** The same week with a fresh proposal (may take a few seconds: road times). Nothing is stored. */
-export async function proposeWeek(from: IsoDate, to: IsoDate): Promise<AgendaDataResult<WeekView>> {
-  return run("proposeWeek", async ({ ownerId }) => weekResult(ownerId, weekPeriod(from, to), planDeps(), true));
+/** « Préparer ma proposition »: everyone who can be visited, by town and establishment, most urgent first. */
+export async function getPreparation(from: IsoDate, to: IsoDate): Promise<AgendaDataResult<PreparationView>> {
+  return run("getPreparation", async ({ ownerId }) => {
+    const period = weekPeriod(from, to);
+    const loaded = await loadPlannerState(ownerId, new Date());
+    if (!loaded.ok) return fail(NOT_PLANNABLE_ERROR, loaded.issues);
+    const start = period.from < loaded.state.today ? loaded.state.today : period.from;
+    return { success: true, data: buildPreparation(loaded.state, start, period.to, await agendaGroupTags(ownerId)) };
+  });
+}
+
+/** « Proposer pour moi » (no choice), or « Préparer ma proposition » with the persons and appointments picked. */
+export async function proposeWeek(from: IsoDate, to: IsoDate, choice: PlanChoiceInput = null): Promise<AgendaDataResult<WeekView>> {
+  return run("proposeWeek", async ({ ownerId }) => weekResult(ownerId, weekPeriod(from, to), planDeps(), true, choiceSchema.parse(choice)));
 }
 
 /** Validates the proposal the user saw (`fingerprint`), then returns the week again (stored planning only). */
-export async function validateWeek(from: IsoDate, to: IsoDate, fingerprint: string): Promise<AgendaDataResult<WeekView>> {
+export async function validateWeek(from: IsoDate, to: IsoDate, fingerprint: string, choice: PlanChoiceInput = null): Promise<AgendaDataResult<WeekView>> {
   return run("validateWeek", async ({ ownerId }) => {
     const period = weekPeriod(from, to);
     const print = fingerprintSchema.parse(fingerprint);
     const deps = planDeps();
-    const count = await validatePeriod(ownerId, period, print, deps);
+    const count = await validatePeriod(ownerId, period, print, deps, choiceSchema.parse(choice));
     const week = await weekResult(ownerId, period, deps, false);
     if (!week.success) return week;
     return written(week.data, count === 0 ? "Rien de nouveau à valider." : `Semaine validée : ${count} élément${count > 1 ? "s" : ""} ajouté${count > 1 ? "s" : ""} au planning.`);

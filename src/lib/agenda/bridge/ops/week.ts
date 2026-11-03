@@ -6,7 +6,7 @@ import { parsePeriod } from "../period";
 import type { Period } from "../period";
 import { CONFIRM_WINDOW_DAYS } from "./missed";
 import { proposePeriod } from "./plan";
-import type { PlanDeps, ProposeResult } from "./plan";
+import type { PlanChoice, PlanDeps, ProposeResult } from "./plan";
 
 /** The proposal of a period, when it succeeded. */
 export type ProposedPeriod = Extract<ProposeResult, { ok: true }>;
@@ -29,7 +29,7 @@ export type WeekRead =
  * the proposal. With a proposal, the plan is computed as proposePeriod does
  * (road times asked to IGN, or estimated). Never writes anything.
  */
-export async function readWeek(ownerId: string, rawPeriod: Period, deps: PlanDeps, withProposal: boolean): Promise<WeekRead> {
+export async function readWeek(ownerId: string, rawPeriod: Period, deps: PlanDeps, withProposal: boolean, choice: PlanChoice = null): Promise<WeekRead> {
   const period = parsePeriod(rawPeriod);
   if (period === null) return { ok: false, reason: "INVALID_INPUT", issues: [] };
   if (!withProposal) {
@@ -37,7 +37,7 @@ export async function readWeek(ownerId: string, rawPeriod: Period, deps: PlanDep
     if (!loaded.ok) return { ok: false, reason: "NOT_PLANNABLE", issues: loaded.issues };
     return { ok: true, state: loaded.state, proposal: null, issues: loaded.issues };
   }
-  const proposed = await proposePeriod(ownerId, period, deps);
+  const proposed = await proposePeriod(ownerId, period, deps, choice);
   if (!proposed.ok) return { ok: false, reason: proposed.reason, issues: proposed.issues };
   const loaded = await loadPlannerState(ownerId, deps.now);
   if (!loaded.ok) return { ok: false, reason: "NOT_PLANNABLE", issues: loaded.issues };

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { AgendaDataResult, IsoDate, WeekView } from "@/lib/agenda/views/types";
-import { getWeek, proposeWeek } from "../planning-actions";
+import { getWeek, proposeWeek, type PlanChoiceInput } from "../planning-actions";
 import { useAgendaQuery, type AgendaQuery } from "../use-agenda-query";
 import { addDays, localToday, mondayOf, proposalSummary } from "./format";
 
@@ -75,12 +75,25 @@ export function useWeekData(enabled: boolean) {
   // Only the first request uses the page's clock; « Aujourd'hui » then uses the server's date.
   const [from, setFrom] = useState<IsoDate>(() => mondayOf(localToday()));
   const fromRef = useRef(from);
+  /** « Préparer ma proposition »: the persons and appointments picked; null = « Proposer pour moi ». Kept for recomputing and validating. */
+  const [choice, setChoice] = useState<PlanChoiceInput>(null);
+  const choiceRef = useRef<PlanChoiceInput>(null);
 
+  const clearChoice = useCallback(() => {
+    choiceRef.current = null;
+    setChoice(null);
+  }, []);
   const load = useCallback((weekFrom: IsoDate) => fetchInto("get", () => getWeek(weekFrom)), [fetchInto]);
-  const propose = useCallback(() => {
+  /** Without an argument the current choice is kept (« Recalculer »); `null` = the planner chooses. */
+  const propose = useCallback((next?: PlanChoiceInput) => {
+    if (next !== undefined) {
+      choiceRef.current = next;
+      setChoice(next);
+    }
     const weekFrom = fromRef.current;
     const weekTo = viewRef.current?.to ?? addDays(weekFrom, 6);
-    return fetchInto("propose", () => proposeWeek(weekFrom, weekTo));
+    const picked = choiceRef.current;
+    return fetchInto("propose", () => proposeWeek(weekFrom, weekTo, picked));
   }, [fetchInto, viewRef]);
 
   useEffect(() => {
@@ -97,6 +110,8 @@ export function useWeekData(enabled: boolean) {
       if (weekFrom === fromRef.current) return;
       dropView();
       clearError();
+      choiceRef.current = null;
+      setChoice(null);
       fromRef.current = weekFrom;
       setFrom(weekFrom);
     },
@@ -104,7 +119,7 @@ export function useWeekData(enabled: boolean) {
   );
 
   const { view, mode, announcement, setAnnouncement } = fetcher;
-  return { from, view, mode, error, issues, announcement, announce: setAnnouncement, load, propose, reload, retry, goTo, isShowing, dropView };
+  return { from, view, mode, error, issues, announcement, announce: setAnnouncement, load, propose, reload, retry, goTo, isShowing, dropView, choice, choiceRef, clearChoice };
 }
 
 export type WeekData = ReturnType<typeof useWeekData>;

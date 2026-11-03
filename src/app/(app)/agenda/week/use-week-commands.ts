@@ -52,13 +52,15 @@ function useValidate(data: WeekData, focus: FocusTargets) {
     if (!view || !fingerprint) return;
     setIsValidating(true);
     setValidateError(null);
-    const outcome = await callAction(() => validateWeek(view.from, view.to, fingerprint));
+    const picked = data.choiceRef.current;
+    const outcome = await callAction(() => validateWeek(view.from, view.to, fingerprint, picked));
     setIsValidating(false);
     if (!outcome.ok) {
       setValidateError(outcome.error);
       return;
     }
     toast.success("Semaine validée : c'est maintenant votre planning.");
+    data.clearChoice();
     if (!data.isShowing(view.from)) return;
     const result = await data.load(view.from);
     // The proposal on screen is validated already: never leave it offered again; the load error shows instead.
@@ -72,7 +74,13 @@ function useValidate(data: WeekData, focus: FocusTargets) {
     void data.propose();
   }
 
-  return { isValidating, validateError, validate, recompute };
+  /** « Proposer pour moi »: the planner chooses again. */
+  function proposeAuto() {
+    setValidateError(null);
+    void data.propose(null);
+  }
+
+  return { isValidating, validateError, validate, recompute, proposeAuto };
 }
 
 /**

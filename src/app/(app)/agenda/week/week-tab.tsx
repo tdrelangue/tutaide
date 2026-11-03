@@ -9,6 +9,7 @@ import { DeleteAppointmentDialog } from "../appointments/delete-dialog";
 import { EditAppointmentDialog } from "../appointments/edit-dialog";
 import { DurationDialog } from "./duration-dialog";
 import { DayDialog } from "./day-dialog";
+import { PrepareDialog } from "./prepare-dialog";
 import { MissedDialog } from "../appointments/missed-dialog";
 import { ERROR_TEXT } from "../address-field";
 import { addDays, mondayOf, weekLabel } from "./format";
@@ -124,7 +125,17 @@ function WeekContent({ data, commands, ui, busy, proposalTitleRef, jumpTo }: Con
         <WeekGrid key={`${view.from}:${jumpTo?.seq ?? 0}`} view={view} busy={busy} onEntryAction={ui.handleEntryAction} onDrop={ui.handleDrop} onOpenDay={ui.setOpenDay} focusDate={jumpTo?.date ?? null} />
         <Legend grid={view.grid} />
       </div>
-      <ProposalPanel proposal={view.proposal} titleRef={proposalTitleRef} busy={busy} onAnswer={commands.answer} onRefuse={commands.refuse} />
+      <ProposalPanel
+        proposal={view.proposal}
+        titleRef={proposalTitleRef}
+        busy={busy}
+        onAnswer={commands.answer}
+        onRefuse={commands.refuse}
+        onAuto={commands.proposeAuto}
+        onPrepare={ui.openPrepare}
+        pickedCount={data.choice ? data.choice.persons.length : null}
+        canPlan
+      />
     </div>
   );
 }
@@ -143,6 +154,14 @@ function WeekDialogs({ data, ui, persons }: { data: WeekData; ui: WeekInteractio
       <MissedDialog open={ui.missed !== null} onOpenChange={ui.handleMissedOpenChange} item={ui.missed} onDone={ui.handleDialogDone} />
       <NotesDialog target={ui.notes} onClose={ui.closeNotes} />
       <DeleteAppointmentDialog open={ui.isDeleteOpen} onOpenChange={ui.setIsDeleteOpen} row={ui.deleting} onDone={ui.handleDialogDone} />
+      <PrepareDialog
+        open={ui.isPreparing}
+        from={view?.from ?? data.from}
+        to={view?.to ?? addDays(data.from, 6)}
+        initial={data.choice}
+        onClose={ui.closePrepare}
+        onOrganise={(choice) => void data.propose(choice)}
+      />
       <DayDialog day={ui.openDay} onClose={ui.closeDay} onDone={ui.handleDialogDone} />
       <DurationDialog target={ui.resizing} onClose={ui.closeResize} onDone={ui.handleDialogDone} />
       <EditAppointmentDialog appointmentId={ui.editingId} onClose={ui.closeEdit} persons={persons} onDone={ui.handleDialogDone} />

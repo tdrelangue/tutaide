@@ -101,3 +101,19 @@ describe("« Adresse temporaire »", () => {
     expect(buildTasks(createContext(state({ contacts: [after] })), MON, FRI, new Set()).tasks[0]?.place.address).toContain("Objat");
   });
 });
+
+describe("« Préparer ma proposition »: exactly the persons picked, the rest only on the way", () => {
+  it("places the picked ones (even not due), offers the others of the area, leaves far ones out", () => {
+    const contacts = [
+      protege("due", "due", { at: TULLE(1), last: "2026-07-20", period: "QUARTER", minutes: 30 }),
+      protege("later", "later", { at: TULLE(2), last: "2026-10-01", period: "QUARTER", minutes: 30 }),
+      protege("objat", "objat", { at: OBJAT(1), last: "2026-07-20", period: "QUARTER", minutes: 30 }),
+    ];
+    const plan = solve(createContext(state({ contacts, choice: { persons: ["later"], appointments: [] } })), MON, FRI);
+    const items = plan.days.flatMap((d) => d.items);
+    const later = items.find((i) => i.task.person?.id === "later");
+    expect(later?.task.early).toBeUndefined();
+    expect(items.find((i) => i.task.person?.id === "due")?.task.early).toBe(true);
+    expect(items.some((i) => i.task.person?.id === "objat")).toBe(false);
+  });
+});

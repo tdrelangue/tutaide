@@ -401,25 +401,60 @@ export function appointmentTasks(
 }
 
 /**
+ * The next visit of a person, as a task of the period (keyed on the period:
+ * « Pas cette fois » refuses this offer only, never the visit at its normal
+ * time). Null when the person cannot be visited or was refused for the period.
+ */
+function periodVisit(ctx: PlannerContext, person: Contact, P0: IsoDate, P1: IsoDate): Task | null {
+  const { visits } = person;
+  const place = person.places[0] ?? person.temporary?.place;
+  if (!visits || !place || person.category !== "PROTEGE" || person.status !== "ACTIVE" || !isValidVisitPlan(visits)) return null;
+  const id = `${person.id}@${P0}`;
+  if (ctx.state.skips.includes(id)) return null;
+  const due = nextVisitDue(ctx, person) ?? P0;
+  return { ...visitTask(ctx, person, place, { earliest: P0, latest: P1, due, overdue: false }, false), id };
+}
+
+/**
  * The next visit of each active person with nothing in the period: a
  * candidate to be seen in advance when a day already goes to their area.
  */
 function earlyTasks(ctx: PlannerContext, P0: IsoDate, P1: IsoDate, busy: ReadonlySet<string>): Task[] {
-  const out: Task[] = [];
-  for (const person of ctx.state.contacts) {
-    const { visits } = person;
-    const place = person.places[0] ?? person.temporary?.place;
-    if (!visits || !place || busy.has(person.id) || person.category !== "PROTEGE" || person.status !== "ACTIVE") continue;
-    if (!isValidVisitPlan(visits)) continue;
-    const due = nextVisitDue(ctx, person);
-    // Keyed on the period, not on the real due date: « Pas cette fois » refuses this offer only,
-    // never the visit at its normal time.
-    const id = `${person.id}@${P0}`;
-    if (due === null || due <= P1 || ctx.state.skips.includes(id)) continue;
-    const o = { earliest: P0, latest: P1, due, overdue: false };
-    out.push({ ...visitTask(ctx, person, place, o, false), id, priority: "LOW", early: true });
-  }
-  return out;
+  return ctx.state.contacts.flatMap((person) => {
+    if (busy.has(person.id)) return [];
+    const task = periodVisit(ctx, person, P0, P1);
+    if (!task || task.due <= P1) return [];
+    return [{ ...task, priority: "LOW" as const, early: true }];
+  });
+}
+
+/**
+ * « Préparer ma proposition »: the picked persons are all placed in the
+ * period (their due visit, or their next one, at least « Normale »), the
+ * picked appointments too; every other visit of the period, and the next
+ * visit of the others, is only offered on a day that goes to its area.
+ */
+function applyChoice(ctx: PlannerContext, set: TaskSet & { early: readonly Task[] }, P0: IsoDate, P1: IsoDate): TaskSet {
+  const choice = ctx.state.choice;
+  if (!choice) return set;
+  const persons = new Set(choice.persons);
+  const appointments = new Set(choice.appointments);
+  const inPeriod = (t: Task) => t.earliest <= P1 && t.latest >= P0;
+  const isVisit = (t: Task) => t.kind === "VISIT" && t.person !== null && t.originalDate === null;
+  const picked = (t: Task) => (isVisit(t) ? persons.has(t.person?.id ?? "") : t.apptId === null || appointments.has(t.apptId));
+  const visits = set.tasks.filter((t) => isVisit(t) && inPeriod(t));
+  const covered = new Set(visits.filter(picked).map((t) => t.person?.id));
+  const extra = ctx.state.contacts.flatMap((p) => {
+    if (!persons.has(p.id) || covered.has(p.id)) return [];
+    const task = periodVisit(ctx, p, P0, P1);
+    return task ? [task] : [];
+  });
+  const chosen = [...set.tasks.filter((t) => picked(t) && (!isVisit(t) || inPeriod(t))), ...extra].map((t) =>
+    isVisit(t) ? { ...t, earliest: P0, latest: P1, strict: false, priority: atLeastNormal(t.priority) } : t,
+  );
+  const offered = visits.filter((t) => !picked(t)).map((t) => ({ ...t, priority: "LOW" as const, early: true }));
+  const early = set.early.filter((t) => !persons.has(t.person?.id ?? ""));
+  return { ...set, tasks: chosen, early: [...offered, ...early] };
 }
 
 /** Everything the period must hold. */
@@ -453,5 +488,5 @@ export function buildTasks(
     ...appts.fixed.flatMap((t) => t.participants),
     ...ctx.state.pins.flatMap((p) => p.participants),
   ]);
-  return { fixed: fixedEvents(ctx, P0, P1, appts), tasks, held, invalid, early: earlyTasks(ctx, P0, P1, busy) };
+  return applyChoice(ctx, { fixed: fixedEvents(ctx, P0, P1, appts), tasks, held, invalid, early: earlyTasks(ctx, P0, P1, busy) }, P0, P1);
 }

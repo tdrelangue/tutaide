@@ -52,10 +52,13 @@ type Computed =
       readonly issues: readonly BridgeIssue[];
     };
 
-async function computeProposal(ownerId: string, period: Period, deps: PlanDeps): Promise<Computed> {
+/** « Préparer ma proposition »: the persons and appointments picked; null = the planner chooses. */
+export type PlanChoice = PlannerState["choice"];
+
+async function computeProposal(ownerId: string, period: Period, deps: PlanDeps, choice: PlanChoice = null): Promise<Computed> {
   const loaded = await loadPlannerState(ownerId, deps.now);
   if (!loaded.ok) return { ok: false, issues: loaded.issues };
-  const { state } = loaded;
+  const state = { ...loaded.state, choice };
   const p = fromToday(period, state.today);
   const travel = await travelFor(ownerId, state, p, deps);
   const proposal = propose(createContext(state, travel.model), p.from, p.to);
@@ -63,10 +66,10 @@ async function computeProposal(ownerId: string, period: Period, deps: PlanDeps):
 }
 
 /** The proposed plan of a period. Never stored: only a validated plan is the planning (rule 8). */
-export async function proposePeriod(ownerId: string, rawPeriod: Period, deps: PlanDeps): Promise<ProposeResult> {
+export async function proposePeriod(ownerId: string, rawPeriod: Period, deps: PlanDeps, choice: PlanChoice = null): Promise<ProposeResult> {
   const period = parsePeriod(rawPeriod);
   if (period === null) return { ok: false, reason: "INVALID_INPUT", issues: [] };
-  const result = await computeProposal(ownerId, period, deps);
+  const result = await computeProposal(ownerId, period, deps, choice);
   if (!result.ok) return { ok: false, reason: "NOT_PLANNABLE", issues: result.issues };
   const { state, proposal, estimated, issues } = result;
   return { ok: true, today: state.today, proposal, fingerprint: planFingerprint(proposal.plan), estimated, issues };
@@ -100,10 +103,10 @@ async function writeValidated(ownerId: string, version: number, items: readonly 
  * on a state that moved meanwhile is refused too (planning lock). Returns the
  * number of items added to the planning.
  */
-export async function validatePeriod(ownerId: string, rawPeriod: Period, fingerprint: string, deps: PlanDeps): Promise<number> {
+export async function validatePeriod(ownerId: string, rawPeriod: Period, fingerprint: string, deps: PlanDeps, choice: PlanChoice = null): Promise<number> {
   const period = parsePeriod(rawPeriod);
   if (period === null) throw new AgendaUserError("Période invalide : indiquez deux dates, la fin après le début, sur un mois au plus.");
-  const result = await computeProposal(ownerId, period, deps);
+  const result = await computeProposal(ownerId, period, deps, choice);
   if (!result.ok) throw new AgendaConflict("L'agenda ne peut pas encore être planifié : complétez les paramètres.");
   if (planFingerprint(result.proposal.plan) !== fingerprint) {
     throw new AgendaConflict("Le planning a changé depuis son affichage. Vérifiez la nouvelle proposition avant de valider.");

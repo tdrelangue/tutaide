@@ -15,14 +15,22 @@ type ProposalPanelProps = {
   readonly busy: boolean;
   readonly onAnswer: (ruleKey: string, answer: "respect" | "break" | null) => void;
   readonly onRefuse: (ruleKey: string) => void;
+  /** « Proposer pour moi »: the planner chooses. */
+  readonly onAuto: () => void;
+  /** « Préparer ma proposition »: the user picks, the planner organises. */
+  readonly onPrepare: () => void;
+  /** How many persons the user picked for the proposal on screen; null = the planner chose. */
+  readonly pickedCount: number | null;
+  readonly canPlan: boolean;
 };
 
 /** What the proposal needs from the user, most urgent first. Beside the grid from 1280 px, below it otherwise. */
-export function ProposalPanel({ proposal, titleRef, busy, onAnswer, onRefuse }: ProposalPanelProps) {
-  if (proposal === null) return <NoProposal />;
+export function ProposalPanel({ proposal, titleRef, busy, onAnswer, onRefuse, onAuto, onPrepare, pickedCount, canPlan }: ProposalPanelProps) {
+  if (proposal === null) return <NoProposal busy={busy} canPlan={canPlan} onAuto={onAuto} onPrepare={onPrepare} />;
   return (
     <aside aria-labelledby="agenda-proposal-title" className="space-y-3">
       <SummarySection proposal={proposal} titleRef={titleRef} />
+      <ModeSection busy={busy} pickedCount={pickedCount} onAuto={onAuto} onPrepare={onPrepare} />
       {proposal.questions.length > 0 && (
         <Section title="Questions « Important »" tone="ask">
           <div className="space-y-3">
@@ -81,15 +89,39 @@ function EstimatedRoutesNotice({ count }: { count: number }) {
   );
 }
 
-function NoProposal() {
+type ModeProps = { readonly busy: boolean; readonly onAuto: () => void; readonly onPrepare: () => void };
+
+/**
+ * Two ways (Thomas, 2026-11-03): the planner chooses everything, or the user
+ * picks whom she wants to see and the planner organises it, suggesting others
+ * on the way.
+ */
+function NoProposal({ busy, canPlan, onAuto, onPrepare }: ModeProps & { readonly canPlan: boolean }) {
   return (
-    <aside aria-label="Proposition" className="rounded-lg border border-dashed p-4 text-sm">
+    <aside aria-label="Proposition" className="space-y-3 rounded-lg border border-dashed p-4 text-sm">
       <p className="font-medium">Pas encore de proposition</p>
-      <p className="mt-1 text-muted-foreground">
-        « Préparer une proposition » place vos visites et rendez-vous de la semaine. Vous pouvez ensuite déplacer des
-        blocs, répondre aux questions, puis valider. Seul le planning validé compte.
-      </p>
+      <div className="space-y-2">
+        <BusyButton type="button" className="w-full" onClick={onPrepare} busy={busy} disabled={!canPlan}>Préparer ma proposition</BusyButton>
+        <p className="text-xs text-muted-foreground">Vous choisissez qui voir, commune par commune ; Tutellia organise les journées et vous suggère d&apos;autres personnes en route.</p>
+      </div>
+      <div className="space-y-2">
+        <BusyButton type="button" variant="outline" className="w-full" onClick={onAuto} busy={busy} disabled={!canPlan}>Proposer pour moi</BusyButton>
+        <p className="text-xs text-muted-foreground">Tutellia choisit selon les échéances et regroupe par commune.</p>
+      </div>
+      <p className="text-xs text-muted-foreground">Vous pourrez ensuite déplacer des blocs, puis valider. Seul le planning validé compte.</p>
     </aside>
+  );
+}
+
+function ModeSection({ busy, pickedCount, onAuto, onPrepare }: ModeProps & { readonly pickedCount: number | null }) {
+  return (
+    <div className="flex flex-wrap items-center gap-2 rounded-lg border p-3 text-sm">
+      <p className="w-full text-xs text-muted-foreground">
+        {pickedCount === null ? "Proposée par Tutellia." : `Préparée par vous : ${plural(pickedCount, "personne choisie", "personnes choisies")}, les autres seulement suggérées en route.`}
+      </p>
+      <BusyButton type="button" size="sm" variant="outline" onClick={onPrepare} busy={busy}>{pickedCount === null ? "Préparer ma proposition" : "Modifier mes choix"}</BusyButton>
+      {pickedCount !== null && <BusyButton type="button" size="sm" variant="ghost" onClick={onAuto} busy={busy}>Proposer pour moi</BusyButton>}
+    </div>
   );
 }
 
