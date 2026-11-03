@@ -85,6 +85,8 @@ export function placeRow(over: Partial<AgendaPlace> = {}): AgendaPlace {
     point: sealPoint({ lat: 48.2, lon: -1.7 }),
     precision: null,
     position: 0,
+    fromDate: null,
+    toDate: null,
     ...over,
   };
 }

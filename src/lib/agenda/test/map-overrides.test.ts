@@ -11,6 +11,7 @@ const override = (over: Partial<AgendaOccurrenceOverride> = {}): AgendaOccurrenc
   dueOn: day("2026-11-03"),
   skipped: false,
   priority: null,
+  durationMin: null,
   ...over,
 });
 
@@ -28,16 +29,18 @@ describe("mapOverrides", () => {
       override({ skipped: true }),
       override({ occurrenceKey: "c1@2026-12-03", dueOn: day("2026-12-03"), priority: "HIGH" }),
       override({ occurrenceKey: "c2@2026-11-03", contactId: "c2", skipped: true, priority: "LOW" }),
+      override({ occurrenceKey: "c3@2026-11-03", contactId: "c3", durationMin: 15 }),
     ];
     expect(mapOverrides(rows)).toEqual({
       skips: ["c1@2026-11-03", "c2@2026-11-03"],
       priorityOverrides: { "c1@2026-12-03": "HIGH", "c2@2026-11-03": "LOW" },
+      durationOverrides: { "c3@2026-11-03": 15 },
       issues: [],
     });
   });
 
   it("ignores a row that overrides nothing", () => {
-    expect(mapOverrides([override()])).toEqual({ skips: [], priorityOverrides: {}, issues: [] });
+    expect(mapOverrides([override()])).toEqual({ skips: [], priorityOverrides: {}, durationOverrides: {}, issues: [] });
   });
 
   it("reports BAD_KEY and ignores keys that do not match the row", () => {
@@ -59,7 +62,7 @@ describe("mapOverrides", () => {
   });
 
   it("handles an empty list", () => {
-    expect(mapOverrides([])).toEqual({ skips: [], priorityOverrides: {}, issues: [] });
+    expect(mapOverrides([])).toEqual({ skips: [], priorityOverrides: {}, durationOverrides: {}, issues: [] });
   });
 });
 

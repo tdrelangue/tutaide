@@ -34,7 +34,7 @@ import { importAgendaPersons, removeAgendaPerson } from "./actions";
 import { getVisitStatus } from "./planning-actions";
 import { useAgendaQuery } from "./use-agenda-query";
 import { useAgendaAction } from "./use-agenda-action";
-import { SortableHeader, sortRows, useTableSort } from "./sort-header";
+import { SortableHeader, sortRows, useTableSort, type DateKey } from "./sort-header";
 
 type Props = {
   persons: AgendaPersonView[];
@@ -347,7 +347,12 @@ function PersonTable({
   const headingId = useId();
   const { sort, toggle } = useTableSort();
   if (rows.length === 0) return null;
-  const sorted = sortRows(rows, sort);
+  const dateOf = (person: AgendaPersonView, key: DateKey): string | null => {
+    const status = statuses?.get(person.id);
+    if (!status) return null;
+    return key === "seen" ? status.seenOn : key === "planned" ? status.plannedOn : status.nextDue;
+  };
+  const sorted = sortRows(rows, sort, undefined, dateOf);
   const ids = sorted.map((p) => p.id);
   const ticked = selection ? ids.filter((id) => selection.selected.has(id)).length : 0;
   const allState = ticked === 0 ? false : ticked === ids.length ? true : "indeterminate";
@@ -371,9 +376,9 @@ function PersonTable({
               <SortableHeader label="Lieu de visite" sortKey="address" sort={sort} onSort={toggle} />
               <th scope="col" className="px-3 py-2 font-medium">Fréquence</th>
               <th scope="col" className="px-3 py-2 font-medium">Durée</th>
-              <th scope="col" className="whitespace-nowrap px-3 py-2 font-medium">Vu le</th>
-              <th scope="col" className="whitespace-nowrap px-3 py-2 font-medium">Prévu le</th>
-              <th scope="col" className="whitespace-nowrap px-3 py-2 font-medium">Prochaine visite</th>
+              <SortableHeader label="Vu le" sortKey="seen" sort={sort} onSort={toggle} className="whitespace-nowrap" />
+              <SortableHeader label="Prévu le" sortKey="planned" sort={sort} onSort={toggle} className="whitespace-nowrap" />
+              <SortableHeader label="Prochaine visite" sortKey="next" sort={sort} onSort={toggle} className="whitespace-nowrap" />
               <th scope="col" className="px-3 py-2"><span className="sr-only">Actions</span></th>
             </tr>
           </thead>
@@ -422,7 +427,7 @@ function PersonRow({
       <th scope="row" className="px-3 py-2 text-left font-normal">
         <span className="font-medium">{person.fullName}</span>
         {group && <GroupBadge group={group} className="ml-2" />}
-        {person.fromDossiers && <Badge variant="outline" className="ml-2 text-xs">Issue de vos dossiers</Badge>}
+        {person.justImported && <Badge variant="outline" className="ml-2 text-xs">Issue de vos dossiers</Badge>}
         {person.phone && (
           <a href={`tel:${person.phone.replace(/[^0-9+]/g, "")}`} className="block text-xs text-muted-foreground underline-offset-2 hover:underline">
             {person.phone}

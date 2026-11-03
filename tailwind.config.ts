@@ -59,6 +59,7 @@ export default {
           warn: "hsl(var(--agenda-warn))",
           "warn-soft": "hsl(var(--agenda-warn-soft))",
           missed: "hsl(var(--agenda-missed))",
+          personal: "hsl(var(--agenda-personal) / <alpha-value>)",
           busy: "hsl(var(--agenda-busy))",
           paper: "hsl(var(--agenda-paper))",
         },

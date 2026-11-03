@@ -156,13 +156,20 @@ function occurrences(
   return out;
 }
 
+/** The temporary address while it lasts (the visit's due day decides), the home otherwise. */
+export function placeOn(person: Contact, home: Place, day: IsoDate): Place {
+  const temp = person.temporary;
+  return temp && day >= temp.from && day <= temp.to ? temp.place : home;
+}
+
 function visitTask(
   ctx: PlannerContext,
   person: Contact,
-  place: Place,
+  home: Place,
   o: Occurrence,
   rescheduled: boolean,
 ): Task {
+  const place = placeOn(person, home, o.due);
   const id = `${person.id}@${o.due}`;
   const base =
     ctx.state.priorityOverrides[id] ?? person.visits?.priority ?? "LOW";
@@ -176,7 +183,7 @@ function visitTask(
     participants: [person.id],
     person,
     place,
-    dur: person.visits?.minutes ?? ctx.state.settings.visitMinutes,
+    dur: ctx.state.durationOverrides?.[id] ?? person.visits?.minutes ?? ctx.state.settings.visitMinutes,
     priority: rescheduled ? atLeastNormal(base) : base,
     strict: false,
     rescheduled,
@@ -276,7 +283,8 @@ function visitTasks(
     reason,
   });
   if (!isValidVisitPlan(visits)) return invalid("INVALID_FREQUENCY");
-  const place = person.places[0];
+  // Only a temporary address (just entered from hospital): it is enough while it lasts.
+  const place = person.places[0] ?? person.temporary?.place;
   if (!place) return invalid("NO_ADDRESS");
   const fresh = freshStart(ctx, person, visits, P0, P1, freshRanks.get(person.id));
   const due = fresh?.nextDue ?? nextVisitDue(ctx, person);
@@ -400,7 +408,7 @@ function earlyTasks(ctx: PlannerContext, P0: IsoDate, P1: IsoDate, busy: Readonl
   const out: Task[] = [];
   for (const person of ctx.state.contacts) {
     const { visits } = person;
-    const place = person.places[0];
+    const place = person.places[0] ?? person.temporary?.place;
     if (!visits || !place || busy.has(person.id) || person.category !== "PROTEGE" || person.status !== "ACTIVE") continue;
     if (!isValidVisitPlan(visits)) continue;
     const due = nextVisitDue(ctx, person);

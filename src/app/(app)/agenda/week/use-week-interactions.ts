@@ -7,6 +7,7 @@ import type { EntryAction } from "./entry-menu";
 import { addDays, localToday, mondayOf, timeRange } from "./format";
 import type { MoveTarget } from "./move-dialog";
 import type { NotesTarget } from "../notes/notes-dialog";
+import type { DurationTarget } from "./duration-dialog";
 import type { WeekCommands } from "./use-week-commands";
 import type { WeekData } from "./use-week-data";
 
@@ -21,6 +22,16 @@ function useWeekDialogState(data: WeekData) {
   /** « Supprimer le rendez-vous… »: kept while the dialog closes, so its title never goes blank. */
   const [deleting, setDeleting] = useState<{ id: string; title: string } | null>(null);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  /** « Ce jour… »: office half-day, reschedule. */
+  const [openDay, setOpenDay] = useState<DayView | null>(null);
+  function closeDay() {
+    setOpenDay(null);
+  }
+  /** « Durée pour cette fois… ». */
+  const [resizing, setResizing] = useState<DurationTarget | null>(null);
+  function closeResize() {
+    setResizing(null);
+  }
   /** « Modifier le rendez-vous… »: the appointment behind the block. */
   const [editingId, setEditingId] = useState<string | null>(null);
   function closeEdit() {
@@ -50,7 +61,7 @@ function useWeekDialogState(data: WeekData) {
     setIsDeleteOpen(true);
   }
 
-  return { moving, setMoving, missed, setMissed, isAppointmentOpen, setIsAppointmentOpen, notes, setNotes, closeNotes, closeMove, handleMissedOpenChange, handleDialogDone, openAppointment, deleting, isDeleteOpen, setIsDeleteOpen, askDelete, editingId, setEditingId, closeEdit };
+  return { moving, setMoving, missed, setMissed, isAppointmentOpen, setIsAppointmentOpen, notes, setNotes, closeNotes, closeMove, handleMissedOpenChange, handleDialogDone, openAppointment, deleting, isDeleteOpen, setIsDeleteOpen, askDelete, editingId, setEditingId, closeEdit, resizing, setResizing, closeResize, openDay, setOpenDay, closeDay };
 }
 
 /** Week navigation: previous, next, and the server's « today ». */
@@ -71,12 +82,13 @@ function useWeekNavigation(data: WeekData) {
 export function useWeekInteractions(data: WeekData, commands: WeekCommands) {
   const dialogs = useWeekDialogState(data);
   const navigation = useWeekNavigation(data);
-  const { setMoving, setMissed, setNotes, askDelete, setEditingId } = dialogs;
+  const { setMoving, setMissed, setNotes, askDelete, setEditingId, setResizing } = dialogs;
 
   function handleEntryAction(action: EntryAction, entry: EntryView, day: DayView) {
     if (action === "move") setMoving({ entry, date: day.date });
     else if (action === "unpin") void commands.unpin(entry);
     else if (action === "skip") void commands.skip(entry);
+    else if (action === "duration") setResizing({ entry, dayLabel: day.label });
     else if (action === "edit" && entry.appointmentId) setEditingId(entry.appointmentId);
     else if (action === "delete" && entry.appointmentId) askDelete({ id: entry.appointmentId, title: entry.title });
     else if (action === "notes" && entry.itemKey !== null) setNotes({ key: entry.itemKey, title: entry.title, when: `${day.label}, ${timeRange(entry.start, entry.end)}` });

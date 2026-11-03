@@ -14,6 +14,8 @@ export type PlaceKind = "OFFICE" | "PERSON" | "PARTNER" | "OUTSIDE" | "VISIO";
 
 export type FormValues = {
   readonly title: string;
+  /** « Rendez-vous personnel » (Thomas, 2026-11-03): nobody else, its own colour. */
+  readonly personal: boolean;
   /** Persons to visit taking part. */
   readonly participantIds: readonly string[];
   /** Contacts of the shared address book taking part (lawyer, notary…). */
@@ -77,6 +79,7 @@ const DAY_MS = 86_400_000;
 export function initialValues(today: IsoDate, participantIds: readonly string[]): FormValues {
   return {
     title: "",
+    personal: false,
     participantIds,
     partnerIds: [],
     place: "OFFICE",
@@ -103,6 +106,7 @@ export function valuesFromInput(input: AppointmentInput, today: IsoDate): FormVa
   return {
     ...base,
     title: input.title,
+    personal: input.participantIds.length === 0 && (input.partnerIds ?? []).length === 0,
     partnerIds: input.partnerIds ?? [],
     place: place.kind === "PLACE" || place.kind === "HOME" ? "OFFICE" : place.kind,
     placePersonId: place.kind === "PERSON" ? place.personId : null,
@@ -122,6 +126,11 @@ export function valuesFromInput(input: AppointmentInput, today: IsoDate): FormVa
 
 function minutesToTime(minutes: number): string {
   return `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
+}
+
+/** A personal appointment is never « chez » a person or a contact. */
+export function placeChoicesFor(values: FormValues): readonly { value: PlaceKind; label: string }[] {
+  return values.personal ? PLACE_CHOICES.filter((c) => c.value !== "PERSON" && c.value !== "PARTNER") : PLACE_CHOICES;
 }
 
 /** The weeks offered by « Dans la semaine du… »: this one and the next ones, Monday to Friday. */
@@ -198,8 +207,9 @@ function whenInput(values: FormValues): AppointmentInput["when"] {
 export function toInput(values: FormValues): AppointmentInput {
   return {
     title: values.title.trim(),
-    participantIds: [...values.participantIds],
-    partnerIds: [...values.partnerIds],
+    // Personal: nobody else, whatever was ticked before the box.
+    participantIds: values.personal ? [] : [...values.participantIds],
+    partnerIds: values.personal ? [] : [...values.partnerIds],
     place: placeInput(values),
     durationMin: values.durationMin,
     when: whenInput(values),

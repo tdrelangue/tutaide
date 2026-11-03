@@ -5,7 +5,9 @@ import { fromIso } from "@/lib/agenda/bridge/dates";
 import { loadPlannerState, ownerToday } from "@/lib/agenda/bridge/load";
 import { applyMoves, addAppointment as addNewAppointment, movableCandidates, placeInFreeSlot, previewMoves } from "@/lib/agenda/bridge/ops/insert";
 import { markItemMissed } from "@/lib/agenda/bridge/ops/missed";
-import { editAppointment } from "@/lib/agenda/bridge/ops/edit";
+import { editAppointment, setValidatedDuration } from "@/lib/agenda/bridge/ops/edit";
+import { moveDayPart, moveDaySchema, officeDayOf, officeDaySchema, setOfficeDay, type DayPart, type MoveDayReport } from "@/lib/agenda/day-actions";
+import { z } from "zod";
 import { pinBlock, setOccurrence, setRuleAnswer, unpinBlock } from "@/lib/agenda/bridge/ops/adjust";
 import { validatePeriod } from "@/lib/agenda/bridge/ops/plan";
 import type { Period } from "@/lib/agenda/bridge/period";
@@ -136,6 +138,49 @@ export async function skipOccurrence(occurrenceKey: string, skipped: boolean): P
   return run("skipOccurrence", async ({ ownerId }) => {
     const outcome = await setOccurrence(ownerId, itemKeySchema.parse(occurrenceKey), { skipped: flagSchema.parse(skipped) }, new Date());
     return adjustResult(outcome, "Cette visite est introuvable.");
+  });
+}
+
+const durationSchema = z.number().int().min(5, "Une visite dure au moins 5 minutes.").max(10 * 60, "Dix heures au plus.");
+
+/**
+ * « Durée pour cette fois » (Thomas, 2026-11-03): this visit only, the person's
+ * usual length is kept. A proposed visit keeps it for its occurrence (null =
+ * back to usual); a validated one is shortened or lengthened in place.
+ */
+export async function setVisitDuration(target: { occurrenceKey: string } | { itemKey: string }, minutes: number | null): Promise<Done> {
+  return run("setVisitDuration", async ({ ownerId }) => {
+    if ("occurrenceKey" in target) {
+      const durationMin = minutes === null ? null : durationSchema.parse(minutes);
+      const outcome = await setOccurrence(ownerId, itemKeySchema.parse(target.occurrenceKey), { durationMin }, new Date());
+      return adjustResult(outcome, "Cette visite est introuvable.");
+    }
+    if (minutes === null) return fail("Indiquez une durée.");
+    const today = await ownerToday(ownerId, new Date());
+    const done = await setValidatedDuration(ownerId, itemKeySchema.parse(target.itemKey), durationSchema.parse(minutes), today);
+    return done ? doneResult() : fail("Cette visite est passée ou introuvable.");
+  });
+}
+
+/** « Au bureau ce jour-là » currently set on a date (null = none). */
+export async function getOfficeDay(date: IsoDate): Promise<AgendaDataResult<DayPart | null>> {
+  return run("getOfficeDay", async ({ ownerId }) => ({ success: true, data: await officeDayOf(ownerId, dateSchema.parse(date)) }));
+}
+
+/** Sets or clears « Au bureau » on one date (Thomas, 2026-11-03). */
+export async function saveOfficeDay(date: IsoDate, part: DayPart | null): Promise<Done> {
+  return run("saveOfficeDay", async ({ ownerId }) => {
+    const input = officeDaySchema.parse({ date, part });
+    await setOfficeDay(ownerId, input.date, input.part);
+    return doneResult();
+  });
+}
+
+/** « Reprogrammer »: the validated round of a morning, afternoon or day goes to another day. */
+export async function rescheduleDayPart(from: IsoDate, part: DayPart, to: IsoDate): Promise<AgendaDataResult<MoveDayReport>> {
+  return run("rescheduleDayPart", async ({ ownerId }) => {
+    const input = moveDaySchema.parse({ from, part, to });
+    return written(await moveDayPart(ownerId, input.from, input.part, input.to));
   });
 }
 

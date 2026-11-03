@@ -76,6 +76,8 @@ export type EntryView = {
   readonly canSkip: boolean;
   /** The appointment behind the block (« Supprimer le rendez-vous… »); null for a visit or a past block. */
   readonly appointmentId?: string | null;
+  /** No participant: a personal appointment (« Personnel », its own colour). Only read for APPT. */
+  readonly personal?: boolean;
   /** Group of the first participant that has one (colour + name); null for a block. */
   readonly group?: GroupTag | null;
 };

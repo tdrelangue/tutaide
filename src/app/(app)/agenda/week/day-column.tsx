@@ -20,7 +20,8 @@ export type GridLimits = Pick<WeekView["grid"], "dayEnd" | "dayEndLimit">;
 /** Today is framed on its three cells: header ring, side borders, bottom border. */
 const TODAY_SIDES = "border-x-2 border-x-primary";
 
-export function DayHeader({ day, compact }: { day: DayView; compact: boolean }) {
+export function DayHeader({ day, compact, onOpen }: { day: DayView; compact: boolean; onOpen?: (day: DayView) => void }) {
+  const canOpen = onOpen !== undefined && !day.isPast && !day.offDay;
   return (
     <div
       className={cn(
@@ -40,6 +41,16 @@ export function DayHeader({ day, compact }: { day: DayView; compact: boolean }) 
           <CalendarOff className="h-3 w-3 shrink-0" aria-hidden="true" />
           {day.closedLabel}
         </span>
+      )}
+      {canOpen && (
+        <button
+          type="button"
+          onClick={() => onOpen(day)}
+          className="rounded border px-1.5 py-0.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          aria-label={`${day.label} : au bureau, reprogrammer…`}
+        >
+          Ce jour…
+        </button>
       )}
     </div>
   );

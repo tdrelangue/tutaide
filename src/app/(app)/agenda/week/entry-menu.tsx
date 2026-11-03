@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { CalendarX2, ListChecks, Move, Pencil, SkipForward, Trash2, Undo2 } from "lucide-react";
+import { CalendarX2, Clock, ListChecks, Move, Pencil, SkipForward, Trash2, Undo2 } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,7 +15,7 @@ import { canHaveNotes } from "../calendar/calendar-format";
 import { PRIORITY_LABEL, SOURCE_WORD, WARNING_LABEL, timeRange } from "./format";
 import type { DragHandlers } from "./use-pointer-drag";
 
-export type EntryAction = "move" | "unpin" | "skip" | "missed" | "notes" | "edit" | "delete";
+export type EntryAction = "move" | "unpin" | "skip" | "missed" | "notes" | "edit" | "duration" | "delete";
 
 type EntryMenuProps = {
   readonly entry: EntryView;
@@ -76,7 +76,9 @@ function EntryActions({ entry, disabled, onAction }: { entry: EntryView; disable
   const hasNotes = canHaveNotes(entry);
   // Deleting it here spares a trip to « Rendez-vous » (Thomas, 2026-11-02).
   const canDelete = entry.kind === "APPT" && (entry.appointmentId ?? null) !== null;
-  const hasAny = entry.canMove || canUnpin || canSkip || canMiss || hasNotes || canDelete;
+  // A visit to come, proposed or validated: its length for this time only (Thomas, 2026-11-03).
+  const canResize = entry.kind === "VISIT" && ((entry.source === "PROPOSED" && entry.occurrenceKey !== null) || (entry.source === "VALIDATED" && !entry.canMarkMissed && entry.itemKey !== null));
+  const hasAny = entry.canMove || canUnpin || canSkip || canMiss || hasNotes || canDelete || canResize;
   if (!hasAny) {
     return <DropdownMenuItem disabled>Aucune action pour ce bloc</DropdownMenuItem>;
   }
@@ -85,6 +87,7 @@ function EntryActions({ entry, disabled, onAction }: { entry: EntryView; disable
       {entry.canMove && <ActionItem action="move" icon={<Move aria-hidden="true" />} label="Déplacer…" disabled={disabled} onAction={onAction} />}
       {canUnpin && <ActionItem action="unpin" icon={<Undo2 aria-hidden="true" />} label="Rendre au planificateur" disabled={disabled} onAction={onAction} />}
       {canSkip && <ActionItem action="skip" icon={<SkipForward aria-hidden="true" />} label="Pas cette fois" disabled={disabled} onAction={onAction} />}
+      {canResize && <ActionItem action="duration" icon={<Clock aria-hidden="true" />} label="Durée pour cette fois…" disabled={disabled} onAction={onAction} />}
       {canDelete && <ActionItem action="edit" icon={<Pencil aria-hidden="true" />} label="Modifier le rendez-vous…" disabled={disabled} onAction={onAction} />}
       {hasNotes && <ActionItem action="notes" icon={<ListChecks aria-hidden="true" />} label="Notes et tâches…" disabled={false} onAction={onAction} />}
       {canMiss && <ActionItem action="missed" icon={<CalendarX2 aria-hidden="true" />} label="N'a pas eu lieu…" disabled={disabled} onAction={onAction} />}

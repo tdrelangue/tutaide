@@ -59,6 +59,9 @@ export type AgendaGroupInput = z.infer<typeof agendaGroupSchema>;
 
 export const groupIdSchema = z.string().regex(/^[a-z0-9]{20,40}$/, "Groupe introuvable.");
 
+const isoDay = (label: string) =>
+  z.string().regex(/^\d{4}-\d{2}-\d{2}$/, `${label} invalide.`).refine((d) => !Number.isNaN(Date.parse(`${d}T00:00:00Z`)), `${label} invalide.`);
+
 export const agendaPersonSchema = z
   .object({
     fullName: z.string().trim().min(2, "Indiquez le nom de la personne.").max(200),
@@ -84,6 +87,12 @@ export const agendaPersonSchema = z
     phone: phoneSchema,
     status: z.enum(["ACTIVE", "PAUSED", "ENDED"]),
     endReason: z.enum(["DECES", "DESSAISISSEMENT", "MAINLEVEE", "TRANSFERT", "AUTRE"]).nullable(),
+    /** « Adresse temporaire » (EHPAD, hôpital…) between two days; the usual address stays. */
+    tempAddress: z
+      .object({ address: placeSchema, from: isoDay("Date de début"), to: isoDay("Date de fin") })
+      .refine((t) => t.from <= t.to, { message: "La fin de l'adresse temporaire doit suivre son début.", path: ["to"] })
+      .nullable()
+      .optional(),
   })
   .refine((p) => (p.visitsPerPeriod === null) === (p.visitPeriod === null), {
     message: "Fréquence des visites incomplète.",

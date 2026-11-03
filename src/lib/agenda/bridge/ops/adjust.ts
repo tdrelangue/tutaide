@@ -114,6 +114,7 @@ const OCCURRENCE_KEY = /^([a-z0-9]{20,40})@(\d{4}-\d{2}-\d{2})$/;
 const occurrenceChangeSchema = z.object({
   skipped: z.boolean().optional(),
   priority: z.enum(["LOW", "NORMAL", "HIGH", "MUST"]).nullable().optional(),
+  durationMin: z.number().int().min(5).max(10 * 60).nullable().optional(),
 });
 
 /**
@@ -124,7 +125,7 @@ const occurrenceChangeSchema = z.object({
 export async function setOccurrence(
   ownerId: string,
   occurrenceKey: string,
-  change: { skipped?: boolean; priority?: Priority | null },
+  change: { skipped?: boolean; priority?: Priority | null; durationMin?: number | null },
   now: Date,
 ): Promise<AdjustOutcome> {
   const match = OCCURRENCE_KEY.exec(occurrenceKey);
@@ -135,8 +136,12 @@ export async function setOccurrence(
   const today = await ownerToday(ownerId, now);
   if (due < addDays(today, -OCCURRENCE_RANGE_DAYS) || due > addDays(today, OCCURRENCE_RANGE_DAYS)) return INVALID;
   if ((await db.agendaContact.count({ where: { ownerId, id: contactId, category: "PROTEGE" } })) === 0) return UNKNOWN;
-  const { skipped, priority } = parsed.data;
-  const data = { ...(skipped !== undefined ? { skipped } : {}), ...(priority !== undefined ? { priority } : {}) };
+  const { skipped, priority, durationMin } = parsed.data;
+  const data = {
+    ...(skipped !== undefined ? { skipped } : {}),
+    ...(priority !== undefined ? { priority } : {}),
+    ...(durationMin !== undefined ? { durationMin } : {}),
+  };
   try {
     await db.agendaOccurrenceOverride.upsert({
       where: { ownerId_occurrenceKey: { ownerId, occurrenceKey } },

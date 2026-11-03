@@ -104,10 +104,25 @@ function mapPrefDay(row: AgendaContact): Mapped<PrefDayRule> {
   });
 }
 
+type Temporary = NonNullable<Contact["temporary"]>;
+
+/** The « Adresse temporaire » row (dated), as the engine reads it; an EHPAD gets its site for grouping. */
+function mapTemporary(rows: readonly AgendaPlace[]): Mapped<Temporary> {
+  const row = rows.find((p) => p.fromDate !== null && p.toDate !== null);
+  if (!row || !row.fromDate || !row.toDate) return ABSENT;
+  const mapped = mapPlaceRow(row, "contact", row.id);
+  if (mapped.value === null) return rejected(mapped.issues);
+  const place = mapped.value;
+  const ehpad = findEhpad(place.address, place);
+  return found({ place: ehpad ? { ...place, site: ehpad.id } : place, from: toIso(row.fromDate), to: toIso(row.toDate) });
+}
+
 /** Always yields a contact; what could not be used is reported in the issues. */
 export function mapContact(input: ContactInput, today: string): Mapped<Contact> {
   const { row } = input;
-  const places = mapPlaces(row, input.places);
+  // A dated (temporary) address is never one of the usual places.
+  const places = mapPlaces(row, input.places.filter((p) => p.fromDate === null));
+  const temporary = mapTemporary(input.places);
   const avail = mapAvail(row.id, input.avails);
   const visits = mapVisits(row, today);
   const prefDay = mapPrefDay(row);
@@ -123,8 +138,9 @@ export function mapContact(input: ContactInput, today: string): Mapped<Contact> 
       status: row.status,
       visits: visits.value,
       prefDay: prefDay.value,
+      temporary: temporary.value,
     },
-    [...places.issues, ...avail.issues, ...visits.issues, ...prefDay.issues],
+    [...places.issues, ...avail.issues, ...visits.issues, ...prefDay.issues, ...temporary.issues],
   );
 }
 

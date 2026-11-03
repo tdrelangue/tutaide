@@ -25,7 +25,15 @@ describe("mapContact basics", () => {
       status: "PAUSED",
       visits: null,
       prefDay: null,
+      temporary: null,
     });
+  });
+
+  it("keeps a dated address apart, as the temporary one (Thomas, 2026-11-03)", () => {
+    const places = [placeRow({ id: "home" }), placeRow({ id: "temp", position: 90, fromDate: new Date("2026-10-01T00:00:00Z"), toDate: new Date("2026-10-31T00:00:00Z") })];
+    const value = mapContact(input({}, places), TODAY).value;
+    expect(value?.places.map((p) => p.id)).toEqual(["home"]);
+    expect(value?.temporary).toMatchObject({ from: "2026-10-01", to: "2026-10-31", place: { id: "temp" } });
   });
 
   it("orders places by position, then id", () => {

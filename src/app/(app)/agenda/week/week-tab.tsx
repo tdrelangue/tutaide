@@ -7,6 +7,8 @@ import type { PersonOption } from "../appointments/shared-contracts";
 import { AppointmentDialog } from "../appointments/appointment-dialog";
 import { DeleteAppointmentDialog } from "../appointments/delete-dialog";
 import { EditAppointmentDialog } from "../appointments/edit-dialog";
+import { DurationDialog } from "./duration-dialog";
+import { DayDialog } from "./day-dialog";
 import { MissedDialog } from "../appointments/missed-dialog";
 import { ERROR_TEXT } from "../address-field";
 import { addDays, mondayOf, weekLabel } from "./format";
@@ -119,7 +121,7 @@ function WeekContent({ data, commands, ui, busy, proposalTitleRef, jumpTo }: Con
         <IssuesCard issues={view.issues} title="Éléments que l'agenda n'a pas pu utiliser" />
         {isEmptyWeek(view) && <EmptyWeekNote />}
         {/* Re-keyed on a pick from the month, so the picked day opens even within the same week. */}
-        <WeekGrid key={`${view.from}:${jumpTo?.seq ?? 0}`} view={view} busy={busy} onEntryAction={ui.handleEntryAction} onDrop={ui.handleDrop} focusDate={jumpTo?.date ?? null} />
+        <WeekGrid key={`${view.from}:${jumpTo?.seq ?? 0}`} view={view} busy={busy} onEntryAction={ui.handleEntryAction} onDrop={ui.handleDrop} onOpenDay={ui.setOpenDay} focusDate={jumpTo?.date ?? null} />
         <Legend grid={view.grid} />
       </div>
       <ProposalPanel proposal={view.proposal} titleRef={proposalTitleRef} busy={busy} onAnswer={commands.answer} onRefuse={commands.refuse} />
@@ -141,6 +143,8 @@ function WeekDialogs({ data, ui, persons }: { data: WeekData; ui: WeekInteractio
       <MissedDialog open={ui.missed !== null} onOpenChange={ui.handleMissedOpenChange} item={ui.missed} onDone={ui.handleDialogDone} />
       <NotesDialog target={ui.notes} onClose={ui.closeNotes} />
       <DeleteAppointmentDialog open={ui.isDeleteOpen} onOpenChange={ui.setIsDeleteOpen} row={ui.deleting} onDone={ui.handleDialogDone} />
+      <DayDialog day={ui.openDay} onClose={ui.closeDay} onDone={ui.handleDialogDone} />
+      <DurationDialog target={ui.resizing} onClose={ui.closeResize} onDone={ui.handleDialogDone} />
       <EditAppointmentDialog appointmentId={ui.editingId} onClose={ui.closeEdit} persons={persons} onDone={ui.handleDialogDone} />
       <AppointmentDialog open={ui.isAppointmentOpen} onOpenChange={ui.setIsAppointmentOpen} persons={persons} onDone={ui.handleDialogDone} />
     </>

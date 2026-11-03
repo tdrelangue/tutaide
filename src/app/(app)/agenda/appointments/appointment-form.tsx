@@ -19,6 +19,7 @@ import {
   FIELD_ORDER,
   initialValues,
   PLACE_CHOICES,
+  placeChoicesFor,
   placePartner,
   placePerson,
   toInput,
@@ -29,6 +30,8 @@ import type { FieldErrors, FieldKey, FieldProps, FormValues } from "./form-model
 import { isPartnerOption, type PersonOption } from "./shared-contracts";
 import { ParticipantPicker } from "./participant-picker";
 import { WhenFields } from "./when-fields";
+import { QuickContactDialog } from "./quick-contact-dialog";
+import type { QuickContact } from "../actions";
 
 type AppointmentFormProps = {
   readonly persons: readonly PersonOption[];
@@ -44,8 +47,19 @@ type AppointmentFormProps = {
 };
 
 /** Step 1 of « Nouveau rendez-vous »: what, with whom, where, how long, when, how important. */
-export function AppointmentForm({ persons, defaultParticipantIds, isBusy, onSubmit, onCancel, initial, submitLabel = "Ajouter le rendez-vous", children }: AppointmentFormProps) {
+export function AppointmentForm({ persons: known, defaultParticipantIds, isBusy, onSubmit, onCancel, initial, submitLabel = "Ajouter le rendez-vous", children }: AppointmentFormProps) {
   const [values, setValues] = useState<FormValues>(() => initial ?? initialValues(localToday(), defaultParticipantIds));
+  /** Contacts added from « Avec qui ? » while filling the form (the page's list comes back with them later). */
+  const [added, setAdded] = useState<readonly PersonOption[]>([]);
+  const [newContactName, setNewContactName] = useState<string | null>(null);
+  const persons = [...known, ...added.filter((a) => !known.some((k) => k.id === a.id))];
+  function handleContactCreated(contact: QuickContact) {
+    setAdded((current) => [...current, { id: contact.id, fullName: contact.fullName, kind: "PARTNER", group: contact.group, searchText: contact.fullName }]);
+    setValues((current) => ({ ...current, partnerIds: [...current.partnerIds, contact.id] }));
+  }
+  function handleNewContactClose() {
+    setNewContactName(null);
+  }
   const [errors, setErrors] = useState<FieldErrors>({});
   const fields = useRef<Partial<Record<FieldKey, HTMLInputElement | null>>>({});
 
@@ -76,7 +90,8 @@ export function AppointmentForm({ persons, defaultParticipantIds, isBusy, onSubm
     <form onSubmit={handleSubmit} className="space-y-5" noValidate>
       <fieldset disabled={isBusy} className="space-y-5">
         <TitleField {...props} />
-        <ParticipantsField {...props} persons={persons} />
+        <PersonalField {...props} />
+        {!values.personal && <ParticipantsField {...props} persons={persons} onCreate={setNewContactName} />}
         <div className="grid gap-5 sm:grid-cols-[1fr_auto]">
           <PlaceField {...props} persons={persons} />
           <DurationField {...props} />
@@ -86,6 +101,12 @@ export function AppointmentForm({ persons, defaultParticipantIds, isBusy, onSubm
         {values.whenKind !== "FIXED" && <PriorityField {...props} />}
       </fieldset>
       {children}
+      <QuickContactDialog
+        name={newContactName}
+        address={values.place === "OUTSIDE" ? values.outsideAddress : null}
+        onClose={handleNewContactClose}
+        onCreated={handleContactCreated}
+      />
       <DialogFooter className="gap-2">
         {/* Focusable while saving: a disabled button would drop focus to <body> (WCAG 2.4.3). */}
         <BusyButton type="button" variant="outline" onClick={onCancel} busy={isBusy}>Annuler</BusyButton>
@@ -122,7 +143,22 @@ function TitleField({ values, update, errors, register }: FieldProps) {
   );
 }
 
-function ParticipantsField({ values, update, persons }: FieldProps & { readonly persons: readonly PersonOption[] }) {
+function PersonalField({ values, update }: FieldProps) {
+  function handleChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const personal = event.target.checked;
+    // « Chez la personne / le contact » make no sense without anyone: back to the office.
+    const place = personal && (values.place === "PERSON" || values.place === "PARTNER") ? "OFFICE" : values.place;
+    update({ personal, place });
+  }
+  return (
+    <label className="flex items-center gap-2 text-sm">
+      <input type="checkbox" checked={values.personal} onChange={handleChange} className="h-4 w-4 accent-primary" />
+      Rendez-vous personnel <span className="text-muted-foreground">(médecin, famille… : sans personne suivie, dans sa propre couleur)</span>
+    </label>
+  );
+}
+
+function ParticipantsField({ values, update, persons, onCreate }: FieldProps & { readonly persons: readonly PersonOption[]; readonly onCreate: (name: string) => void }) {
   /** One search for persons and contacts; the form keeps them apart (they are stored differently). */
   function handleChange(ids: string[]) {
     const partners = new Set(persons.filter(isPartnerOption).map((p) => p.id));
@@ -137,7 +173,7 @@ function ParticipantsField({ values, update, persons }: FieldProps & { readonly 
         Tapez quelques lettres du nom : personnes suivies et contacts (avocat, notaire…). Sans personne choisie, c&apos;est un rendez-vous personnel.
         {count > 0 && ` ${count} personne${count > 1 ? "s" : ""} choisie${count > 1 ? "s" : ""}.`}
       </p>
-      <ParticipantPicker persons={persons} value={chosen} onChange={handleChange} describedBy="appt-people-hint" />
+      <ParticipantPicker persons={persons} value={chosen} onChange={handleChange} describedBy="appt-people-hint" onCreate={onCreate} />
     </fieldset>
   );
 }
@@ -151,7 +187,7 @@ function PlaceField({ values, update, errors, register, persons }: FieldProps & 
     <fieldset className="space-y-2" aria-describedby={errors.place ? "appt-place-error" : undefined}>
       <legend className="text-sm font-medium">Où ?</legend>
       <div className="flex flex-wrap gap-x-4 gap-y-2">
-        {PLACE_CHOICES.map((choice, i) => (
+        {placeChoicesFor(values).map((choice, i) => (
           <label key={choice.value} className="flex items-center gap-2 text-sm">
             <input
               ref={i === 0 ? register("place") : undefined}

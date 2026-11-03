@@ -7,6 +7,7 @@ import type { BridgeIssue } from "../issues";
 export type MappedOverrides = {
   readonly skips: readonly string[];
   readonly priorityOverrides: Readonly<Record<string, Priority>>;
+  readonly durationOverrides: Readonly<Record<string, number>>;
   readonly issues: readonly BridgeIssue[];
 };
 
@@ -28,6 +29,7 @@ export function mapOverrides(rows: readonly AgendaOccurrenceOverride[]): MappedO
   return {
     skips: good.filter((r) => r.skipped).map((r) => r.occurrenceKey),
     priorityOverrides: Object.fromEntries(priorityEntries(good)),
+    durationOverrides: Object.fromEntries(good.flatMap((r): [string, number][] => (r.durationMin === null ? [] : [[r.occurrenceKey, r.durationMin]]))),
     issues: rows.filter((r) => !isConsistent(r)).map((r) => makeIssue("override", r.occurrenceKey, "BAD_KEY")),
   };
 }

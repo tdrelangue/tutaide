@@ -13,7 +13,24 @@ const base = (row: AgendaRule) => ({ id: row.id, label: row.label, strength: row
 const isExpressible = (row: AgendaRule): boolean =>
   row.dow !== null && row.fromDate === null && row.toDate === null;
 
+/** « Au bureau ce jour-là »: one day, stored with no weekday and the same first and last date. */
+function mapDated(row: AgendaRule): Mapped<SlotRule> {
+  if (row.fromDate === null || row.toDate === null || row.fromDate.getTime() !== row.toDate.getTime()) return unsupported(row);
+  const { fromMin, toMin } = row;
+  if (fromMin === null || toMin === null || fromMin >= toMin) return bad(row);
+  const date = toIso(row.fromDate);
+  const dow = isoDowOf(date);
+  if (!isIsoDow(dow)) return bad(row);
+  return found<SlotRule>({ ...base(row), type: "UNAVAILABLE", dow, date, allDay: false, from: fromMin, to: toMin, atOffice: row.atOffice });
+}
+
+function isoDowOf(date: string): number {
+  const d = new Date(`${date}T00:00:00Z`).getUTCDay();
+  return d === 0 ? 7 : d;
+}
+
 function mapUnavailable(row: AgendaRule): Mapped<SlotRule> {
+  if (row.dow === null) return mapDated(row);
   if (!isExpressible(row)) return unsupported(row);
   if (!isIsoDow(row.dow)) return bad(row);
   if (row.allDay === true) return found<SlotRule>({ ...base(row), type: "UNAVAILABLE", dow: row.dow, allDay: true });

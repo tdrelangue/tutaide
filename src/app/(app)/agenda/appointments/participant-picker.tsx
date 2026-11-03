@@ -1,7 +1,7 @@
 "use client";
 
 import { useId, useRef, useState } from "react";
-import { Search, X } from "lucide-react";
+import { Search, UserPlus, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { GroupTag } from "@/lib/agenda/groups-rules";
 import { searchPersons } from "@/lib/agenda/participant-search";
@@ -15,6 +15,8 @@ type Props = {
   /** Hint read with the search bar. */
   readonly describedBy?: string;
   readonly label?: string;
+  /** « Ajouter « X » comme contact… »: offered for a name nobody has (Thomas, 2026-11-03). */
+  readonly onCreate?: (typed: string) => void;
 };
 
 /** The groups present among the persons, in their first-seen order. */
@@ -31,7 +33,7 @@ const personsLabel = (n: number) => `${n} personne${n > 1 ? "s" : ""}`;
  * filters, instead of a long list to scroll. ARIA combobox: arrows move in the
  * suggestions, Entrée picks, Échap closes; the number of results is announced.
  */
-export function ParticipantPicker({ persons, value, onChange, describedBy, label = "Rechercher une personne" }: Props) {
+export function ParticipantPicker({ persons, value, onChange, describedBy, label = "Rechercher une personne", onCreate }: Props) {
   const [query, setQuery] = useState("");
   const [groupId, setGroupId] = useState<string | null>(null);
   const [isOpen, setIsOpen] = useState(false);
@@ -44,6 +46,15 @@ export function ParticipantPicker({ persons, value, onChange, describedBy, label
   const { matches, total } = searchPersons(persons, query, { groupId, exclude: new Set(value) });
   const activeIndex = Math.min(active, Math.max(matches.length - 1, 0));
   const showList = isOpen && (query.trim() !== "" || groupId !== null || matches.length > 0);
+  const typed = query.trim();
+  const sameName = (p: PersonOption) => p.fullName.localeCompare(typed, "fr", { sensitivity: "base" }) === 0;
+  const canCreate = onCreate !== undefined && typed.length >= 2 && !persons.some(sameName);
+  function create() {
+    if (!onCreate) return;
+    onCreate(typed);
+    setQuery("");
+    setIsOpen(false);
+  }
 
   function pick(person: PersonOption) {
     onChange([...value, person.id]);
@@ -74,6 +85,7 @@ export function ParticipantPicker({ persons, value, onChange, describedBy, label
       event.preventDefault();
       const person = matches[activeIndex];
       if (person) pick(person);
+      else if (canCreate) create();
     } else if (event.key === "Escape" && showList) {
       // The dialog stays open (appointment-dialog.tsx handleEscape).
       setIsOpen(false);
@@ -89,7 +101,7 @@ export function ParticipantPicker({ persons, value, onChange, describedBy, label
     inputRef.current?.focus();
   }
 
-  if (persons.length === 0) {
+  if (persons.length === 0 && !onCreate) {
     return <p className="text-sm text-muted-foreground">Aucune personne dans l&apos;agenda pour l&apos;instant.</p>;
   }
 
@@ -129,11 +141,13 @@ export function ParticipantPicker({ persons, value, onChange, describedBy, label
             activeIndex={activeIndex}
             onPick={pick}
             onHover={setActive}
+            createLabel={canCreate ? typed : null}
+            onCreate={create}
           />
         )}
       </div>
       <p className="sr-only" aria-live="polite">
-        {showList ? (total === 0 ? "Aucune personne trouvée" : `${personsLabel(total)} trouvée${total > 1 ? "s" : ""}`) : ""}
+        {showList ? (total === 0 ? `Aucune personne trouvée${canCreate ? " ; Entrée pour l'ajouter comme contact" : ""}` : `${personsLabel(total)} trouvée${total > 1 ? "s" : ""}`) : ""}
       </p>
 
       {chosen.length > 0 && (
@@ -166,9 +180,12 @@ type SuggestionsProps = {
   readonly activeIndex: number;
   readonly onPick: (person: PersonOption) => void;
   readonly onHover: (index: number) => void;
+  /** The typed name, when it can become a new contact. */
+  readonly createLabel: string | null;
+  readonly onCreate: () => void;
 };
 
-function Suggestions({ listId, baseId, matches, total, activeIndex, onPick, onHover }: SuggestionsProps) {
+function Suggestions({ listId, baseId, matches, total, activeIndex, onPick, onHover, createLabel, onCreate }: SuggestionsProps) {
   return (
     <div className="absolute z-50 mt-1 w-full rounded-md border bg-popover p-1 shadow-md">
       {matches.length === 0 ? (
@@ -202,6 +219,20 @@ function Suggestions({ listId, baseId, matches, total, activeIndex, onPick, onHo
         <p className="border-t px-2 py-1.5 text-xs text-muted-foreground">
           … et {total - matches.length} autre{total - matches.length > 1 ? "s" : ""} : précisez la recherche.
         </p>
+      )}
+      {createLabel !== null && (
+        <button
+          type="button"
+          // mousedown, not click: the input's blur would close the list first.
+          onMouseDown={(event) => {
+            event.preventDefault();
+            onCreate();
+          }}
+          className="mt-1 flex w-full items-center gap-2 rounded border-t px-2 py-1.5 text-left text-sm hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <UserPlus className="h-4 w-4 shrink-0" aria-hidden="true" />
+          Ajouter « {createLabel} » comme contact…
+        </button>
       )}
     </div>
   );

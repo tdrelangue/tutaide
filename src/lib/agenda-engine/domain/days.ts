@@ -117,7 +117,7 @@ function buildDay(
   }
   const dow = isoDow(date);
   for (const rule of rules)
-    if (rule.type !== "VACATION" && rule.dow === dow)
+    if (rule.type !== "VACATION" && rule.dow === dow && (rule.type !== "UNAVAILABLE" || rule.date === undefined || rule.date === date))
       applyRule(day, rule, ctx, opts);
   day.blocks.push(
     ...fixed.filter((f) => f.due === date).map(eventBlock),

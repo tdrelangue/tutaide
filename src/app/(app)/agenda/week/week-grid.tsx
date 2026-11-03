@@ -22,6 +22,8 @@ type WeekGridProps = {
   readonly busy: boolean;
   readonly onEntryAction: (action: EntryAction, entry: EntryView, day: DayView) => void;
   readonly onDrop: (entry: EntryView, date: IsoDate, start: Minutes) => void;
+  /** « Ce jour… »: office half-day, reschedule (a working day still to come). */
+  readonly onOpenDay?: (day: DayView) => void;
   /** Day to open directly on a phone (coming from the month); otherwise the compact week shows first. */
   readonly focusDate?: IsoDate | null;
 };
@@ -38,7 +40,7 @@ function columnTemplate(days: readonly DayView[], isNarrow: boolean): string {
 }
 
 /** The « carnet de tournée »: hour rail and paper day columns. Keyed by week, so the pager resets. */
-export function WeekGrid({ view, busy, onEntryAction, onDrop, focusDate }: WeekGridProps) {
+export function WeekGrid({ view, busy, onEntryAction, onDrop, focusDate, onOpenDay }: WeekGridProps) {
   const isNarrow = useMediaQuery(NARROW_QUERY);
   /** Phone only: the day opened from the compact week, null = the compact week. */
   const [dayIndex, setDayIndex] = useState<number | null>(() => focusIndex(view.days, focusDate));
@@ -65,7 +67,7 @@ export function WeekGrid({ view, busy, onEntryAction, onDrop, focusDate }: WeekG
         <div className="grid" style={{ gridTemplateColumns: columnTemplate(days, isNarrow) }}>
           <div className="sticky left-0 z-20 border-b bg-background" />
           {days.map((day) => (
-            <DayHeader key={day.date} day={day} compact={day.offDay && !isNarrow} />
+            <DayHeader key={day.date} day={day} compact={day.offDay && !isNarrow} onOpen={onOpenDay} />
           ))}
           <HourRail range={range} limits={view.grid} />
           {days.map((day) => (

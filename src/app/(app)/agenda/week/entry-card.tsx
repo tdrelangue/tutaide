@@ -26,9 +26,13 @@ export const SOURCE_STYLE: Readonly<Record<EntrySource, string>> = {
 
 const WARNED_PIN_STYLE = "border-2 border-agenda-warn bg-agenda-warn-soft";
 
+/** « Personnel » (Thomas, 2026-11-03): its own colour, never a group's. */
+const PERSONAL_CARD = "border border-agenda-personal/40 border-l-4 border-l-agenda-personal bg-agenda-personal/10";
+
 /** A validated block takes its group's colour; every other state keeps its own style. */
 export function entryStyle(entry: EntryView): string {
   if (entry.source === "PINNED" && entry.warning) return WARNED_PIN_STYLE;
+  if (entry.source === "VALIDATED" && entry.kind === "APPT" && entry.personal) return PERSONAL_CARD;
   if (entry.source === "VALIDATED" && entry.group) return GROUP_CARD[entry.group.color];
   return SOURCE_STYLE[entry.source];
 }
@@ -147,6 +151,7 @@ function CardTags({ entry }: { entry: EntryView }) {
     <span className="mt-0.5 flex flex-wrap items-center gap-1 text-xs leading-tight">
       <span className="font-medium">{SOURCE_WORD[entry.source]}</span>
       {entry.group && <GroupBadge group={entry.group} />}
+      {entry.kind === "APPT" && entry.personal && <span className="rounded border border-agenda-personal px-1">Personnel</span>}
       {entry.priority && <PriorityTag priority={entry.priority} />}
       {entry.early && <span className="rounded border border-border px-1" title="Pas encore à voir : proposé car la journée passe par sa commune">En avance</span>}
       {entry.moved && <span className="rounded border border-agenda-warn px-1">Décalé</span>}

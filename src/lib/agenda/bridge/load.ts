@@ -92,6 +92,7 @@ export async function loadPlannerState(ownerId: string, now: Date): Promise<Load
     past: items.past,
     skips: overrides.skips,
     priorityOverrides: overrides.priorityOverrides,
+    durationOverrides: overrides.durationOverrides,
     answers,
     refusedExceptions,
     pins: pins.values,

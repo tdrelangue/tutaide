@@ -51,6 +51,8 @@
     --group-pink: 330 75% 48%;
     --group-purple: 270 60% 50%;
     --group-slate: 215 16% 42%;
+    /* Personal appointments (« Personnel »): a colour no group can take. */
+    --agenda-personal: 300 45% 38%;
   }
 
   .dark {
@@ -98,6 +100,7 @@
     --group-pink: 330 80% 70%;
     --group-purple: 270 85% 75%;
     --group-slate: 215 20% 65%;
+    --agenda-personal: 300 55% 72%;
   }
 }
 

@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import type { Prisma } from "@prisma/client";
 import { personsFromDossiers, type AgendaEndReasonValue, type AgendaPeriodValue, type DossierPerson } from "./rules";
 import type { AddressPrecision } from "./geocode";
 import { AgendaRefusal } from "./bridge/errors";
@@ -37,6 +38,8 @@ export type AgendaPersonView = {
   /** Null = the first group (groups-rules.ts groupOf). */
   groupId: string | null;
   fromDossiers: boolean;
+  /** Imported from the dossiers in the last days: the only time « Issue de vos dossiers » is shown. */
+  justImported: boolean;
   address: Place | null;
   /** Null = no regular visits. */
   visitsPerPeriod: number | null;
@@ -51,6 +54,8 @@ export type AgendaPersonView = {
   lastVisitOn: string | null;
   status: "ACTIVE" | "PAUSED" | "ENDED";
   endReason: AgendaEndReasonValue | null;
+  /** « Adresse temporaire » (EHPAD, hôpital…) between two days; null = none. */
+  tempAddress: { address: Place; from: string; to: string } | null;
 };
 
 /** Same defaults as the AgendaSettings columns. */
@@ -131,7 +136,8 @@ export async function saveAgendaSettings(ownerId: string, input: AgendaSettingsI
 // Protected persons
 // ---------------------------------------------------------------------------
 
-const personInclude = { places: { where: { position: 0 }, take: 1 } } as const;
+/** The usual address (position 0) and the temporary one (dated). */
+const personInclude = { places: { where: { OR: [{ position: 0, fromDate: null }, { fromDate: { not: null } }] } } } satisfies Prisma.AgendaContactInclude;
 
 type PersonRow = Awaited<ReturnType<typeof findPersonRows>>[number];
 
@@ -139,13 +145,24 @@ export function findPersonRows(ownerId: string) {
   return db.agendaContact.findMany({ where: { ownerId, category: "PROTEGE" }, include: personInclude });
 }
 
+/** « Issue de vos dossiers » marks the new ones of an import, then goes (Thomas, 2026-11-03). */
+const JUST_IMPORTED_DAYS = 7;
+
+function tempView(r: PersonRow): AgendaPersonView["tempAddress"] {
+  const row = r.places.find((p) => p.fromDate !== null && p.toDate !== null);
+  const address = row ? toPlace(row.address, row.point, row.precision) : null;
+  if (!row?.fromDate || !row.toDate || !address) return null;
+  return { address, from: row.fromDate.toISOString().slice(0, 10), to: row.toDate.toISOString().slice(0, 10) };
+}
+
 function toPersonView(r: PersonRow): AgendaPersonView {
-  const place = r.places[0];
+  const place = r.places.find((p) => p.fromDate === null && p.position === 0);
   return {
     id: r.id,
     fullName: r.fullName,
     groupId: r.groupId,
     fromDossiers: r.dossierGroupKey !== null,
+    justImported: r.dossierGroupKey !== null && Date.now() - r.createdAt.getTime() < JUST_IMPORTED_DAYS * 86_400_000,
     address: place ? toPlace(place.address, place.point, place.precision) : null,
     visitsPerPeriod: r.visitsPerPeriod,
     visitPeriod: r.visitPeriod,
@@ -157,6 +174,7 @@ function toPersonView(r: PersonRow): AgendaPersonView {
     lastVisitOn: r.lastVisitOn?.toISOString().slice(0, 10) ?? null,
     status: r.status,
     endReason: r.endReason,
+    tempAddress: tempView(r),
   };
 }
 
@@ -253,6 +271,7 @@ export async function createAgendaPerson(ownerId: string, actorId: string, input
       },
     });
     if (input.address) await tx.agendaPlace.create({ data: { ...placeColumns(ownerId, input.address), contactId: contact.id } });
+    await replaceTemporaryPlace(tx, ownerId, contact.id, input.tempAddress);
   });
 }
 
@@ -269,6 +288,7 @@ export async function updateAgendaPerson(ownerId: string, personId: string, inpu
     await assertPersonGroup(tx, ownerId, input.groupId);
     await tx.agendaContact.update({ where: key, data: { ...personColumns(input), endedOn } });
     await replaceDefaultPlace(tx, ownerId, personId, input.address);
+    await replaceTemporaryPlace(tx, ownerId, personId, input.tempAddress);
   });
   return true;
 }
@@ -298,6 +318,31 @@ export async function replaceDefaultPlace(tx: Tx, ownerId: string, contactId: st
     return;
   }
   const data = placeColumns(ownerId, address);
+  if (current) await tx.agendaPlace.update({ where: { id_ownerId: { id: current.id, ownerId } }, data });
+  else await tx.agendaPlace.create({ data: { ...data, contactId } });
+}
+
+/** Out of the way of the usual address (0) and of a contact's office places. */
+const TEMPORARY_POSITION = 90;
+const TEMPORARY_LABEL = "Adresse temporaire";
+
+/** One temporary address at most, updated in place. `undefined` = not sent: left as it is; null = removed. */
+async function replaceTemporaryPlace(tx: Tx, ownerId: string, contactId: string, temp: AgendaPersonInput["tempAddress"]): Promise<void> {
+  if (temp === undefined) return;
+  const current = await tx.agendaPlace.findFirst({ where: { ownerId, contactId, fromDate: { not: null } }, select: { id: true } });
+  if (temp === null) {
+    if (!current) return;
+    if (await placesInUse(tx, ownerId, [current.id])) throw new AgendaRefusal(PLACE_IN_USE_MESSAGE);
+    await tx.agendaPlace.delete({ where: { id_ownerId: { id: current.id, ownerId } } });
+    return;
+  }
+  const data = {
+    ...placeColumns(ownerId, temp.address),
+    label: TEMPORARY_LABEL,
+    position: TEMPORARY_POSITION,
+    fromDate: new Date(`${temp.from}T00:00:00.000Z`),
+    toDate: new Date(`${temp.to}T00:00:00.000Z`),
+  };
   if (current) await tx.agendaPlace.update({ where: { id_ownerId: { id: current.id, ownerId } }, data });
   else await tx.agendaPlace.create({ data: { ...data, contactId } });
 }

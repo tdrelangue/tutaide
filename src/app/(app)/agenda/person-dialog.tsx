@@ -25,6 +25,7 @@ import type { AgendaPartnerView } from "@/lib/agenda/partners";
 import { groupOf } from "@/lib/agenda/groups-rules";
 import type { AgendaPersonView, Place } from "@/lib/agenda/service";
 import { AddressField, ERROR_TEXT, PENDING_ADDRESS_ERROR } from "./address-field";
+import { TempAddressField, tempAddressProblem, type TempAddressDraft } from "./temp-address-field";
 import { saveAgendaPerson } from "./actions";
 import { DurationField } from "./duration-field";
 import { EhpadField, FrequencyField, LastVisitField, frequencyPayload, initialFrequency, type Frequency } from "./person-visit-fields";
@@ -71,7 +72,9 @@ export function PersonDialog({ open, onOpenChange, person, groups, partners = []
   const [status, setStatus] = useState<Status>(person?.status ?? "ACTIVE");
   const [endReason, setEndReason] = useState<AgendaEndReasonValue | null>(person?.endReason ?? null);
   const [isAddressPending, setIsAddressPending] = useState(false);
-  const [fieldErrors, setFieldErrors] = useState<{ name?: string; reason?: string; address?: string; frequency?: string; lastVisit?: string }>({});
+  const [tempAddress, setTempAddress] = useState<TempAddressDraft>(person?.tempAddress ?? null);
+  const [isTempPending, setIsTempPending] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<{ name?: string; reason?: string; address?: string; frequency?: string; lastVisit?: string; temp?: string }>({});
   const nameRef = useRef<HTMLInputElement>(null);
   const reasonRef = useRef<HTMLSelectElement>(null);
   const { run, isBusy, error } = useAgendaAction();
@@ -114,6 +117,8 @@ export function PersonDialog({ open, onOpenChange, person, groups, partners = []
     if (!frequency.isNone && frequency.every === null) errors.frequency = "Indiquez tous les combien (un nombre entre 1 et 52).";
     if (lastVisitOn !== "" && lastVisitOn > todayIso()) errors.lastVisit = "La dernière visite ne peut pas être dans le futur.";
     if (status === "ENDED" && endReason === null) errors.reason = "Indiquez la raison de la fin de mesure.";
+    const tempProblem = isTempPending ? PENDING_ADDRESS_ERROR : tempAddressProblem(tempAddress);
+    if (tempProblem) errors.temp = tempProblem;
     setFieldErrors(errors);
     if (errors.name) nameRef.current?.focus();
     else if (errors.reason) reasonRef.current?.focus();
@@ -135,6 +140,7 @@ export function PersonDialog({ open, onOpenChange, person, groups, partners = []
       phone: phone.trim() || null,
       status,
       endReason: status === "ENDED" ? endReason : null,
+      tempAddress: tempAddress && tempAddress.address ? { address: tempAddress.address, from: tempAddress.from, to: tempAddress.to } : null,
     };
     if (await run(() => saveAgendaPerson(person?.id ?? null, payload))) onOpenChange(false);
   }
@@ -199,6 +205,8 @@ export function PersonDialog({ open, onOpenChange, person, groups, partners = []
           {fieldErrors.address && <p role="alert" className={ERROR_TEXT}>{fieldErrors.address}</p>}
 
           <EhpadField address={address} choice={inEhpad} onChange={setInEhpad} disabled={isBusy} />
+
+          <TempAddressField value={tempAddress} onChange={setTempAddress} onPendingChange={setIsTempPending} today={todayIso()} error={fieldErrors.temp} disabled={isBusy} />
 
           <FrequencyField value={frequency} onChange={setFrequency} error={fieldErrors.frequency} disabled={isBusy} />
 

@@ -95,7 +95,8 @@ function sameAddress(stored: string, fromFile: string): boolean {
 
 /** What the file would change for a known person: only where both have a value and they differ. */
 function differences(person: Known, contact: FileContact) {
-  const stored = person.places[0];
+  // The usual address only: a temporary one (dated) is not what a file would say.
+  const stored = person.places.find((p) => p.fromDate === null && p.position === 0);
   const address = stored ? unseal(stored.address) : null;
   const phone = unseal(person.phone);
   return {

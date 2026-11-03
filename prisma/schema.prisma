@@ -681,6 +681,10 @@ model AgendaPlace {
   point        String
   precision    String?
   position     Int                 @default(0)
+  /// « Adresse temporaire » of a person (Thomas, 2026-11-03: EHPAD after a hospital stay, hospital…):
+  /// used for the visits between these days, the home address is never changed. Null = a usual place.
+  fromDate     DateTime?           @db.Date
+  toDate       DateTime?           @db.Date
   owner        User                @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   contact      AgendaContact?      @relation(fields: [contactId, ownerId], references: [id, ownerId], onDelete: Cascade)
   appointments AgendaAppointment[]
@@ -905,6 +909,8 @@ model AgendaOccurrenceOverride {
   dueOn         DateTime        @db.Date
   skipped       Boolean         @default(false)
   priority      AgendaPriority?
+  /// « Durée pour cette fois » (Thomas, 2026-11-03): this visit only, minutes. Null = the person's own.
+  durationMin   Int?
   owner         User            @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   contact       AgendaContact   @relation(fields: [contactId, ownerId], references: [id, ownerId], onDelete: Cascade)
 

@@ -5,31 +5,55 @@ import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
 import { compareByName, type NameSortBasis } from "@/lib/name-sort";
 import { loadNameSortBasis } from "@/lib/local-prefs";
 import { cn } from "@/lib/utils";
+import { cityKey } from "@/lib/agenda-engine/domain/grouping";
 
 /**
  * Tables sorted by clicking their headers (Thomas, 2026-11-03): by name — the
  * last or the first name, as chosen in Paramètres, like the dossiers — or by
  * address, town first so a town's people are side by side.
  */
-export type SortKey = "name" | "address";
+export type SortKey = "name" | "address" | "seen" | "planned" | "next";
 export type TableSort = { readonly key: SortKey; readonly direction: 1 | -1; readonly basis: NameSortBasis };
+export type DateKey = Exclude<SortKey, "name" | "address">;
 
-/** "tulle|19000 tulle 12 rue…": the town, then the whole label (empty town without a postcode). */
+/**
+ * "soudeilles|les landes, 19300 soudeilles": the town (as the planner reads it,
+ * also when the address is the bare commune), then the whole label.
+ */
 function townFirst(label: string): string {
   const plain = label.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
-  const town = [...plain.matchAll(/\b\d{5}\s+([a-z][a-z' -]*)/g)].at(-1)?.[1]?.trim() ?? "";
+  const town = cityKey(label)?.replace(/^\d{5} /, "") ?? "";
   return `${town}|${plain}`;
 }
 
 type Sortable = { readonly fullName: string; readonly address: { readonly label: string } | null };
 
-/** Pure: a new array, never the one given. Rows without an address always come last. */
-export function sortRows<T extends Sortable>(rows: readonly T[], sort: TableSort, nameOf: (row: T) => string = (r) => r.fullName): T[] {
+/** The date of a row for « Vu le », « Prévu le », « Prochaine visite »; null = none. */
+export type DateOf<T> = (row: T, key: DateKey) => string | null;
+
+/**
+ * Pure: a new array, never the one given. Rows without an address come last.
+ * « Vu le » A→Z = not seen for the longest first, never seen at the very top;
+ * « Prévu le » and « Prochaine visite » = soonest first, nothing planned last.
+ */
+export function sortRows<T extends Sortable>(rows: readonly T[], sort: TableSort, nameOf: (row: T) => string = (r) => r.fullName, dateOf?: DateOf<T>): T[] {
   const byName = (a: T, b: T) => compareByName(nameOf(a), nameOf(b), sort.basis);
+  const { key } = sort;
   return [...rows].sort((a, b) => {
-    if (sort.key === "name") return sort.direction * byName(a, b);
-    if (a.address === null || b.address === null) return a.address === null ? (b.address === null ? byName(a, b) : 1) : -1;
-    return sort.direction * townFirst(a.address.label).localeCompare(townFirst(b.address.label), "fr-FR") || byName(a, b);
+    if (key === "name") return sort.direction * byName(a, b);
+    if (key === "address") {
+      if (a.address === null || b.address === null) return a.address === null ? (b.address === null ? byName(a, b) : 1) : -1;
+      return sort.direction * townFirst(a.address.label).localeCompare(townFirst(b.address.label), "fr-FR") || byName(a, b);
+    }
+    const da = dateOf?.(a, key) ?? null;
+    const db = dateOf?.(b, key) ?? null;
+    if (da === null || db === null) {
+      if (da === db) return byName(a, b);
+      // Never seen is the most urgent; nothing planned is the least.
+      const missingFirst = key === "seen" ? -1 : 1;
+      return (da === null ? missingFirst : -missingFirst) * sort.direction;
+    }
+    return sort.direction * da.localeCompare(db) || byName(a, b);
   });
 }
 

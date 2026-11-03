@@ -7,7 +7,10 @@ import { findImportConflicts, importContactsFromFile, type ImportConflict, type 
 import { requireAgendaOwner } from "@/lib/agenda/context";
 import { dayRuleSchema, deleteDayRule, ruleIdSchema, saveDayRule } from "@/lib/agenda/day-rules";
 import { searchPlaces, type GeocodeResult } from "@/lib/agenda/geocode";
-import { createGroup, deleteGroup, moveGroup, setPersonsGroup, updateGroup, type GroupScope } from "@/lib/agenda/groups";
+import { createGroup, deleteGroup, listGroups, moveGroup, setPersonsGroup, updateGroup, type GroupScope } from "@/lib/agenda/groups";
+import { groupOf, type GroupTag } from "@/lib/agenda/groups-rules";
+import { splitFullName } from "@/lib/agenda/partners-file";
+import { partnerName } from "@/lib/agenda/rules";
 import { addressBookOf, createPartner, deletePartner, updatePartner } from "@/lib/agenda/partners";
 import { importPartnersFromFile, partnerImportSchema, type PartnerImportReport } from "@/lib/agenda/partners-import";
 import {
@@ -28,6 +31,7 @@ import {
   partnerIdSchema,
   personIdSchema,
   phoneSchema,
+  placeSchema,
 } from "@/lib/agenda/validation";
 import { failureMessage } from "./action-errors";
 
@@ -280,6 +284,48 @@ export async function moveAgendaPersonsToGroup(personIds: unknown, groupId: unkn
 // ---------------------------------------------------------------------------
 // Contacts: the partners' address book, shared by the structure (Thomas, 2026-11-02)
 // ---------------------------------------------------------------------------
+
+const quickContactSchema = z.object({
+  name: z.string().trim().min(2, "Indiquez le nom du contact.").max(150, "Nom trop long."),
+  groupId: groupIdSchema.nullable(),
+  address: placeSchema.nullable(),
+});
+
+export type QuickContact = { id: string; fullName: string; group: GroupTag | null };
+export type QuickContactResult = { success: true; data: QuickContact } | { success: false; error: string };
+
+/**
+ * « Ajouter « X » comme contact » from « Avec qui ? » (Thomas, 2026-11-03): a
+ * name nobody knows yet becomes a contact of the address book, in the group
+ * chosen, with the appointment's address if the user kept it.
+ */
+export async function quickAddContact(input: unknown): Promise<QuickContactResult> {
+  try {
+    const { ownerId, actorId } = await requireAgendaOwner();
+    const { name, groupId, address } = quickContactSchema.parse(input);
+    const book = await addressBookOf(ownerId);
+    const split = splitFullName(name);
+    const parts = split.lastName ? split : { ...split, lastName: name };
+    const data = agendaPartnerSchema.parse({ ...parts, groupId, address });
+    const id = await createPartner(book, ownerId, actorId, data);
+    const groups = await listGroups({ kind: "PARTNERS", book });
+    revalidatePath("/agenda");
+    return { success: true, data: { id, fullName: partnerName(data), group: groupOf(groupId, groups) } };
+  } catch (error) {
+    return { success: false, error: failureMessage("quickAddContact", error) };
+  }
+}
+
+/** The groups of the address book, for « Ajouter comme contact ». */
+export async function listContactGroups(): Promise<{ success: true; data: GroupTag[] } | { success: false; error: string }> {
+  try {
+    const { ownerId } = await requireAgendaOwner();
+    const groups = await listGroups({ kind: "PARTNERS", book: await addressBookOf(ownerId) });
+    return { success: true, data: groups.map(({ id, name, color }) => ({ id, name, color })) };
+  } catch (error) {
+    return { success: false, error: failureMessage("listContactGroups", error) };
+  }
+}
 
 export async function saveAgendaPartner(partnerId: string | null, input: unknown): Promise<AgendaActionResult> {
   try {

@@ -80,6 +80,8 @@ export interface Contact {
   readonly status: ContactStatus;
   readonly visits: VisitPlan | null;
   readonly prefDay: PrefDayRule | null;
+  /** « Adresse temporaire » (Thomas, 2026-11-03): visits due between `from` and `to` go there. */
+  readonly temporary?: { readonly place: Place; readonly from: IsoDate; readonly to: IsoDate } | null;
 }
 
 interface RuleBase {
@@ -90,11 +92,14 @@ interface RuleBase {
 export interface UnavailableAllDayRule extends RuleBase {
   readonly type: "UNAVAILABLE";
   readonly dow: IsoDow;
+  /** Set: this one day only (« au bureau ce jeudi », Thomas 2026-11-03); `dow` is that day's. */
+  readonly date?: IsoDate;
   readonly allDay: true;
 }
 export interface UnavailableHoursRule extends RuleBase {
   readonly type: "UNAVAILABLE";
   readonly dow: IsoDow;
+  readonly date?: IsoDate;
   readonly allDay: false;
   readonly from: Minutes;
   readonly to: Minutes;
@@ -231,6 +236,8 @@ export interface PlannerState {
   readonly skips: readonly string[];
   /** Per-occurrence priority, keyed by visit occurrence id. */
   readonly priorityOverrides: Readonly<Record<string, Priority>>;
+  /** « Durée pour cette fois »: minutes of one visit occurrence, keyed like `priorityOverrides`. */
+  readonly durationOverrides?: Readonly<Record<string, number>>;
   /** Answers to « Important » questions, keyed by rule id. */
   readonly answers: Readonly<Record<string, Answer>>;
   /** « Souhaité » rules whose exception the user refused: they become imperative. */

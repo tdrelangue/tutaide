@@ -19,6 +19,7 @@ import { groupOf, type GroupTag } from "@/lib/agenda/groups-rules";
 import { searchPersons } from "@/lib/agenda/participant-search";
 import type { AgendaPartnerView } from "@/lib/agenda/partners";
 import { partnerName } from "@/lib/agenda/rules";
+import { SortableHeader, sortRows, useTableSort } from "./sort-header";
 import { ERROR_TEXT } from "./address-field";
 import { removeAgendaPartner } from "./actions";
 import { GroupBadge, GroupFilter } from "./group-badge";
@@ -181,22 +182,29 @@ type TableProps = {
   onDelete: (partner: AgendaPartnerView) => void;
 };
 
+/** « Prénom Nom » for the name sort; a structure alone sorts by its name. */
+function sortName(partner: AgendaPartnerView): string {
+  return [partner.firstName, partner.lastName ?? partner.company].filter((s): s is string => s !== null).join(" ");
+}
+
 function ContactTable({ rows, onEdit, onDelete }: TableProps) {
+  const { sort, toggle } = useTableSort();
+  const sorted = sortRows(rows.map((row) => ({ ...row, fullName: sortName(row.partner), address: row.partner.address, row })), sort).map((s) => s.row);
   return (
     <div className="overflow-x-auto rounded-lg border">
       <table className="w-full text-sm">
         <caption className="sr-only">Contacts</caption>
         <thead className="bg-muted/50 text-left">
           <tr>
-            <th scope="col" className="px-3 py-2 font-medium">Nom</th>
+            <SortableHeader label="Nom" sortKey="name" sort={sort} onSort={toggle} />
             <th scope="col" className="px-3 py-2 font-medium">Téléphone</th>
             <th scope="col" className="px-3 py-2 font-medium">E-mail</th>
-            <th scope="col" className="px-3 py-2 font-medium">Adresse</th>
+            <SortableHeader label="Adresse" sortKey="address" sort={sort} onSort={toggle} />
             <th scope="col" className="px-3 py-2"><span className="sr-only">Actions</span></th>
           </tr>
         </thead>
         <tbody>
-          {rows.map((row) => <ContactRow key={row.id} row={row} onEdit={onEdit} onDelete={onDelete} />)}
+          {sorted.map((row) => <ContactRow key={row.id} row={row} onEdit={onEdit} onDelete={onDelete} />)}
         </tbody>
       </table>
     </div>

@@ -78,3 +78,26 @@ describe("the minimum admin time is never eaten by proposed visits", () => {
     expect(perDay(plan)).toBeLessThan(perDay(without));
   });
 });
+
+describe("« Durée pour cette fois »", () => {
+  it("one occurrence gets its own length, the person's usual one stays for the others", () => {
+    const person = protege("a", "a", { at: TULLE(1), last: "2026-09-19", minutes: 60 });
+    const base = createContext(state({ contacts: [person] }));
+    const [task] = buildTasks(base, MON, FRI, new Set()).tasks;
+    if (!task) throw new Error("expected a visit");
+    const once = createContext(state({ contacts: [person], durationOverrides: { [task.id]: 15 } }));
+    expect(buildTasks(once, MON, FRI, new Set()).tasks[0]?.dur).toBe(15);
+    expect(task.dur).toBe(60);
+  });
+});
+
+describe("« Adresse temporaire »", () => {
+  it("visits due while it lasts go there; the usual address comes back after", () => {
+    const hospital = at("chu", 45.28, 1.77, "19000 Tulle");
+    const person = { ...protege("a", "a", { at: OBJAT(1), last: "2026-09-19", minutes: 60 }), temporary: { place: hospital, from: "2026-10-01", to: "2026-10-31" } };
+    const inside = buildTasks(createContext(state({ contacts: [person] })), MON, FRI, new Set()).tasks[0];
+    expect(inside?.place.id).toBe("chu");
+    const after = { ...person, temporary: { place: hospital, from: "2026-09-01", to: "2026-09-30" } };
+    expect(buildTasks(createContext(state({ contacts: [after] })), MON, FRI, new Set()).tasks[0]?.place.address).toContain("Objat");
+  });
+});

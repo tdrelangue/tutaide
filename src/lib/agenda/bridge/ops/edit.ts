@@ -89,6 +89,20 @@ function overlaps(ctx: PlannerContext, ap: Appointment): ValidatedItem[] {
   return ctx.state.validated.filter((v) => v.apptId !== ap.id && v.date === date && v.start < time + ap.dur && v.end > time);
 }
 
+/**
+ * « Durée pour cette fois » on a validated visit still to come: same start,
+ * new end. False when there is no such item (past, cancelled, another owner's).
+ */
+export async function setValidatedDuration(ownerId: string, itemKey: string, minutes: number, today: string): Promise<boolean> {
+  const row = await db.agendaItem.findFirst({ where: { ownerId, itemKey, status: "VALIDATED", date: { gte: fromIso(today) } }, select: { id: true, startMin: true } });
+  if (!row) return false;
+  await db.$transaction(async (tx) => {
+    await queuePlanning(tx, ownerId);
+    await tx.agendaItem.update({ where: { id_ownerId: { id: row.id, ownerId } }, data: { endMin: Math.min(24 * 60, row.startMin + minutes) } });
+  }, TX_OPTIONS);
+  return true;
+}
+
 export async function editAppointment(ownerId: string, appointmentId: string, input: AppointmentInput, deps: PlanDeps): Promise<EditOutcome> {
   const { input: parsed, book } = await prepareAppointmentUpdate(ownerId, input);
   try {
