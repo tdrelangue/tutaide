@@ -125,13 +125,32 @@ function tourCost(ctx: PlannerContext, sim: Simulation): number {
   );
 }
 
+const onDays = new WeakMap<Task, Map<IsoDate, Task>>();
+
+/**
+ * The task as it is on that date: « chez la personne » goes to her temporary
+ * address on the days it covers. Same object for the same date (the
+ * availability memo is keyed by task).
+ */
+export function onDay(task: Task, date: IsoDate): Task {
+  const alt = task.placeOn;
+  if (!alt || date < alt.from || date > alt.to) return task;
+  let byDate = onDays.get(task);
+  if (!byDate) onDays.set(task, (byDate = new Map()));
+  const known = byDate.get(date);
+  if (known) return known;
+  const moved: Task = { ...task, place: alt.place };
+  byDate.set(date, moved);
+  return moved;
+}
 /** Cheapest position of `task` in a day's route (extra cost), or null if it fits nowhere. */
 export function tryInsert(
   ctx: PlannerContext,
   day: Day,
   route: readonly Task[],
-  task: Task,
+  given: Task,
 ) {
+  const task = onDay(given, day.date);
   const base = simulate(ctx, day, route);
   if (!base) return null;
   let best: { order: readonly Task[]; delta: number } | null = null;
@@ -220,7 +239,7 @@ function bestDay(
     const route = s.routes.get(day.date) ?? [];
     const ins = tryInsert(s.ctx, day, route, s.task);
     if (!ins) continue;
-    const cost = ins.delta + softCost(s.task, day, s.opts, load) + groupingCost(s.task, route);
+    const cost = ins.delta + softCost(s.task, day, s.opts, load) + groupingCost(onDay(s.task, day.date), route);
     if (!best || cost < best.cost) best = { day, order: ins.order, cost };
   }
   return best;

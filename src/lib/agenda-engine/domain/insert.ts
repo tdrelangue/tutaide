@@ -8,7 +8,7 @@ import type {
   PlannerState,
   ValidatedItem,
 } from "./model";
-import { allowedDay, hasRoom, placeTasks, tryInsert } from "./placement";
+import { allowedDay, hasRoom, onDay, placeTasks, tryInsert } from "./placement";
 import type { BentRule, Day, Task } from "./planTypes";
 import { stateRuleOptions } from "./plan";
 import { simulate } from "./simulate";
@@ -225,7 +225,8 @@ export function applyInsertion(
     title: ap.title,
     participants: ap.participants,
     personId: null,
-    place: task.place,
+    // The day found decides « chez la personne » (temporary address on those days).
+    place: onDay(task, slot.date).place,
     dur: ap.dur,
     date: slot.date,
     start: slot.start,

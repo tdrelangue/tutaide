@@ -2,6 +2,7 @@ import type { AgendaAvailability, AgendaContact, AgendaPlace } from "@prisma/cli
 import type { Availability, Contact, Place, PrefDayRule, VisitPlan } from "../../../agenda-engine/domain";
 import { isValidVisitPlan } from "../../../agenda-engine/domain/recurrence";
 import { EHPAD_VISIT_FROM, EHPAD_VISIT_TO, findEhpad, livesInEhpad, mentionsEhpad } from "../../ehpad";
+import { HOSPITAL_VISIT_FROM, HOSPITAL_VISIT_TO, findHospital, mentionsHospital } from "../../establishments";
 import { isIsoDow, toIso } from "../dates";
 import { ABSENT, found, groupBy, makeIssue, mapMany, rejected } from "../issues";
 import type { Many, Mapped } from "../issues";
@@ -66,12 +67,12 @@ function mapVisits(row: AgendaContact, today: string): Mapped<VisitPlan> {
 
 const ALL_DAYS = [1, 2, 3, 4, 5, 6, 7] as const;
 
-/** EHPAD mornings are for care: every window is cut to the afternoon (none left = never). */
-function afternoonOnly(avail: readonly Availability[] | null): readonly Availability[] {
+/** EHPAD (or hospital) mornings are for care: every window is cut to the visiting hours (none left = never). */
+function afternoonOnly(avail: readonly Availability[] | null, hours = { from: EHPAD_VISIT_FROM, to: EHPAD_VISIT_TO }): readonly Availability[] {
   const windows = avail ?? [{ dows: ALL_DAYS, from: 0, to: MINUTES_PER_DAY }];
   return windows.flatMap((w) => {
-    const from = Math.max(w.from, EHPAD_VISIT_FROM);
-    const to = Math.min(w.to, EHPAD_VISIT_TO);
+    const from = Math.max(w.from, hours.from);
+    const to = Math.min(w.to, hours.to);
     return from < to ? [{ ...w, from, to }] : [];
   });
 }
@@ -106,20 +107,37 @@ function mapPrefDay(row: AgendaContact): Mapped<PrefDayRule> {
 
 type Temporary = NonNullable<Contact["temporary"]>;
 
-/** The « Adresse temporaire » row (dated), as the engine reads it; an EHPAD gets its site for grouping. */
+type Stay = { readonly kind: "EHPAD" | "HOPITAL"; readonly site: string | null } | null;
+
+/**
+ * Where she stays (Thomas, 2026-11-04): a hospital named in the address
+ * first; then an EHPAD (written, or its building), then a hospital by its
+ * building or the word. An EHPAD and a hospital in one building (Cornil, le
+ * Chandou) read as the EHPAD, the narrower hours, unless the name says which.
+ */
+function stayAt(place: Place): Stay {
+  const named = findHospital(place.address, null);
+  if (named) return { kind: "HOPITAL", site: named.id };
+  const ehpad = findEhpad(place.address, place);
+  if (ehpad || mentionsEhpad(place.address)) return { kind: "EHPAD", site: ehpad?.id ?? null };
+  const hospital = findHospital(place.address, place);
+  if (hospital) return { kind: "HOPITAL", site: hospital.id };
+  return mentionsHospital(place.address) ? { kind: "HOPITAL", site: null } : null;
+}
+
+/** The « Adresse temporaire » row (dated), as the engine reads it; an EHPAD or a hospital gets its site for grouping. */
 function mapTemporary(rows: readonly AgendaPlace[], hours: TemporaryHours): Mapped<Temporary> {
   const row = rows.find((p) => p.fromDate !== null && p.toDate !== null);
   if (!row || !row.fromDate || !row.toDate) return ABSENT;
   const mapped = mapPlaceRow(row, "contact", row.id);
   if (mapped.value === null) return rejected(mapped.issues);
   const place = mapped.value;
-  const ehpad = findEhpad(place.address, place);
-  const inEhpad = hours.protege && (ehpad !== null || mentionsEhpad(place.address));
+  const stay = hours.protege ? stayAt(place) : null;
   return found({
-    place: ehpad ? { ...place, site: ehpad.id } : place,
+    place: stay?.site ? { ...place, site: stay.site } : place,
     from: toIso(row.fromDate),
     to: toIso(row.toDate),
-    ...temporaryAvail(inEhpad, hours),
+    ...temporaryAvail(stay, hours),
   });
 }
 
@@ -132,12 +150,14 @@ type TemporaryHours = {
 };
 
 /**
- * Her hours at the temporary address (Thomas, 2026-11-03): in an EHPAD,
- * afternoons only, like a resident; out of her EHPAD (hospital…), her own
- * hours without the EHPAD cut; otherwise her usual hours (nothing to say).
+ * Her hours at the temporary address (Thomas, 2026-11-03/04): in an EHPAD,
+ * afternoons only, like a resident; at the hospital, its visiting hours;
+ * elsewhere out of her EHPAD, her own hours without the EHPAD cut; otherwise
+ * her usual hours (nothing to say).
  */
-function temporaryAvail(inEhpad: boolean, hours: TemporaryHours): { avail?: readonly Availability[] | null } {
-  if (inEhpad) return { avail: afternoonOnly(hours.raw) };
+function temporaryAvail(stay: Stay, hours: TemporaryHours): { avail?: readonly Availability[] | null } {
+  if (stay?.kind === "EHPAD") return { avail: afternoonOnly(hours.raw) };
+  if (stay?.kind === "HOPITAL") return { avail: afternoonOnly(hours.raw, { from: HOSPITAL_VISIT_FROM, to: HOSPITAL_VISIT_TO }) };
   if (hours.homeInEhpad) return { avail: hours.raw };
   return {};
 }

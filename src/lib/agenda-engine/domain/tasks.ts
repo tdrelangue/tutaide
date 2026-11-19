@@ -48,7 +48,9 @@ const NO_MOVE = {
 export function apptTask(ctx: PlannerContext, ap: Appointment): Task | null {
   const stored = ctx.places.get(ap.placeId);
   if (!stored) return null;
-  const place = atTemporary(ctx, ap, stored);
+  const temp = temporaryOf(ctx, ap);
+  const fixedDay = ap.when.kind === "FIXED" ? ap.when.date : null;
+  const place = temp && fixedDay !== null && fixedDay >= temp.from && fixedDay <= temp.to ? temp.place : stored;
   const base = {
     ...NO_MOVE,
     id: ap.id,
@@ -78,21 +80,22 @@ export function apptTask(ctx: PlannerContext, ap: Appointment): Task | null {
     earliest: ap.when.from,
     latest: ap.when.to,
     due: ap.when.from,
+    // A window: the day the planner picks decides (placement swaps the place on those days).
+    ...(temp && temp.from <= ap.when.to && temp.to >= ap.when.from ? { placeOn: temp } : {}),
   };
 }
 
 /**
  * « Chez la personne » while she is somewhere else (hospital, EHPAD…; Thomas,
  * 2026-11-03): the appointment goes to her temporary address when it covers
- * the appointment's day (its fixed date, or the start of its window).
+ * the appointment's day: its fixed date, or the day picked in its window.
  */
-function atTemporary(ctx: PlannerContext, ap: Appointment, stored: Place): Place {
-  const day = ap.when.kind === "FIXED" ? ap.when.date : ap.when.from;
+function temporaryOf(ctx: PlannerContext, ap: Appointment): { place: Place; from: IsoDate; to: IsoDate } | null {
   for (const id of ap.participants) {
     const c = ctx.contacts.get(id);
-    if (c?.places[0]?.id === ap.placeId && c.temporary) return placeOn(c, stored, day);
+    if (c?.places[0]?.id === ap.placeId && c.temporary) return { place: c.temporary.place, from: c.temporary.from, to: c.temporary.to };
   }
-  return stored;
+  return null;
 }
 
 /** A validated item the user allowed to move, as a task kept inside its own window. */

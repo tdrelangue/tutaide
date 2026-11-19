@@ -42,6 +42,11 @@ export interface Task {
    * (« quitte à être à Tulle », Thomas 2026-11-03). Only ever a suggestion.
    */
   readonly early?: boolean;
+  /**
+   * « Chez la personne » while she is elsewhere for part of the window
+   * (Thomas, 2026-11-03): on these days the task goes to this place instead.
+   */
+  readonly placeOn?: { readonly place: Place; readonly from: IsoDate; readonly to: IsoDate };
 }
 
 export type BlockKind = "lunch" | "busy" | "event" | "held";

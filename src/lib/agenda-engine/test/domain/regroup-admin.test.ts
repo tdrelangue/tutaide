@@ -1,6 +1,7 @@
 // Thomas, 2026-11-03: first visits spread by town, a day draws its area, people offered in advance, admin time kept.
 import { describe, expect, it } from "vitest";
 import { apptTask, availWindows, buildTasks, createContext, freshWeeks, solve } from "../../domain";
+import { onDay } from "../../domain/placement";
 import type { Contact, Place } from "../../domain";
 import { FRI, H, MON, place, protege, settings, state } from "./fixtures";
 
@@ -155,5 +156,16 @@ describe("« Adresse temporaire »: appointments at her place and EHPAD hours (T
     expect(wins.every(([from, to]) => from >= 14 * 60 && to <= 17 * 60 + 30)).toBe(true);
     const later = availWindows(ctx, visit, "2026-10-26");
     expect(later.some(([from]) => from < 12 * 60)).toBe(true);
+  });
+
+  it("« dans la semaine »: the day the planner picks decides the address", () => {
+    const partly: Contact = { ...person, temporary: { place: ehpad, from: "2026-10-21", to: "2026-10-31" } };
+    const ctx = createContext(state({ contacts: [partly] }));
+    const task = apptTask(ctx, { ...appt(MON), when: { kind: "WEEK", from: MON, to: FRI } });
+    if (!task) throw new Error("expected a task");
+    expect(task.place.id).toBe("a-home");
+    expect(onDay(task, MON).place.id).toBe("a-home");
+    expect(onDay(task, "2026-10-21").place.id).toBe("chandou");
+    expect(onDay(task, "2026-10-21")).toBe(onDay(task, "2026-10-21"));
   });
 });

@@ -48,6 +48,13 @@ describe("mapContact basics", () => {
     const plain = [placeRow({ id: "home" }), placeRow({ id: "temp", ...dated, address: seal("CH de Tulle") })];
     expect(mapContact(input({}, plain), TODAY).value?.temporary).not.toHaveProperty("avail");
   });
+  it("a hospital stay gets the hospital's visiting hours (14:00–19:00) and its site", () => {
+    const dated = { position: 90, fromDate: new Date("2026-10-01T00:00:00Z"), toDate: new Date("2026-10-31T00:00:00Z") };
+    const places = [placeRow({ id: "home" }), placeRow({ id: "temp", ...dated, address: seal("Centre hospitalier d'Ussel, 2 Avenue du Docteur Roullet 19200 Ussel") })];
+    const temp = mapContact(input({}, places), TODAY).value?.temporary;
+    expect(temp?.avail).toEqual([{ dows: [1, 2, 3, 4, 5, 6, 7], from: 840, to: 1140 }]);
+    expect(temp?.place.site).toBe("190000091");
+  });
   it("orders places by position, then id", () => {
     const places = [
       placeRow({ id: "b", position: 1, label: "B" }),

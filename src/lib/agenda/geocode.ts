@@ -4,6 +4,8 @@
  * sent to this State service only, never to Google (decision 2026-10-12).
  */
 
+import { establishmentLabel, searchEstablishments, type Establishment } from "./establishments";
+
 const DEFAULT_GEOCODER_URL = "https://data.geopf.fr/geocodage/search";
 
 /** An override (tests, mirror) must still be HTTPS: addresses never travel in clear. */
@@ -167,6 +169,23 @@ export function mergeResults(query: string, addresses: readonly GeocodedAddress[
     .slice(0, MAX_RESULTS + 1);
 }
 
+/** A known hospital or court, as a search result (its own building, sure). */
+function knownPlace(e: Establishment): GeocodedAddress {
+  return { label: establishmentLabel(e), lat: e.lat, lon: e.lon, precision: e.precise ? "housenumber" : "street", score: 1, postcode: e.postcode, named: e.kind };
+}
+
+/**
+ * The hospitals and courts of the official lists come first (Thomas,
+ * 2026-11-04), even when the IGN does not answer; the IGN's same place is not
+ * repeated. Pure.
+ */
+export function withKnown(query: string, result: GeocodeResult): GeocodeResult {
+  const known = searchEstablishments(query).map(knownPlace);
+  if (known.length === 0) return result;
+  const others = result.ok ? result.results : [];
+  const near = (a: GeocodedAddress) => known.some((k) => Math.abs(k.lat - a.lat) < 0.0006 && Math.abs(k.lon - a.lon) < 0.0008 && a.named === k.named);
+  return { ok: true, results: [...known, ...others.filter((a) => !near(a))].slice(0, MAX_RESULTS + 1) };
+}
 async function fetchIndex(q: string, index: "address" | "poi"): Promise<unknown> {
   const params = new URLSearchParams({ q, limit: String(MAX_RESULTS), index });
   const res = await fetch(`${geocoderUrl()}?${params}`, { cache: "no-store", signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
@@ -183,9 +202,9 @@ export async function searchPlaces(query: string): Promise<GeocodeResult> {
   const q = query.trim();
   if (q.length < 3) return { ok: false, error: "Saisissez au moins 3 caractères." };
   const [addresses, named] = await Promise.allSettled([fetchIndex(q, "address"), fetchIndex(q, "poi")]);
-  if (addresses.status === "rejected") return searchAddress(q);
+  if (addresses.status === "rejected") return withKnown(q, await searchAddress(q));
   const places = named.status === "fulfilled" ? parseNamedPlaces(named.value) : [];
-  return { ok: true, results: mergeResults(q, parseGeocoderResponse(addresses.value), places) };
+  return withKnown(q, { ok: true, results: mergeResults(q, parseGeocoderResponse(addresses.value), places) });
 }
 
 export type GeocodeResult = { ok: true; results: GeocodedAddress[] } | { ok: false; error: string };
