@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { isDemoActive } from "@/lib/demo/state";
 import { requireActorContext, requireOwnerScope } from "@/lib/access/context";
 import { canWorkOnDossiers, resolveOwnerIds } from "@/lib/access/scope";
+import { IS_AGENDA_RELEASED } from "./release";
 import { hasAgendaAccess, pickAgendaOwner } from "./rules";
 
 /**
@@ -19,7 +20,7 @@ export type AgendaAccess =
   | { status: "unavailable" };
 
 async function ownersWithAgenda(ownerIds: string[]): Promise<{ id: string; name: string | null; email: string }[]> {
-  if (ownerIds.length === 0) return [];
+  if (!IS_AGENDA_RELEASED || ownerIds.length === 0) return [];
   const owners = await db.user.findMany({
     where: { id: { in: ownerIds }, archivedAt: null },
     select: { id: true, name: true, email: true, agendaGranted: true },

@@ -1,6 +1,7 @@
 "use client";
 
 import { Checkbox } from "@/components/ui/checkbox";
+import { IS_AGENDA_RELEASED } from "@/lib/agenda/release";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
@@ -169,6 +170,9 @@ export function AgendaGrantField({
   function handleCheckedChange(value: boolean | "indeterminate") {
     onCheckedChange(value === true);
   }
+
+  // Not released yet: offering it would grant nothing visible.
+  if (!IS_AGENDA_RELEASED) return null;
 
   return (
     <div className="flex items-start gap-3 rounded-md border p-3">

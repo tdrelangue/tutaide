@@ -19,6 +19,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { AdminUserData } from "../actions";
 import { ROLE_LABELS, toRoleChoice } from "../../structure/labels";
+import { IS_AGENDA_RELEASED } from "@/lib/agenda/release";
 import { centsToEuros } from "./billing-required-field";
 
 /** Role of a structure member, shown on their row inside the structure. */
@@ -81,7 +82,7 @@ export function UserRow({
                 ? ` · dès le ${new Date(user.billingStartsAt).toLocaleDateString("fr-FR")}`
                 : ""}
             </Badge>}
-            {user.agendaGranted && (
+            {IS_AGENDA_RELEASED && user.agendaGranted && (
               <Badge variant="outline" className="text-xs">Agenda offert</Badge>
             )}
             {isArchived ? (
