@@ -4,6 +4,7 @@ import { AppSidebar, MobileNavBar } from "@/components/app-sidebar";
 import { AppHeader } from "@/components/app-header";
 import { ImpersonationBanner } from "@/components/impersonation-banner";
 import { UpdaterStartupCheck } from "@/components/updater";
+import { OrigPdfBridge } from "@/components/origpdf-bridge";
 import { getAllModuleConfigs } from "@/app/(app)/settings/actions";
 import { migrateLegacyLinkedDossiers } from "@/lib/legacy-migrations";
 import { getPaymentReminder, isBlockedByPaywall } from "@/lib/billing";
@@ -78,6 +79,7 @@ export default async function AppLayout({
       {isDemoSession && <DemoBanner />}
       {licenseStatus === "invalid" && <LicenseBanner />}
       <UpdaterStartupCheck />
+      <OrigPdfBridge modules={worksOnDossiers ? activeModuleKeys : []} />
       {paymentReminder && <PaymentReminderCard reminder={paymentReminder} />}
       {impersonation && (
         <ImpersonationBanner

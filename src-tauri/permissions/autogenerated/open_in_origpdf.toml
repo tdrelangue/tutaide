@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-open-in-origpdf"
+description = "Enables the open_in_origpdf command without any pre-configured scope."
+commands.allow = ["open_in_origpdf"]
+
+[[permission]]
+identifier = "deny-open-in-origpdf"
+description = "Denies the open_in_origpdf command without any pre-configured scope."
+commands.deny = ["open_in_origpdf"]

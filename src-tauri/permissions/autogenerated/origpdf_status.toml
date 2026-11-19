@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-origpdf-status"
+description = "Enables the origpdf_status command without any pre-configured scope."
+commands.allow = ["origpdf_status"]
+
+[[permission]]
+identifier = "deny-origpdf-status"
+description = "Denies the origpdf_status command without any pre-configured scope."
+commands.deny = ["origpdf_status"]

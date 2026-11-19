@@ -1,4 +1,5 @@
 mod connection;
+mod origpdf;
 mod remote;
 
 use tauri::Manager;
@@ -138,6 +139,16 @@ async fn check_for_update(
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        // First: a second launch (e.g. "Ouvrir Tutellia" in OrigPDF) only
+        // brings this window forward. A second app would kill this one's
+        // local server (port 3456) at start-up.
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.unminimize();
+                let _ = window.show();
+                let _ = window.set_focus();
+            }
+        }))
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
@@ -148,7 +159,13 @@ pub fn run() {
             remote::get_connection,
             remote::set_connection,
             remote::open_connection_settings,
-            remote::save_and_open
+            remote::save_and_open,
+            origpdf::origpdf_status,
+            origpdf::open_in_origpdf,
+            origpdf::origpdf_inbox_list,
+            origpdf::origpdf_inbox_read,
+            origpdf::origpdf_inbox_remove,
+            origpdf::origpdf_report_modules
         ])
         .setup(|app| {
             app.manage(ServerProcess(Mutex::new(None)));

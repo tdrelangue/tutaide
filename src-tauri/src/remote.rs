@@ -127,7 +127,8 @@ pub fn open_connection_settings(app: AppHandle) -> Result<(), String> {
 /// The organisation's server may use only what its pages need from the
 /// desktop app: update checks (OrigAI's own update addresses, see
 /// check_for_update), restart after an update, opening a PDF/image, and the
-/// connection screen. Never file dialogs, launching programs, or changing the
+/// connection screen, and working with OrigPDF (launching OrigPDF only, with a
+/// PDF only). Never file dialogs, launching any other program, or changing the
 /// connection itself.
 pub fn grant_server_permissions(app: &AppHandle, origin: &str) -> tauri::Result<()> {
     app.add_capability(
@@ -143,7 +144,15 @@ pub fn grant_server_permissions(app: &AppHandle, origin: &str) -> tauri::Result<
             .permission("allow-kill-server")
             .permission("allow-get-connection")
             .permission("allow-open-connection-settings")
-            .permission("allow-save-and-open"),
+            .permission("allow-save-and-open")
+            // OrigPDF: open a PDF in it (OrigPDF only, PDF only) and file the
+            // documents it sent; see origpdf.rs.
+            .permission("allow-origpdf-status")
+            .permission("allow-open-in-origpdf")
+            .permission("allow-origpdf-inbox-list")
+            .permission("allow-origpdf-inbox-read")
+            .permission("allow-origpdf-inbox-remove")
+            .permission("allow-origpdf-report-modules"),
     )
 }
 
@@ -151,11 +160,11 @@ pub fn grant_server_permissions(app: &AppHandle, origin: &str) -> tauri::Result<
 // Opening a document
 // ---------------------------------------------------------------------------
 
-const MAX_DOCUMENT_BYTES: usize = 50 * 1024 * 1024;
+pub(crate) const MAX_DOCUMENT_BYTES: usize = 50 * 1024 * 1024;
 
 /// Only what Tutellia stores (PDF and images), recognised by content, not by
 /// name: never an executable, script or shortcut.
-fn document_extension(bytes: &[u8]) -> Option<&'static str> {
+pub(crate) fn document_extension(bytes: &[u8]) -> Option<&'static str> {
     if bytes.starts_with(b"%PDF-") {
         Some("pdf")
     } else if bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
@@ -168,7 +177,7 @@ fn document_extension(bytes: &[u8]) -> Option<&'static str> {
 }
 
 /// The page sends the file name percent-encoded (IPC headers are ASCII only).
-fn percent_decode(input: &str) -> String {
+pub(crate) fn percent_decode(input: &str) -> String {
     let bytes = input.as_bytes();
     let mut out = Vec::with_capacity(bytes.len());
     let mut i = 0;
@@ -199,7 +208,7 @@ const RESERVED: [&str; 22] = [
 
 /// A harmless file name: no folders, no hidden characters, no reserved
 /// Windows name, and ALWAYS the extension matching the real content.
-fn safe_file_name(raw: &str, extension: &str) -> String {
+pub(crate) fn safe_file_name(raw: &str, extension: &str) -> String {
     let base = raw.rsplit(['/', '\\']).next().unwrap_or("");
     let cleaned: String = base
         .chars()
@@ -231,7 +240,7 @@ fn open_with_system(path: &std::path::Path) -> Result<(), String> {
 }
 
 /// Writes without ever replacing an existing file (create_new).
-fn write_new_file(dir: &std::path::Path, name: &str, bytes: &[u8]) -> Result<std::path::PathBuf, String> {
+pub(crate) fn write_new_file(dir: &std::path::Path, name: &str, bytes: &[u8]) -> Result<std::path::PathBuf, String> {
     for n in 0..1000 {
         let candidate = if n == 0 { name.to_string() } else { format!("{n}-{name}") };
         let path = dir.join(candidate);

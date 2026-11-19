@@ -35,6 +35,12 @@ fn main() {
         "set_connection",
         "open_connection_settings",
         "save_and_open",
+        "origpdf_status",
+        "open_in_origpdf",
+        "origpdf_inbox_list",
+        "origpdf_inbox_read",
+        "origpdf_inbox_remove",
+        "origpdf_report_modules",
     ]);
 
     tauri_build::try_build(

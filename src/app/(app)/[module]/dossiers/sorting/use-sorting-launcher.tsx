@@ -18,7 +18,11 @@ export function sortableFiles(files: File[]): File[] {
  * Opens the sorting screen for a batch of files. Returns `start(files)` and
  * the dialog element to render. Each batch gets a fresh session.
  */
-export function useSortingLauncher(moduleType: SortModule) {
+export function useSortingLauncher(
+  moduleType: SortModule,
+  /** Told which files were filed (e.g. to take them out of the OrigPDF inbox). */
+  onSettled?: (handled: File[], remaining: File[]) => void
+) {
   const router = useRouter();
   const [batch, setBatch] = useState<{ id: number; files: File[] } | null>(null);
 
@@ -27,8 +31,9 @@ export function useSortingLauncher(moduleType: SortModule) {
     if (accepted.length > 0) setBatch({ id: Date.now(), files: accepted });
   }
 
-  // Unfiled files are still on the user's computer; nothing to keep here.
-  function handleClose() {
+  // Unfiled files are still on the user's computer (or in the OrigPDF inbox).
+  function handleClose(remaining: File[]) {
+    if (batch) onSettled?.(batch.files, remaining);
     setBatch(null);
     router.refresh();
   }

@@ -28,6 +28,12 @@
     "allow-get-connection",
     "allow-set-connection",
     "allow-open-connection-settings",
-    "allow-save-and-open"
+    "allow-save-and-open",
+    "allow-origpdf-status",
+    "allow-open-in-origpdf",
+    "allow-origpdf-inbox-list",
+    "allow-origpdf-inbox-read",
+    "allow-origpdf-inbox-remove",
+    "allow-origpdf-report-modules"
   ]
 }

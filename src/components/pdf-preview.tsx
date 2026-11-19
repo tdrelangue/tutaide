@@ -9,6 +9,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { OpenInOrigPdfButton } from "@/components/open-in-origpdf-button";
 
 interface PdfPreviewProps {
   documentId: string;
@@ -33,8 +34,9 @@ export function PdfPreview({ documentId, filename, mimeType }: PdfPreviewProps) 
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-3xl w-full max-h-[90vh] flex flex-col">
-          <DialogHeader className="shrink-0">
-            <DialogTitle className="truncate pr-8">{filename}</DialogTitle>
+          <DialogHeader className="shrink-0 flex-row items-center gap-3 space-y-0 pr-8">
+            <DialogTitle className="min-w-0 flex-1 truncate">{filename}</DialogTitle>
+            {mimeType === "application/pdf" && <OpenInOrigPdfButton documentId={documentId} filename={filename} />}
           </DialogHeader>
           {open && (
             <PreviewBody

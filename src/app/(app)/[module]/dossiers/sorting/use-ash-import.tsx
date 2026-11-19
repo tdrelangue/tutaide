@@ -59,7 +59,10 @@ async function importAshPdf(file: File, askOwner: AskOwner): Promise<AshImportRe
 }
 
 /** Runs the ASH import on dropped files; what it cannot place goes to manual sorting. */
-export function useAshImport() {
+export function useAshImport(
+  /** Told which files were filed (e.g. to take them out of the OrigPDF inbox). */
+  onSettled?: (handled: File[], remaining: File[]) => void
+) {
   const router = useRouter();
   const [isProcessing, setIsProcessing] = useState(false);
   const [results, setResults] = useState<AshImportResult[] | null>(null);
@@ -100,11 +103,13 @@ export function useAshImport() {
       setResults(output);
       setUnsorted(failed);
       setIsProcessing(false);
+      onSettled?.(accepted, failed);
       router.refresh();
     }
   }
 
   function handleSortingClose(remaining: File[]) {
+    onSettled?.(unsorted, remaining);
     setSortingBatch(null);
     setUnsorted(remaining);
     router.refresh();

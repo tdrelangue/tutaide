@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { SORTABLE_ACCEPT, useSortingLauncher } from "./use-sorting-launcher";
 import { useAshImport } from "./use-ash-import";
 import { AshImportResults } from "./ash-import-results";
+import { OrigPdfInboxBanner, useOrigPdfInbox } from "./origpdf-inbox";
 import type { SortModule } from "./use-sorting-session";
 
 const COPY: Record<"auto" | "manual", { hint: string; detail: string }> = {
@@ -56,8 +57,9 @@ export function ModuleDropArea({
   children: React.ReactNode;
 }) {
   const isAsh = moduleType === "ASH";
-  const ash = useAshImport();
-  const manual = useSortingLauncher(moduleType);
+  const inbox = useOrigPdfInbox(moduleType);
+  const ash = useAshImport(inbox.settle);
+  const manual = useSortingLauncher(moduleType, inbox.settle);
   const start = isAsh ? ash.start : manual.start;
   const drag = useFileDrag(start);
   const copy = COPY[isAsh ? "auto" : "manual"];
@@ -70,6 +72,12 @@ export function ModuleDropArea({
           short list is droppable too (header, tabs, title and filters ≈ 15rem). */}
       <div className="relative flex min-h-[calc(100vh-15rem)] flex-1 flex-col" {...drag.handlers}>
         <div className="border-b px-6 py-3">
+          <OrigPdfInboxBanner
+            items={inbox.items}
+            isBusy={inbox.isLoading || ash.isProcessing}
+            onSort={() => void inbox.sortAll(start)}
+            onDiscard={(id) => void inbox.discard(id)}
+          />
           <DropBanner
             hint={copy.hint}
             detail={copy.detail}
